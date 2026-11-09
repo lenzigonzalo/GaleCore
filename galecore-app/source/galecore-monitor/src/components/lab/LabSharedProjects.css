@@ -1,4 +1,4 @@
-.lab-shared-projects { width:min(760px,calc(100vw - 48px)); max-height:calc(100dvh - 64px); display:flex; flex-direction:column; overflow:hidden; background:var(--bg-secondary); border:1px solid var(--border); border-radius:14px; box-shadow:0 24px 80px #0008; color:var(--text-primary); font-family:var(--font-sans); }
+.lab-shared-projects { width:min(760px,calc(calc(100 * var(--vw)) - 48px)); max-height:calc(calc(100 * var(--dvh)) - 64px); display:flex; flex-direction:column; overflow:hidden; background:var(--bg-secondary); border:1px solid var(--border); border-radius:14px; box-shadow:0 24px 80px #0008; color:var(--text-primary); font-family:var(--font-sans); }
 .lab-shared-projects > header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px 26px 20px; flex-shrink:0; }
 .lab-shared-projects h2 { margin:0; font-size:24px; font-weight:600; line-height:1.2; }
 .lab-shared-header-actions { display:flex; align-items:center; gap:14px; }
@@ -36,4 +36,4 @@
 .lab-shared-create label { flex:1; min-width:0; font-size:14px; color:var(--text-primary); }
 .lab-shared-create input { display:block; width:100%; min-height:40px; margin-top:8px; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg-primary); color:var(--text-primary); font:15px var(--font-sans); }
 .lab-shared-create .lab-icon { height:40px; }
-@media (max-width:640px) { .lab-shared-projects { width:calc(100vw - 24px); max-height:calc(100dvh - 32px); } .lab-shared-projects > header { padding:20px 16px 16px; } .lab-shared-search-row { padding:0 16px 16px; } .lab-shared-lists { padding-inline:8px; } .lab-shared-actions { max-width:165px; } .lab-shared-folder { display:none; } .lab-shared-create { margin-inline:16px; flex-wrap:wrap; } .lab-shared-create label { flex-basis:100%; } }
+@media (max-width:640px) { .lab-shared-projects { width:calc(calc(100 * var(--vw)) - 24px); max-height:calc(calc(100 * var(--dvh)) - 32px); } .lab-shared-projects > header { padding:20px 16px 16px; } .lab-shared-search-row { padding:0 16px 16px; } .lab-shared-lists { padding-inline:8px; } .lab-shared-actions { max-width:165px; } .lab-shared-folder { display:none; } .lab-shared-create { margin-inline:16px; flex-wrap:wrap; } .lab-shared-create label { flex-basis:100%; } }

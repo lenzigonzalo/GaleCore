@@ -212,7 +212,7 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
   return (
     <div style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 50, maxWidth: 'calc(100% - 32px)' }}>
       {open && (
-        <div className="supervisor-dock" style={{ width: 420, maxWidth: '100%', maxHeight: '70vh', overflow: 'auto', marginBottom: 8,
+        <div className="supervisor-dock" style={{ width: 420, maxWidth: '100%', maxHeight: 'calc(70 * var(--vh))', overflow: 'auto', marginBottom: 8,
           backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 12,
           boxShadow: '0 8px 24px rgba(0,0,0,.35)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>

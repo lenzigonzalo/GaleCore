@@ -711,3 +711,27 @@ entries:
       - "Read-only: a candidate is described, never advised; no orders; a signal is never shown as executable without size and dated quote"
       - "Not checked - that the proposed rules are good to trade; the owner has not approved them for operating"
     schedulable: {runs: model, work: reading, max_turns: 25, timeout_minutes: 12}
+
+  - id: html_board
+    kind: investigation
+    serves: >-
+      Armar un tablero, panel o informe visual como un único .html autocontenido en el proyecto, con datos de GaleCore
+      embebidos y su fecha a la vista, que se abre renderizado a la derecha del chat. Una consulta puntual sigue en el
+      chat con una tabla.
+    example_requests:
+      - Armame un tablero de SPY
+      - Haceme un panel con mi cartera
+      - Un informe visual de la macro
+      - Haceme un gráfico de la curva de tasas
+      - Armame un dashboard de volatilidad
+    skill: skills/html-board/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - galecore get <capacidad> --out .scratch/<tema>-<dato>.json --keep "<pedido>"   # una vez por bloque; después el modelo escribe files/<tema>.html y lo enlaza
+    stored_as: none
+    controls:
+      - "Read-only: data only from GaleCore via galecore get, embedded as JSON when the file is written; the date and time of the data and the source of each block are shown"
+      - "The HTML is sandboxed (no session, no live data): no fetch to APIs, no keys, libraries only from cdnjs.cloudflare.com or cdn.jsdelivr.net"
+      - "Not checked - that the file follows the design criteria or that its numbers match GaleCore; nothing validates the HTML"

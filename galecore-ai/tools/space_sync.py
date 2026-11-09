@@ -9,6 +9,7 @@ is appended to %LOCALAPPDATA%\GaleCore-AI\space_sync.log and the next run tries 
 """
 
 import json
+import logging
 import os
 import sys
 import traceback
@@ -19,8 +20,43 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 
+def _user_env(name: str) -> str | None:
+    """Windows user variable (registry), like start-lab.ps1 reads them; None elsewhere or if unset."""
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            return winreg.QueryValueEx(key, name)[0] or None
+    except (ImportError, OSError):
+        return None
+
+
+def apply_lab_connection(env: dict | None = None, user_env=_user_env) -> bool:
+    """BF-0004: same connection as the production Lab (start-lab.ps1): GALECORE_LAB_* overrides GALECORE_*.
+
+    Only when GALECORE_LAB_BASE_URL is defined (process or user variable). Dev credentials are never mixed with
+    the production URL: the Dev key/login are dropped if the LAB ones do not replace them.
+    """
+    env = os.environ if env is None else env
+
+    def lab(name: str) -> str | None:
+        return env.get(f"GALECORE_LAB_{name}") or user_env(f"GALECORE_LAB_{name}")
+
+    url = lab("BASE_URL")
+    if not url:
+        return False
+    for name in ("API_KEY", "USERNAME", "PASSWORD"):
+        env.pop(f"GALECORE_{name}", None)
+        if value := lab(name):
+            env[f"GALECORE_{name}"] = value
+    env["GALECORE_BASE_URL"] = url
+    env["GALECORE_ALLOWED_BASE_URL"] = url
+    return True
+
+
 def main() -> int:
     try:
+        apply_lab_connection()
         from galecore_ai.adapters.galecore_space import SpaceClient
         from galecore_ai.adapters.knowledge_base import knowledge_dir
         from galecore_ai.adapters.record_store import FileRecordStore, default_records_dir
@@ -30,6 +66,10 @@ def main() -> int:
         from galecore_ai.application.supervisor import api_reader
         from galecore_ai.application.tasks import WindowsScheduler
 
+        logdir = Path(os.environ.get("LOCALAPPDATA", str(REPO))) / "GaleCore-AI"
+        logdir.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(logdir / "space_sync.log", encoding="utf-8")
+        logging.getLogger("galecore_ai.application.space").addHandler(handler)
         base = knowledge_dir()
         kb = KnowledgeBase(base=base, records=FileRecordStore(default_records_dir()), research=FileResearchStore(base))
         publish_agents(SpaceClient(), kb, WindowsScheduler(), supervise=api_reader())

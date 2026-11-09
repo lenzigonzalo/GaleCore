@@ -1,13 +1,16 @@
-import React, { useRef, useState } from 'react';
-import { X, ChevronDown, ChevronRight, ArrowRightLeft, Pencil, Trash2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, ChevronDown, ChevronRight, ArrowRightLeft, Pencil, Trash2, MoreHorizontal } from 'lucide-react';
 import { TickerState } from '../../types/market';
 import { calcChange, fmtPct, fmtPrice, fmtTime, isStale } from '../../utils/formatters';
 import { PremarketQuote } from '../../api/marketdata';
 import { PremarketCell } from './PremarketCell';
+import { WATCHLIST_COLUMNS, WatchlistColumn } from './watchlistColumns';
 
 interface Props {
   tickers: TickerState[];
   showPremarket?: boolean;
+  /** Columnas que el usuario ocultó (menú «⋯» del panel). */
+  hiddenColumns?: WatchlistColumn[];
   premarket?: Record<string, PremarketQuote>;
   premarketLoading?: boolean;
   premarketError?: boolean;
@@ -37,11 +40,11 @@ interface RowContext {
 interface RowProps {
   ticker: TickerState; ctx: React.MutableRefObject<RowContext>; stale: boolean; selected: boolean; removable: boolean;
   editable: boolean; group?: string; namesKey: string; moving: boolean; dropClass: string; showPremarket: boolean;
-  columnCount: number; premarket?: PremarketQuote; premarketLoading?: boolean; premarketError?: boolean;
+  columnCount: number; showLast: boolean; showChg: boolean; showChgPct: boolean; premarket?: PremarketQuote; premarketLoading?: boolean; premarketError?: boolean;
 }
 
 /** Una fila; se re-dibuja sólo si cambia su ticker, su vigencia o su estado de edición. */
-const WatchlistRow = React.memo(function WatchlistRow({ ticker, ctx, stale, selected, removable, editable, group, namesKey, moving, dropClass, showPremarket, columnCount, premarket, premarketLoading, premarketError }: RowProps) {
+const WatchlistRow = React.memo(function WatchlistRow({ ticker, ctx, stale, selected, removable, editable, group, namesKey, moving, dropClass, showPremarket, columnCount, showLast, showChg, showChgPct, premarket, premarketLoading, premarketError }: RowProps) {
   // Los callbacks se leen del ref al ocurrir el evento: la fila puede no re-dibujarse entre renders.
   const c = () => ctx.current;
   const dropHandlers = (group:string, symbol:string): React.HTMLAttributes<HTMLTableRowElement> => ({
@@ -58,6 +61,7 @@ const WatchlistRow = React.memo(function WatchlistRow({ ticker, ctx, stale, sele
   return (
     <React.Fragment>
     <tr className={(selected ? 'selected' : '') + dropClass} draggable={editable || undefined}
+      onClick={e => { if (!(e.target as HTMLElement).closest('button')) c().onSelect(ticker.symbol); }}   // el precio y la variación también abren el símbolo
       onDragStart={editable ? e => c().startDrag(e, 'ticker', ticker.symbol) : undefined} onDragEnd={() => c().endDrag()}
       {...(editable && group ? dropHandlers(group, ticker.symbol) : {})}
       title={ticker.lastUpdate ? 'Recepción ' + fmtTime(ticker.lastUpdate) + ' ET' + (stale ? ' · lectura anterior' : '') : 'Sin fecha de recepción'}>
@@ -66,13 +70,13 @@ const WatchlistRow = React.memo(function WatchlistRow({ ticker, ctx, stale, sele
           onClick={() => c().onSelect(selected ? null : ticker.symbol)}><TickerLogo symbol={ticker.symbol}/>{ticker.symbol}</button>
         {hasPrice && ticker.error.price && <span className="watchlist-price-error" role="status" title={ticker.error.price}>Lectura anterior</span>}
       </th>
-      <td className="numeric tabular-nums" title={ticker.error.price || undefined}>
+      {showLast && <td className="numeric tabular-nums" title={ticker.error.price || undefined}>
         {hasPrice ? fmtPrice(ticker.price) : ticker.error.price ? 'Sin datos' : ticker.loading.price ? 'Cargando…' : '—'}
-      </td>
-      <td className="numeric tabular-nums" style={{ color }} title={hasClose ? 'Contra cierre previo' : 'Sin cierre previo: no se calcula la variación'}>
+      </td>}
+      {showChg && <td className="numeric tabular-nums" style={{ color }} title={hasClose ? 'Contra cierre previo' : 'Sin cierre previo: no se calcula la variación'}>
         {change ? (change.abs > 0 ? '+' : '') + fmtPrice(change.abs) : '—'}
-      </td>
-      <td className="numeric tabular-nums" style={{ color }}>{change ? fmtPct(change.pct) : '—'}</td>
+      </td>}
+      {showChgPct && <td className="numeric tabular-nums" style={{ color }}>{change ? fmtPct(change.pct) : '—'}</td>}
       {showPremarket && <PremarketCell quote={premarket} loading={premarketLoading} error={premarketError} />}
       <td className="numeric tabular-nums watchlist-received"
         style={{ color: stale ? 'var(--yellow-gc)' : undefined }}
@@ -93,9 +97,29 @@ const WatchlistRow = React.memo(function WatchlistRow({ ticker, ctx, stale, sele
   );
 });
 
+/** Menú «⋯» del encabezado del panel: qué columnas se ven. */
+export function ColumnsMenu({ hidden, onToggle }: { hidden: WatchlistColumn[]; onToggle: (id: WatchlistColumn) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  return <div className="watchlist-columns" ref={ref}>
+    <button className="lw-close" data-close aria-label="Columnas" aria-expanded={open} title="Columnas" onClick={() => setOpen(v => !v)}><MoreHorizontal size={20}/></button>
+    {open && <div className="watchlist-columns-menu" role="group" aria-label="Columnas visibles">
+      {WATCHLIST_COLUMNS.map(c => <label key={c.id}><input type="checkbox" checked={!hidden.includes(c.id)} onChange={() => onToggle(c.id)}/>{c.label}</label>)}
+    </div>}
+  </div>;
+}
+
 /** Presentación compacta del mismo store de las tarjetas; no consulta ni suscribe datos. */
-export function TickerWatchlist({ tickers, showPremarket = true, premarket, premarketLoading, premarketError, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections, groupActions }: Props) {
-  const columnCount = showPremarket ? 7 : 6;
+export function TickerWatchlist({ tickers, showPremarket = true, hiddenColumns = [], premarket, premarketLoading, premarketError, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections, groupActions }: Props) {
+  const show = (id: WatchlistColumn) => !hiddenColumns.includes(id);
+  const columnCount = 3 + (['last', 'chg', 'chgPct'] as WatchlistColumn[]).filter(show).length + (showPremarket ? 1 : 0);
   const [collapsed,setCollapsed] = useState<string[]>([]);
   const [moving,setMoving] = useState<string | null>(null);
   const [renaming,setRenaming] = useState<string | null>(null);
@@ -140,7 +164,7 @@ export function TickerWatchlist({ tickers, showPremarket = true, premarket, prem
     stale={!!ticker.lastUpdate && isStale(ticker.lastUpdate)} selected={selectedSymbol === ticker.symbol}
     removable={!!(removableSymbols?.includes(ticker.symbol) && onRemoveSymbol)} editable={!!groupActions}
     group={groupOf(ticker.symbol)} namesKey={namesKey} moving={moving === ticker.symbol} dropClass={dropClass('ticker:' + ticker.symbol)}
-    showPremarket={showPremarket} columnCount={columnCount} premarket={premarket?.[ticker.symbol]} premarketLoading={premarketLoading} premarketError={premarketError} />;
+    showPremarket={showPremarket} columnCount={columnCount} showLast={show('last')} showChg={show('chg')} showChgPct={show('chgPct')} premarket={premarket?.[ticker.symbol]} premarketLoading={premarketLoading} premarketError={premarketError} />;
   const header = (label:string) => {
     const open = !collapsed.includes(label);
     const toggle = <button aria-expanded={open} onClick={() => setCollapsed(v => v.includes(label) ? v.filter(s => s !== label) : [...v,label])}>{open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}{label}</button>;
@@ -164,9 +188,9 @@ export function TickerWatchlist({ tickers, showPremarket = true, premarket, prem
       <table aria-label="Seguimiento de instrumentos">
         <thead><tr>
           <th scope="col">Symbol</th>
-          <th scope="col" className="numeric">Last</th>
-          <th scope="col" className="numeric">Chg</th>
-          <th scope="col" className="numeric">Chg%</th>
+          {show('last') && <th scope="col" className="numeric">Last</th>}
+          {show('chg') && <th scope="col" className="numeric">Chg</th>}
+          {show('chgPct') && <th scope="col" className="numeric">Chg%</th>}
           {showPremarket && <th scope="col" className="numeric" title="Variación premarket contra el cierre regular anterior">Premarket</th>}
           <th scope="col" className="numeric watchlist-received">Recepción (ET)</th>
           <th scope="col"><span className="sr-only">Acciones</span></th>

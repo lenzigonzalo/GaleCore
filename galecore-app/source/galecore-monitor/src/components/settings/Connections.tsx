@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, Shield } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { fetchProviderAuth, ProviderAuth } from '../../api/terminal';
 import { AuthenticationTerminal } from './AuthenticationTerminal';
+import { Permissions } from './Permissions';
 
 const labels: Record<ProviderAuth['status'], string> = {
   authenticated: 'Cuenta conectada', 'signed-out': 'Sin autenticar',
@@ -39,7 +40,7 @@ export function Connections() {
         <div className="settings-agent-login"><div><h3>Volver a iniciar sesión</h3><p>Conectá otra cuenta o renová tus credenciales.</p></div><button className="settings-action" aria-label={`Reautenticar ${name}`} disabled={checking || error || running || !provider || provider.status === 'not-installed'} onClick={() => reauthenticate(selected)}>Reautenticar</button></div></div>
       </section>;
     })()}
-    {tab === 'permisos' && <section className="settings-agent-account"><header><Shield size={21}/><h2>Permisos de {selected === 'claude' ? 'Claude Code' : 'Codex'}</h2></header><div className="settings-agent-card"><h3>Elegís los permisos en cada chat</h3><p><strong>Manual:</strong> las acciones que necesitan permiso se frenan y te avisan.</p><p><strong>Auto:</strong> permite editar archivos y ejecutar comandos dentro de la carpeta del proyecto.</p><p>Usá el selector Manual / Auto junto al botón de enviar.</p></div></section>}
+    {tab === 'permisos' && <Permissions engine={selected}/>}
     {error && <p className="settings-error" role="alert">No se pudo conectar con la terminal local.</p>}
     {login && <AuthenticationTerminal key={login.id} provider={login.provider} onEnd={() => { setRunning(false); setRevision(v => v + 1); }} onClose={() => { setLogin(null); setRunning(false); setRevision(v => v + 1); }}/>}
   </div>;

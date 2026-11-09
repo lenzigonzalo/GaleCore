@@ -123,3 +123,12 @@ test('la ventana del + busca en locales y compartidos, y crea sin salir', async 
   await waitFor(() => expect(open).toHaveBeenCalledWith('nuevo'));
   expect(request).toHaveBeenCalledWith('/workspaces', { label: 'Nueva idea' });
 });
+
+test('con cambios locales sin subir dice «Cambios sin compartir» y su botón sincroniza, no «Al día»', async () => {
+  request.mockResolvedValue(catalog(added({ syncState: 'pending', action: 'sync', notice: 'Cambios sin compartir' })));
+  render(<LabSharedProjects onClose={() => {}} onChanged={changed} onOpen={open}/>);
+  expect(await screen.findByText('Cambios sin compartir')).toBeInTheDocument();
+  expect(screen.queryByText('Al día')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Sincronizar' }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('/workspaces/bancos/sync', {}, expect.any(Number)));
+});

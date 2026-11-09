@@ -12,8 +12,8 @@ const pref = (enabled: boolean) => ({ kind: 'preference', key: SUGGESTIONS_KEY, 
 
 beforeEach(() => { jest.clearAllMocks(); clearSuggestionsCache(); });
 
-test('sin preferencia están prendidas y un clic manda la pregunta', async () => {
-  (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
+test('prendidas por el usuario, un clic manda la pregunta', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [pref(true)], shared: [] });
   (apiClient.get as jest.Mock).mockResolvedValue({ data: { items: [spy] } });
   const onPick = jest.fn();
   render(<LabSuggestions onPick={onPick}/>);
@@ -22,7 +22,7 @@ test('sin preferencia están prendidas y un clic manda la pregunta', async () =>
 });
 
 test('volver a montarlas reusa la consulta', async () => {
-  (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [pref(true)], shared: [] });
   (apiClient.get as jest.Mock).mockResolvedValue({ data: { items: [spy] } });
   const first = render(<LabSuggestions onPick={jest.fn()}/>);
   await screen.findByRole('button', { name: /SPY baja/ });
@@ -30,6 +30,19 @@ test('volver a montarlas reusa la consulta', async () => {
   render(<LabSuggestions onPick={jest.fn()}/>);
   await screen.findByRole('button', { name: /SPY baja/ });
   expect(apiClient.get).toHaveBeenCalledTimes(1);
+});
+
+test('sin preferencia o con el JSON roto están apagadas', async () => {
+  for (const items of [[], [{ ...pref(true), content: '{roto' }]]) {
+    clearSuggestionsCache();
+    (fetchSpace as jest.Mock).mockResolvedValue({ items, shared: [] });
+    const { container, unmount } = render(<LabSuggestions onPick={jest.fn()}/>);
+    await waitFor(() => expect(fetchSpace).toHaveBeenCalled());
+    await new Promise(r => setTimeout(r, 0));
+    expect(container).toBeEmptyDOMElement();
+    unmount();
+  }
+  expect(apiClient.get).not.toHaveBeenCalled();
 });
 
 test('apagadas no consultan la API ni muestran nada', async () => {

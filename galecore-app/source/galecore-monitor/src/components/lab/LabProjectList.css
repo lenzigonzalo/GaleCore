@@ -20,7 +20,7 @@
 .lab-group-loose-chats { border:0; padding:0; margin:0; }
 .lab-group-loose-chats .lab-chat-row svg { color:var(--group-color); }
 .lab-group-editor { margin:4px 3px 12px; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-tertiary); color:var(--text-secondary); font:var(--font-label) var(--font-sans); }
-.lab-group-options { position:fixed; z-index:160; display:flex; flex-direction:column; gap:5px; width:min(220px,calc(100vw - 16px)); max-height:calc(100vh - 16px); overflow-y:auto; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-tertiary); box-shadow:var(--shadow-sm); color:var(--text-secondary); font:var(--font-label)/1.4 var(--font-sans); }
+.lab-group-options { position:fixed; z-index:160; display:flex; flex-direction:column; gap:5px; width:min(220px,calc(calc(100 * var(--vw)) - 16px)); max-height:calc(calc(100 * var(--vh)) - 16px); overflow-y:auto; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-tertiary); box-shadow:var(--shadow-sm); color:var(--text-secondary); font:var(--font-label)/1.4 var(--font-sans); }
 .lab-group-options > button { display:block; width:100%; padding:5px 6px; border:0; border-radius:5px; background:transparent; color:var(--text-primary); font:inherit; text-align:left; cursor:pointer; }
 .lab-group-options > button:hover { background:var(--bg-hover); }
 .lab-group-options label,.lab-group-editor label { display:block; font-size:var(--font-label); }
@@ -77,3 +77,4 @@
 .lab-project-list .lab-favorite:hover { color:var(--text-primary); }
 .lab-project-list .lab-favorite:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .lab-project-list .lab-list-tabs button,.lab-project-list .lab-group-toggle { font-size:14px; }
+.lab-group-options > .lab-option-sync small { display:block; margin-top:1px; font-size:11px; color:var(--text-muted); }

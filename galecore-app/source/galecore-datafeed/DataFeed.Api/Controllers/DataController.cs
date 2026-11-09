@@ -113,6 +113,10 @@ namespace DataFeed.Controllers
         [HttpGet("A3/Cotizaciones")]
         public async Task<IActionResult> A3CotizacionesAsync([FromQuery] A3CotizacionesRequest request) => await Handle(request);
 
+        [Tags("Data.Sources")]
+        [HttpGet("A3/Futuros")]
+        public async Task<IActionResult> A3FuturosAsync([FromQuery] A3FuturosRequest request) => await Handle(request);
+
         [Tags("Data.Api")]
         [HttpGet("Tastytrade/MarketData/ByType")]
         public async Task<IActionResult> MarketDataByTypeAsync([FromQuery] MarketDataByTypeRequest request) => await Handle(request);

@@ -26,7 +26,7 @@
 .biblioteca-error { color:var(--red, #e5534b); }
 @media (max-width: 760px) {
   .biblioteca { flex-direction:column; }
-  .biblioteca-list { width:auto; border-right:0; border-bottom:1px solid var(--border-subtle, #262626); max-height:40vh; }
+  .biblioteca-list { width:auto; border-right:0; border-bottom:1px solid var(--border-subtle, #262626); max-height:calc(40 * var(--vh)); }
   .biblioteca-report { padding:16px; }
   .biblioteca-grid { grid-template-columns:1fr; }
 }

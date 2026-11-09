@@ -7,6 +7,7 @@ import { TickerState } from '../../types/market';
 import { fetchMarketDataBatch, fetchPremarketBatch, PremarketQuote } from '../../api/marketdata';
 import { etDateParts } from '../../utils/formatters';
 import { regularSessionLabel } from '../../utils/marketSession';
+import { useWatchlistColumns } from './watchlistColumns';
 
 interface Props {
   active?: boolean;
@@ -75,7 +76,8 @@ export function TickerGrid({
   }, [active, layout]);
   const sessionTicker = tickers.SPY ?? symbols.map(symbol => tickers[symbol]).find(ticker => ticker?.marketStatusSourceAt);
   const session = regularSessionLabel(new Date(), sessionTicker, !!sessionTicker?.isStreaming);
-  const showPremarket = session === 'Rueda regular cerrada' || session === 'Fuera de rueda regular';
+  const columns = useWatchlistColumns();
+  const showPremarket = !columns.hidden.includes('premarket') && (session === 'Rueda regular cerrada' || session === 'Fuera de rueda regular');
 
   // Premarket tiene su propia fuente, sesión y frescura, incluso cuando Trade regular sigue conectado.
   useEffect(() => {
@@ -206,7 +208,7 @@ export function TickerGrid({
   }
 
   if (layout === 'list') return <>
-    <TickerWatchlist sections={sections} showPremarket={showPremarket} premarket={premarket} premarketLoading={premarketLoading} premarketError={premarketError} tickers={symbols.map(symbol => tickers[symbol] ?? {
+    <TickerWatchlist sections={sections} showPremarket={showPremarket} hiddenColumns={columns.hidden} premarket={premarket} premarketLoading={premarketLoading} premarketError={premarketError} tickers={symbols.map(symbol => tickers[symbol] ?? {
       symbol, price: 0, open: 0, bid: 0, ask: 0, lastUpdate: null, isStreaming: false,
       loading: { price: true, ivRank: true, iv: true, gex: false }, error: {},
     })} selectedSymbol={selectedSymbol} onSelect={onSelect}

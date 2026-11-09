@@ -40,4 +40,43 @@ function brokerQueries(local) {
   };
 }
 
-module.exports = { brokerQueries };
+// Claude (WS-0091): sólo los servidores de IOL e IBKR por --mcp-config (el resto de los conectores sigue cortado con
+// --strict-mcp-config). Nombre, URL y alcance deben coincidir con los de la autorización hecha una vez en el CLI;
+// IBKR va por su servidor público con alcance mcp.read (sólo lectura del lado de IBKR, como en Codex).
+// Claude Code no filtra herramientas por servidor: se permiten las de consulta y se niegan las que validan o cambian algo.
+const CLAUDE_SERVERS = {
+  iol: { prefix: 'iol_invertironline', config: { type: 'http', url: 'https://mcp.invertironline.com' },
+    denied: ['update_access_mode', 'validate_order', 'validate_caucion', 'validate_fci_subscription',
+      'validate_fci_redemption', 'get_ddjj', 'get_caucion_guarantee_assets'] },
+  ibkr: { prefix: 'interactive_brokers_ibkr', config: { type: 'http', url: 'https://api.ibkr.com/v1/api/mcp-public', oauth: { scopes: 'mcp.read' } },
+    denied: [] },
+};
+function claudeBrokerQueries(local) {
+  if (!brokerQueries(local)) return null;
+  const servers = Object.entries(CLAUDE_SERVERS);
+  return {
+    mcp: { mcpServers: Object.fromEntries(servers.map(([name, s]) => [name, s.config])) },
+    allow: servers.flatMap(([name, s]) => BROKERS.find(b => b.prefix === s.prefix).tools.map(t => 'mcp__' + name + '__' + t)),
+    deny: servers.flatMap(([name, s]) => s.denied.map(t => 'mcp__' + name + '__' + t)),
+    instructions: '\nBrokers externos habilitados sólo para consultas: IBKR e IOL, mediante las conexiones del usuario. ' +
+      'GaleCore sigue siendo la primera fuente. Para datos propios de esos brokers usá sus consultas y presentá fuente y fecha por separado. ' +
+      'No envíes, prepares, valides, modifiques ni canceles operaciones, ni cambies alertas, listas, permisos o fondos. ' +
+      'En IOL comprobá get_access_mode antes de consultar la cuenta; debe devolver read_only. ' +
+      'Si un broker pide autorización o no responde, decilo y seguí con GaleCore. ' +
+      'No uses shell, HTTP ni otro canal para evitar estas restricciones. Si falta una consulta, declará el faltante.\n',
+  };
+}
+
+// Interruptor de Configuración → Mis conectores (WS-0083): lee y escribe el mismo broker-queries.json. Un archivo ilegible cuenta como apagado.
+function brokerSetting(local) {
+  try { return JSON.parse(fs.readFileSync(path.join(local, 'broker-queries.json'), 'utf8')).enabled === true; } catch { return false; }
+}
+function setBrokerQueries(local, enabled) {
+  fs.mkdirSync(local, { recursive: true });
+  const file = path.join(local, 'broker-queries.json'), tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify({ enabled: enabled === true }, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, file);
+  return enabled === true;
+}
+
+module.exports = { brokerQueries, claudeBrokerQueries, brokerSetting, setBrokerQueries };

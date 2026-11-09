@@ -5,6 +5,12 @@
 @tailwind utilities;
 
 :root {
+  /* Escala global de la plataforma (único lugar): 1 = 100 %. El 0.9 de WS-0083 espera el ok del owner. */
+  --app-zoom: 1;
+  /* Con zoom en <html>, vh/dvh/vw quedan al 90 %: estas unidades los compensan (usar calc(100 * var(--vh))). */
+  --vh: calc(1vh / var(--app-zoom));
+  --dvh: calc(1dvh / var(--app-zoom));
+  --vw: calc(1vw / var(--app-zoom));
   --font-label: 14px;
   --font-body: 16px;
   --font-page: 24px;
@@ -58,6 +64,8 @@
 }
 
 /* ── Base ── */
+
+.min-h-screen { min-height: calc(100 * var(--vh)); }
 body {
   margin: 0;
   font-size: 16px;
@@ -302,8 +310,8 @@ summary:focus-visible, [role="button"]:focus-visible {
 .market-workspace { display: flex; align-items: flex-start; min-height: 100%; }
 .market-analysis { flex: 1; min-width: 0; }
 .market-analysis-label { color: var(--text-muted); font-size: 14px; }
-.market-watchlist-panel { position: sticky; top: 0; flex: 0 0 auto; max-height: calc(100vh - 110px); overflow: visible; border-left: 1px solid var(--border); background: var(--bg-primary); }
-.market-watchlist-panel > div:last-child { max-height: calc(100vh - 166px); overflow-y: auto; padding: 0 10px 12px; }
+.market-watchlist-panel { position: sticky; top: 0; flex: 0 0 auto; max-height: calc(calc(100 * var(--vh)) - 110px); overflow: visible; border-left: 1px solid var(--border); background: var(--bg-primary); }
+.market-watchlist-panel > div:last-child { max-height: calc(calc(100 * var(--vh)) - 166px); overflow-y: auto; padding: 0 10px 12px; }
 .market-watchlist-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 16px 12px; }
 .market-watchlist-heading h2 { font-size: 16px; font-weight: 600; margin: 0; }
 .market-watchlist-heading button { display: inline-flex; padding: 5px; background: transparent; color: var(--text-muted); border: 0; cursor: pointer; }
@@ -316,6 +324,11 @@ summary:focus-visible, [role="button"]:focus-visible {
 .ticker-watchlist .numeric { text-align: right; }
 .ticker-watchlist .watchlist-received { display: none; }
 .ticker-watchlist .watchlist-premarket { white-space: nowrap; }
+.watchlist-columns { position: relative; }
+.watchlist-columns > button[aria-expanded="true"] { background: var(--bg-hover); color: var(--text-primary); border-radius: 5px; }
+.watchlist-columns-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; display: grid; gap: 2px; min-width: 190px; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 8px; box-shadow: 0 8px 24px #0008; }
+.watchlist-columns-menu label { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 5px; font-size: 14px; font-weight: 400; color: var(--text-primary); cursor: pointer; }
+.watchlist-columns-menu label:hover { background: var(--bg-hover); }
 .ticker-watchlist tr.selected { background: var(--bg-tertiary); box-shadow: inset 2px 0 var(--accent); }
 .watchlist-symbol, .watchlist-remove { background: transparent; color: var(--text-primary); border: 0; cursor: pointer; padding: 4px 0; }
 .watchlist-symbol { font-weight: 600; }
@@ -408,7 +421,7 @@ summary:focus-visible, [role="button"]:focus-visible {
 .operations-orders { grid-column: 1 / -1; }
 .order-lifecycle { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; margin-top: 26px; }
 .order-lifecycle span { padding: 12px 16px; border-top: 2px solid var(--border); font-size: var(--font-label); color: var(--text-muted); }
-.lab-studio { min-height: calc(100vh - 180px); display: grid; grid-template-columns: 210px minmax(0, 1fr) 260px; }
+.lab-studio { min-height: calc(calc(100 * var(--vh)) - 180px); display: grid; grid-template-columns: 210px minmax(0, 1fr) 260px; }
 .lab-studio.without-context { grid-template-columns: 210px minmax(0,1fr); }
 .lab-projects { padding: 22px 14px; border-right: 1px solid var(--border-dark); display: flex; flex-direction: column; }
 .lab-new-work { border: 1px solid var(--border); border-radius: 7px; background: var(--bg-secondary); color: var(--text-primary); padding: 11px; display: flex; align-items: center; gap: 9px; font-size: var(--font-label); cursor: pointer; }
@@ -423,9 +436,9 @@ summary:focus-visible, [role="button"]:focus-visible {
 .lab-conversation { min-width: 0; display: flex; flex-direction: column; }
 .lab-session-heading { display: flex; justify-content: space-between; align-items: center; padding: 22px 26px; font-size: var(--font-label); color: var(--text-muted); }
 .lab-session-heading button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
-.lab-start { width: 100%; max-width: 850px; padding: clamp(32px, 7vh, 90px) 36px 44px; margin: auto; }
+.lab-start { width: 100%; max-width: 850px; padding: clamp(32px, calc(7 * var(--vh)), 90px) 36px 44px; margin: auto; }
 .lab-start > .space-eyebrow { text-align: center; }
-.lab-start h2 { font-size: clamp(25px, 2.3vw, 37px); font-weight: 500; line-height: 1.25; letter-spacing: -1px; text-align: center; margin: 20px 0 14px; }
+.lab-start h2 { font-size: clamp(25px, calc(2.3 * var(--vw)), 37px); font-weight: 500; line-height: 1.25; letter-spacing: -1px; text-align: center; margin: 20px 0 14px; }
 .lab-start > p:not(.lab-preview-note) { text-align: center; color: var(--text-muted); font-size: 14px; line-height: 1.7; margin: 0 0 32px; }
 .lab-composer { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: 0 14px 50px #0002; }
 .lab-composer:focus-within { border-color: var(--border-light); }

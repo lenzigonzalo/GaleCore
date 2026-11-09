@@ -1,15 +1,18 @@
 // Preferencias del chat del Lab que son de este navegador (WS-0067): sonido al terminar, sonido al pedir permiso,
 // volumen y aviso del navegador. Como el resto de las preferencias de pantalla: localStorage con try/catch.
+import { useEffect, useState } from 'react';
+import { DEFAULT_MODE, Engine, normalizeMode } from './chatPermissions';
+
 export interface ChatPrefs {
   finishSound: boolean; permissionSound: boolean; volume: number; notify: boolean;
   /** Proveedor, modelo y esfuerzo con los que abre un chat nuevo ('' = el predeterminado del Lab). */
   provider: '' | 'codex' | 'claude'; model: string; effort: string;
-  /** Permisos con los que abre un chat: Manual (pregunta) o Auto (decide lo seguro). */
-  mode: 'manual' | 'auto';
+  /** Permisos con los que abre un chat nuevo, por motor (ver chatPermissions). */
+  modes: Record<Engine, string>;
 }
 const KEY = 'galecore:lab:chat-prefs';
 const EVENT = 'galecore:lab:chat-prefs';
-const DEFAULTS: ChatPrefs = { finishSound: true, permissionSound: true, volume: 0.5, notify: false, provider: '', model: '', effort: '', mode: 'manual' };
+const DEFAULTS: ChatPrefs = { finishSound: true, permissionSound: true, volume: 0.5, notify: false, provider: '', model: '', effort: '', modes: { ...DEFAULT_MODE } };
 
 export function readChatPrefs(): ChatPrefs {
   try {
@@ -21,7 +24,8 @@ export function readChatPrefs(): ChatPrefs {
       notify: raw.notify === true,
       provider: raw.provider === 'codex' || raw.provider === 'claude' ? raw.provider : '',
       model: typeof raw.model === 'string' ? raw.model : '', effort: typeof raw.effort === 'string' ? raw.effort : '',
-      mode: raw.mode === 'auto' ? 'auto' : 'manual',
+      // `mode` ('manual' | 'auto') era el valor único de antes: se migra a los dos motores ('manual' = su predeterminado seguro).
+      modes: { claude: normalizeMode('claude', raw.modes?.claude ?? raw.mode), codex: normalizeMode('codex', raw.modes?.codex ?? raw.mode) },
     };
   } catch { return { ...DEFAULTS }; }
 }
@@ -61,3 +65,10 @@ export function notifyChat(title: string, body: string, onClick: () => void) {
 }
 
 export const CHAT_PREFS_EVENT = EVENT;
+
+/** Modos de permisos con los que abre cada chat nuevo; se actualiza al instante cuando se cambian en Configuración. */
+export function useChatModes(): ChatPrefs['modes'] {
+  const [modes, setModes] = useState(() => readChatPrefs().modes);
+  useEffect(() => { const update = () => setModes(readChatPrefs().modes); window.addEventListener(EVENT, update); return () => window.removeEventListener(EVENT, update); }, []);
+  return modes;
+}

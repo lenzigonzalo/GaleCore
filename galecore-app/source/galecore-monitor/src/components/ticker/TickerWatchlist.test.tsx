@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { TickerWatchlist } from './TickerWatchlist';
+import { ColumnsMenu, TickerWatchlist } from './TickerWatchlist';
+import { readHiddenColumns } from './watchlistColumns';
 import { TickerState } from '../../types/market';
 import { PremarketQuote } from '../../api/marketdata';
 
@@ -127,4 +128,34 @@ test('sin operación premarket explica el estado sin sustituir por el precio reg
   expect(screen.getByLabelText('Último trade fuera de premarket')).toBeEmptyDOMElement();
   expect(screen.queryByText('Sin dato')).toBeNull();
   expect(screen.getByText('+1.00%')).toBeInTheDocument();
+});
+
+test('clic en el precio de la fila abre el símbolo; los botones de la fila no lo duplican', () => {
+  const onSelect = jest.fn();
+  render(<TickerWatchlist tickers={[ticker]} selectedSymbol={null} onSelect={onSelect}/>);
+  fireEvent.click(screen.getByText('101.00', { exact: false }));
+  expect(onSelect).toHaveBeenCalledWith('SPY');
+  onSelect.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'SPY' }));
+  expect(onSelect).toHaveBeenCalledTimes(1);
+});
+
+test('el menú de columnas lista lo visible y la tabla oculta lo elegido; el símbolo queda siempre', () => {
+  const onToggle = jest.fn();
+  render(<><ColumnsMenu hidden={['premarket', 'chgPct']} onToggle={onToggle}/>
+    <TickerWatchlist tickers={[ticker]} selectedSymbol={null} onSelect={jest.fn()} showPremarket={false} hiddenColumns={['premarket', 'chgPct']}/></>);
+  expect(screen.queryByRole('columnheader', { name: 'Chg%' })).toBeNull();
+  expect(screen.getByRole('columnheader', { name: 'Chg' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'SPY' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Columnas' }));
+  const menu = screen.getByRole('group', { name: 'Columnas visibles' });
+  expect(within(menu).getByLabelText('Premarket')).not.toBeChecked();
+  expect(within(menu).getByLabelText('Precio (Last)')).toBeChecked();
+  fireEvent.click(within(menu).getByLabelText('Variación % (Chg%)'));
+  expect(onToggle).toHaveBeenCalledWith('chgPct');
+});
+
+test('sin preferencia guardada Premarket arranca oculta y lo demás visible', () => {
+  expect(readHiddenColumns([])).toEqual(['premarket']);
+  expect(readHiddenColumns([{ kind: 'preference', key: 'watchlist-columnas', content: '{"hidden":["chg","otra"]}' } as any])).toEqual(['chg']);
 });

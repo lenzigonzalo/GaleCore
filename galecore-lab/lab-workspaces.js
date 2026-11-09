@@ -6,13 +6,15 @@ const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const { createSharing } = require('./lab-sharing');
-const { brokerQueries } = require('./lab-brokers');
+const { brokerQueries, claudeBrokerQueries, brokerSetting, setBrokerQueries } = require('./lab-brokers');
+const { permissionRules, saveUserRules, mergedSettings } = require('./lab-permissions');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
 const TYPES = ['personal', 'analysis', 'strategy'];
-const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv|py|log)$/i;
-const IMAGE_TYPES = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp'};
+const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv|py|log|html|htm)$/i;
+const IMAGE_TYPES = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml'};
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg)$/i;
 function attachmentFile(dir, rel) {
   if(!/^adjuntos\/[\w.\- ]+$/.test(rel))throw fail('Adjunto no encontrado: '+rel,404);
   const base=fs.realpathSync(dir);let file;
@@ -32,13 +34,14 @@ function readProjectText(file) {
   const bytes = fs.readFileSync(file);
   return bytes.toString(bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf16le' : 'utf8').replace(/^\uFEFF/, '');
 }
-function safeFile(dir, relative) {
-  if (!relative || path.isAbsolute(relative) || PRIVATE.test(relative) || !TEXT.test(relative)) throw fail('Archivo no disponible.', 404);
+// Los tableros HTML embeben datos; el resto del texto conserva el límite de 512 KB.
+function safeFile(dir, relative, allowed = TEXT, limit = /\.html?$/i.test(relative) ? 2 * 1024 * 1024 : 512 * 1024) {
+  if (!relative || path.isAbsolute(relative) || PRIVATE.test(relative) || !allowed.test(relative)) throw fail('Archivo no disponible.', 404);
   const base = fs.realpathSync(dir), target = path.resolve(base, relative);
   if (!target.startsWith(base + path.sep)) throw fail('Archivo fuera del proyecto.', 403);
   let actual; try { actual = fs.realpathSync(target); } catch { throw fail('Archivo no encontrado.', 404); }
   if (!actual.startsWith(base + path.sep) || !fs.statSync(actual).isFile()) throw fail('Archivo fuera del proyecto.', 403);
-  if (fs.statSync(actual).size > 512 * 1024) throw fail('Archivo demasiado grande para la vista previa.', 413);
+  if (fs.statSync(actual).size > limit) throw fail('Archivo demasiado grande para la vista previa.', 413);
   return actual;
 }
 // Investigaciones (WS-0066): viven en knowledge/research/ (comunes); la que se guardó desde un proyecto lleva `project: <id>`
@@ -64,7 +67,7 @@ function tree(dir, prefix = '', depth = 0) {
   return fs.readdirSync(dir, { withFileTypes: true }).filter(e => !e.isSymbolicLink() && !PRIVATE.test(e.name)).slice(0,200).flatMap(e => {
     const rel = prefix + e.name;
     if(e.isDirectory()) return [{ path:rel, name:e.name, kind:'folder', children:tree(path.join(dir,e.name),rel+'/',depth+1) }];
-    return [{path:rel,name:e.name,kind:'file',...(TEXT.test(e.name)?{}:{text:false})}];
+    return [{path:rel,name:e.name,kind:'file',...(TEXT.test(e.name)?{}:{text:false,...(IMAGE_FILE.test(e.name)?{image:true}:{})})}];
   });
 }
 // Una ruta del explorador de Archivos (owner 17/10: crear, editar, renombrar, eliminar como en el explorador): dentro
@@ -315,6 +318,14 @@ function parseMapa(text){
 // (type:'strategy' + strategyName → strategies:[strategyName]; el resto → []). La API sólo devuelve strategies.
 const strategiesOf=(meta,fallback)=>Array.isArray(meta?.strategies)?[...new Set(meta.strategies.filter(n=>typeof n==='string'&&ID.test(n)))]:meta?.type==='strategy'?[typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:fallback]:[];
 const derived=(id,strategies)=>({strategies});
+// Modos de permisos por motor (WS-0083). Ninguno saltea permisos: un modo desconocido (bypassPermissions, danger-full-access…)
+// cae al seguro, nunca llega crudo al CLI. 'manual' y 'auto' son los de antes (compatibilidad con el front viejo).
+const PERMISSION_MODES = { claude: ['default', 'acceptEdits', 'auto', 'plan'], codex: ['read-only', 'workspace-write', 'auto'] };
+function permissionMode(provider, raw) {
+  const engine = provider === 'codex' ? 'codex' : 'claude', safe = engine === 'codex' ? 'workspace-write' : 'default';
+  return PERMISSION_MODES[engine].includes(raw) ? raw : safe;
+}
+
 function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile, update = () => null }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
@@ -429,7 +440,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   // Proyectos compartidos (WS-0064): el CLI del harness sincroniza; acá sólo se dispara y se avisa si hubo conflictos.
   const sharing=createSharing({root,kb,environment,execute,...(request&&{request}),...(sessionFile&&{sessionFile})});
   const busy=p=>[...jobs.values()].some(j=>j.project===p.id)||shellProjects.has(p.id);
-  const publicProject=({dir,...p})=>sharing.inThisEnvironment({dir})?{...p,shared:true,following:sharing.isFollowing({dir}),mine:sharing.isMine({dir}),syncNotice:sharing.notice(p),...sharing.health({dir,...p})}:p;
+  const publicProject=({dir,...p})=>sharing.inThisEnvironment({dir})?{...p,shared:true,following:sharing.isFollowing({dir}),mine:sharing.isMine({dir}),syncNotice:sharing.notice(p),lastSync:sharing.lastSync({dir}),...sharing.health({dir,...p})}:p;
   // Las conversaciones de prueba (origin «prueba») no se listan: el trader ve sólo las suyas.
   function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.origin!=='prueba').map(({messages,usage,...c})=>({...c,messageCount:messages.length}));}
   // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
@@ -458,7 +469,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   // Lo único propio de cada motor: cómo recibe el contexto, cómo limita navegador y conectores, y cómo retoma
   // (D-0014). El resto (qué contexto, qué datos, qué se guarda) es igual para todos. El contexto va por archivo, no por
   // la línea de comando (Windows la corta en ~32.000 caracteres); el archivo se borra al terminar el turno.
-  function engineArgs(chat,p,context,auto){
+  function engineArgs(chat,p,context,mode){
     if(chat.provider==='codex'){
       const brokers=brokerQueries(local);
       if(brokers)context+=brokers.instructions;
@@ -470,22 +481,33 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       // escribe en el proyecto y en knowledge/.
       const sandbox=['-c','web_search="live"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser',...(brokers?brokers.args:['--disable','apps']),
         '-c','sandbox_workspace_write.network_access=true','-c','sandbox_workspace_write.writable_roots='+JSON.stringify([kb])];
-      const args=['--no-daemon','exec','--json','--skip-git-repo-check','-p',name,...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox];
+      const args=['--no-daemon','exec','--json','--skip-git-repo-check','-p',name,...modelFlags(chat),...(mode==='auto'?['--approve-for-me']:[]),...sandbox];
       // --approve-for-me ya usa el sandbox workspace-write y Codex rechaza los dos juntos (0.164): en Auto no va --sandbox.
-      return {file,args:chat.nativeId?[...args,'resume',chat.nativeId,'-']:[...args,...(auto?[]:['--sandbox','workspace-write']),'-C',p.dir,'-']};
+      // `exec resume` no tiene --sandbox: ahí el sandbox del modo (p. ej. read-only) va como -c, antes de `resume`.
+      const box=mode==='auto'?[]:chat.nativeId?['-c','sandbox_mode='+JSON.stringify(mode)]:['--sandbox',mode];
+      return {file,args:chat.nativeId?[...args,...box,'resume',chat.nativeId,'-']:[...args,...box,'-C',p.dir,'-']};
     }
-    // Claude: sin la configuración del usuario ni conectores; los permisos (web después de GaleCore, sin tocar el código)
-    // salen de knowledge/.claude/settings.json. Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
+    // Claude: sin la configuración del usuario ni conectores salvo IOL con el interruptor de brókers (WS-0091); los permisos
+    // (web después de GaleCore, sin tocar el código) salen de knowledge/.claude/settings.json. Sonnet/medium por defecto
+    // (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
+    const broker=claudeBrokerQueries(local);
+    if(broker)context+=broker.instructions;
     const file=path.join(local,'contexts',chat.id+'.md');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,context);
+    // Un solo --settings: el del producto con las reglas del usuario (lab-permissions.js) y las de IOL si va.
+    const settings=mergedSettings(kb,local);
+    if(broker)for(const k of ['allow','deny'])settings.permissions[k]=[...new Set([...(settings.permissions[k]||[]),...broker[k]])];
+    const settingsFile=path.join(local,'contexts',chat.id+'.settings.json');fs.writeFileSync(settingsFile,JSON.stringify(settings));
+    const mcpFile=path.join(local,'contexts',chat.id+'.mcp.json');
+    if(broker)fs.writeFileSync(mcpFile,JSON.stringify(broker.mcp));
     // stdio mantiene los permisos en el chat también en CLI anteriores a --permission-prompts.
-    // Manual usa default, igual que al cambiar el modo durante un turno: nunca bypassPermissions.
+    // Los modos son los de PERMISSION_MODES: nunca bypassPermissions.
     const args=['-p',...modelFlags(chat),'--input-format','stream-json','--output-format','stream-json','--verbose','--append-system-prompt-file',file,
-      '--permission-prompt-tool','stdio','--permission-mode',(auto?'auto':'default'),'--strict-mcp-config',
-      '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
+      '--permission-prompt-tool','stdio','--permission-mode',mode,'--strict-mcp-config',
+      '--setting-sources','project,local','--settings',settingsFile,...(broker?['--mcp-config',mcpFile]:[])];
     return {file,args:chat.nativeId?[...args,'--resume',chat.nativeId]:args};
   }
   function send(chat, words, options={}){
-    const auto=options.mode==='auto';
+    const mode=permissionMode(chat.provider,options.mode);
     const p=project(chat.project);
     if(sharing.isRunning(p))throw fail('El proyecto está sincronizando. Esperá a que termine para enviar.',409);
     if(jobs.has(chat.id))throw fail('La conversación está respondiendo.',409);
@@ -496,7 +518,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
     const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString(),...(options.attachments?.length?{attachments:options.attachments}:{})};chat.messages.push(ask);
     if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=(words||options.attachments?.[0]?.replace(/^adjuntos\/\d+-/,'')||'Adjunto').replace(/\s+/g,' ').slice(0,65);
-    chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];chat.tasks=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
+    chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];chat.tasks=[];delete chat.limitResetsAt;chat.mode=mode;chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'galecore-lab','skills','lab-strategy-bootstrap','SKILL.md');
     const mapaSkill=path.join(root,'galecore-lab','skills','mapa','SKILL.md');
     // El método de diseño es una sola copia, en galecore-ai/config/skills.
@@ -510,12 +532,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const resume=mine.length&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
     const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.';
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json','.mcp.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor
       const context=[resume,product,here,facts,asked].filter(Boolean).join('\n\n');
-      const engine=engineArgs(chat,p,context,auto);job.file=engine.file;
+      const engine=engineArgs(chat,p,context,mode);job.file=engine.file;
       const proc=job.proc=spawnProcess(binaries[chat.provider],engine.args,{cwd:p.dir,env:{...environment(),GALECORE_HOST_PROVIDER:chat.provider||'',GALECORE_HOST_MODEL:chat.model||'',...(chat.provider==='codex'?{}:{BASH_DEFAULT_TIMEOUT_MS:'300000',BASH_MAX_TIMEOUT_MS:'600000'})},windowsHide:true,stdio:['pipe','pipe','pipe']});
       const decoder=new StringDecoder('utf8');let pending='';
       const claude=chat.provider!=='codex';
@@ -537,10 +559,17 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
+    // Conectores que usa el chat, en sólo lectura salvo el interruptor de brókers (WS-0083): GaleCore va siempre; IBKR/IOL sólo
+    // consultas y sólo en Codex (lab-brokers.js).
+    if(url.pathname==='/connectors'&&req.method==='GET'){json(res,200,{galecore:{enabled:true},brokers:{enabled:brokerSetting(local),engines:['codex','claude']}});return true;}
+    // Reglas de permisos de Claude Code: las del producto (fijas) y las del usuario (lab-permissions.js).
+    if(url.pathname==='/permissions/claude'&&req.method==='GET'){json(res,200,permissionRules(kb,local));return true;}
+    if(url.pathname==='/permissions/claude'&&req.method==='POST'){saveUserRules(local,await readBody(req),fail);json(res,200,permissionRules(kb,local));return true;}
+    if(url.pathname==='/connectors/brokers'&&req.method==='POST'){const b=await readBody(req);if(typeof b.enabled!=='boolean')throw fail('Indicá si querés prender o apagar las consultas a brókers.');json(res,200,{brokers:{enabled:setBrokerQueries(local,b.enabled),engines:['codex','claude']}});return true;}
     if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),update:update(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}
-    if(req.method==='GET' && url.pathname==='/workspaces/shared'){json(res,200,await sharing.catalog({busy}));return true;}
+    if(req.method==='GET' && url.pathname==='/workspaces/shared'){json(res,200,await sharing.catalog({busy,projectsOf:listProjects}));return true;}
     if(req.method==='POST' && url.pathname==='/workspaces/sync'){json(res,200,await sharing.syncAll(listProjects,{busy}));return true;}
     if(req.method==='POST' && parts[0]==='shared-projects'&&parts.length===3&&['subscribe','pause','add'].includes(parts[2])){
       if(parts[2]==='add'){json(res,200,await sharing.add(parts[1],listProjects,{busy}));return true;}
@@ -607,6 +636,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       res.writeHead(200,{'Content-Type':type||'application/octet-stream','Content-Disposition':(type?'inline':'attachment')+'; filename="'+path.basename(rel)+'"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
       res.end(fs.readFileSync(file));return true;
     }
+    if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='raw'&&parts.length===3){
+      // Imágenes de cualquier carpeta del proyecto para la vista previa (WS-0083 AC-10).
+      const p=project(parts[1]), rel=url.searchParams.get('path')||'', file=safeFile(p.dir,rel,IMAGE_FILE,15*1024*1024);
+      const type=IMAGE_TYPES[path.extname(rel).toLowerCase()];
+      res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...(type==='image/svg+xml'?{'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"}:{})});
+      res.end(fs.readFileSync(file));return true;
+    }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='attachments'){
       // Un adjunto del chat (WS-0036): cuerpo crudo, nombre en X-File-Name, hasta 15 MB, a adjuntos/ del proyecto.
       const p=project(parts[1]), raw=decodeURIComponent(String(req.headers['x-file-name']||'archivo'));
@@ -667,7 +703,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         // Editar el último mensaje (WS-0067): el motor no rebobina; el Lab saca del transcript ese pedido y su respuesta y le avisa que el texto nuevo lo reemplaza.
         let prompt;if(b.replace===true){if(jobs.has(c.id))throw fail('La conversación está respondiendo.',409);const at=c.messages.map(m=>m.role).lastIndexOf('user');if(at<0)throw fail('No hay un mensaje para reemplazar.',409);const old=c.messages[at].text;c.messages.splice(at);saveChat(c);if(b.retry!==true)prompt='[Este mensaje reemplaza al pedido anterior ("'+old.replace(/\s+/g,' ').slice(0,300)+'"): ignorá ese pedido y tu respuesta; lo que ya hiciste en archivos sigue ahí.]\n\n'+text;}
         const mentions=mentionLine(b.mentions);if(mentions)prompt=mentions+'\n\n'+(prompt||text);
-        json(res,202,send(c,words,{mode:b.mode==='auto'?'auto':'manual',attachments:files,prompt:prompt||text}));return true;}
+        json(res,202,send(c,words,{mode:b.mode,attachments:files,prompt:prompt||text}));return true;}
       if(req.method==='POST'&&parts[2]==='rename'){const title=String((await readBody(req)).title||'').trim();if(!title||title.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');c.title=title;c.titleLocked=true;saveChat(c);json(res,200,{id:c.id,title});return true;}
       // Eliminar saca la conversación del historial; el archivo pasa a chats-borradas/ (local, no se muestra).
       if(req.method==='POST'&&parts[2]==='delete'){if(jobs.has(c.id))throw fail('La conversación está respondiendo. Detenela antes de eliminarla.',409);fs.mkdirSync(removedDir,{recursive:true});fs.renameSync(path.join(chatDir,c.id+'.json'),path.join(removedDir,c.id+'.json'));json(res,200,{deleted:c.id});return true;}
@@ -680,9 +716,9 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         if(decision==='deny')j.chat.refused=[...(j.chat.refused||[]),r.tool_use_id];
         j.write({type:'control_response',response:{subtype:'success',request_id:b.id,response}});
         j.chat.permission=null;j.chat.activity='Trabajando';saveChat(j.chat);json(res,200,{decision});return true;}
-      // Cambiar Manual/Auto en medio de una respuesta (Claude): el motor sigue con el modo nuevo.
-      if(req.method==='POST'&&parts[2]==='mode'){const mode=(await readBody(req)).mode==='auto'?'auto':'manual',j=jobs.get(c.id),target=j?.chat||c;
-        if(j?.write&&c.provider!=='codex')j.write({type:'control_request',request_id:'mode-'+Date.now(),request:{subtype:'set_permission_mode',mode:mode==='auto'?'auto':'default'}});
+      // Cambiar el modo de permisos en medio de una respuesta (Claude): el motor sigue con el modo nuevo.
+      if(req.method==='POST'&&parts[2]==='mode'){const j=jobs.get(c.id),target=j?.chat||c,mode=permissionMode(c.provider,(await readBody(req)).mode);
+        if(j?.write&&c.provider!=='codex')j.write({type:'control_request',request_id:'mode-'+Date.now(),request:{subtype:'set_permission_mode',mode}});
         target.mode=mode;saveChat(target);json(res,200,{mode,live:!!j});return true;}
       if(req.method==='POST'&&parts[2]==='stop'){const j=jobs.get(c.id);if(j){j.chat.state='cancelled';saveChat(j.chat);j.proc?.kill();}json(res,200,{requested:!!j});return true;}
     }
@@ -697,4 +733,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   return {route,listProjects,reserveShell,isBusy:()=>jobs.size>0||listProjects().some(p=>sharing.isRunning(p)),shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};
+module.exports={permissionMode,mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};
