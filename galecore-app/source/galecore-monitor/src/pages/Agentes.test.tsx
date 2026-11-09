@@ -342,10 +342,29 @@ test('la ayuda genera la clave de agentes, la muestra una sola vez y explica el 
   fireEvent.click(screen.getByRole('button', { name: 'Generar clave' }));
   expect(await screen.findByText('gca_secreta1234')).toBeInTheDocument();
   expect(screen.getByText(/Se ve una sola vez/)).toBeInTheDocument();
+  const link = screen.getByRole('link', { name: /Abrir claude.ai/ });
+  expect(link).toHaveAttribute('href', 'https://claude.ai/code');
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  const writeText = jest.fn().mockResolvedValue(undefined);
+  Object.assign(navigator, { clipboard: { writeText } });
+  fireEvent.click(screen.getAllByRole('button', { name: 'Copiar' })[0]);
+  expect(await screen.findByRole('button', { name: 'Copiada' })).toBeInTheDocument();
+  expect(writeText).toHaveBeenCalledWith('gca_secreta1234');
   api.revokeAgentKey.mockResolvedValue();
   fireEvent.click(screen.getByRole('button', { name: 'Revocar' }));
   await waitFor(() => expect(api.revokeAgentKey).toHaveBeenCalled());
   await waitFor(() => expect(screen.queryByText('gca_secreta1234')).not.toBeInTheDocument());
+});
+
+test('si el portapapeles falla, Copiar pide copiar a mano', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
+  api.fetchAgentKey.mockResolvedValue({ exists: false });
+  Object.assign(navigator, { clipboard: { writeText: jest.fn().mockRejectedValue(new Error('no')) } });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Ayuda' }));
+  fireEvent.click((await screen.findAllByRole('button', { name: /Copiar/ }))[0]);
+  expect(await screen.findByText('Seleccionala y copiala a mano')).toBeInTheDocument();
 });
 
 test('las tareas de la PC siguen en la lista junto a los agentes en la nube', async () => {
