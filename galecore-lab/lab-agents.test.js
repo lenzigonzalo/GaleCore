@@ -42,7 +42,7 @@ test('con pendientes lanza Claude sin chat con la skill y sólo RemoteTrigger y 
   assert.equal(args[0], '-p');
   assert.match(args[1], /SKILL agentes-nube/);
   assert.match(args[1], /resumen-diario/);
-  assert.deepEqual(args.slice(2), ['--model', 'haiku', '--allowedTools', 'RemoteTrigger', 'Bash(python -m galecore_ai.adapters.cli agent:*)']);
+  assert.deepEqual(args.slice(2), ['--model', 'haiku', '--allowedTools', 'RemoteTrigger', 'Bash(python -m galecore_ai.adapters.cli agent:*)', 'PowerShell(python -m galecore_ai.adapters.cli agent:*)']);
 });
 
 test('lo que sigue pendiente con el mismo pedido queda con error; si el pedido cambió, no se toca', async t => {
