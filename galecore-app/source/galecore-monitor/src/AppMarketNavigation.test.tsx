@@ -54,7 +54,7 @@ test('watchlist abre Precio desde Inicio y Lab y conserva el indicador al cambia
   expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('price');
   fireEvent.click(screen.getByRole('button',{name:'inicio'}));
   fireEvent.click(screen.getByRole('button',{name:'gex'}));
-  expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('gamma');
+  expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('price');  // BF-0007: Mercado abre en Precio
 });
 
 test('recargar conserva Chat y monta su contenido sin pasar por Inicio', async () => {

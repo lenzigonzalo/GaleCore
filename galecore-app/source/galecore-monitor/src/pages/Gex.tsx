@@ -128,7 +128,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   useEffect(() => { readSwitch(switchEndpoint); }, [readSwitch, switchEndpoint]);
 
   const [refOpen, setRefOpen] = useState(false);
-  const [localIndicator, setLocalIndicator] = useState<MarketIndicator>('gamma');
+  const [localIndicator, setLocalIndicator] = useState<MarketIndicator>('price');
   const indicator = controlledIndicator ?? localIndicator;
   const setIndicator = onIndicatorChange ?? setLocalIndicator;
 
@@ -545,6 +545,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                     readable
                     key={active}
                     symbol={active}
+                    // BF-0007: los avisos también en Gamma (se ven cuando caen dentro del encuadre gamma).
+                    alertLevels={watches.map(w => ({ id: w.id, price: w.threshold, label: `Aviso ${watchLabel(w)}` }))}
                     currentPrice={ticker?.price ?? data?.spotPrice ?? 0}
                     openPrice={ticker?.open ?? 0}
                     iv30={iv30}
