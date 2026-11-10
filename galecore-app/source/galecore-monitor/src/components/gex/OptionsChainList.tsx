@@ -16,6 +16,8 @@ interface Props {
   /** Vencimientos incluidos en la comparación (sus muros se dibujan junto a los del elegido). */
   compared?: string[];
   onToggleCompare?: (expiration: string) => void;
+  /** El principal se puede destildar cuando hay otro elegido. */
+  canUncheckSelected?: boolean;
 }
 
 /**
@@ -28,7 +30,7 @@ interface Props {
  */
 export function OptionsChainList({
   expiries, selected, onSelect, label = 'Vencimientos',
-  globalNetGex, maxDte, globalLabel = 'Todos', compared = [], onToggleCompare,
+  globalNetGex, maxDte, globalLabel = 'Todos', compared = [], onToggleCompare, canUncheckSelected = false,
 }: Props) {
   const isGlobal = selected === GLOBAL_SCOPE;
   return (
@@ -101,9 +103,9 @@ export function OptionsChainList({
                 <div key={e.expiration} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {onToggleCompare && !isGlobal && (
                   <input type="checkbox" aria-label={`Comparar ${fmtExpiry(e.expiration)}`}
-                    title={isActive ? 'Es el vencimiento elegido' : 'Mostrar también los muros de este vencimiento'}
-                    checked={isActive || isCompared} disabled={isActive} onChange={() => onToggleCompare(e.expiration)}
-                    style={{ cursor: isActive ? 'default' : 'pointer', flexShrink: 0 }} />
+                    title={isActive ? (canUncheckSelected ? 'Sacar este vencimiento' : 'Es el único elegido') : 'Sumar este vencimiento'}
+                    checked={isActive || isCompared} disabled={isActive && !canUncheckSelected} onChange={() => onToggleCompare(e.expiration)}
+                    style={{ cursor: isActive && !canUncheckSelected ? 'default' : 'pointer', flexShrink: 0 }} />
                 )}
                 <button
                   onClick={() => onSelect(e.expiration)}

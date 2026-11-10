@@ -30,7 +30,7 @@ jest.mock('./components/ticker/LiveWatchlist', () => ({LiveWatchlist:({onSelect}
   {['SPY','AAPL'].map(symbol=><button key={symbol} onClick={()=>{mockUseGexStore.getState().setSelectedSymbol(symbol);onSelect();}}>{symbol} en watchlist</button>)}
 </>}));
 jest.mock('./pages/Gex', () => ({Gex:({indicator,onIndicatorChange}:any)=><section aria-label="Mercado activo">
-  {mockUseGexStore(s=>s.selectedSymbol)} {indicator}<button onClick={()=>onIndicatorChange('price')}>Precio</button><button onClick={()=>onIndicatorChange('gamma')}>Gamma</button><button onClick={()=>onIndicatorChange('iv')}>IV</button>
+  {mockUseGexStore(s=>s.selectedSymbol)} {indicator}<button onClick={()=>onIndicatorChange('price')}>Precio</button><button onClick={()=>onIndicatorChange('iv')}>IV</button>
 </section>}));
 
 beforeEach(() => sessionStorage.clear());
@@ -41,7 +41,7 @@ test('watchlist abre Precio desde Inicio y Lab y conserva el indicador al cambia
   await screen.findByText('Inicio del usuario');
   fireEvent.click(screen.getByRole('button',{name:'SPY en watchlist'}));
   expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('price');
-  for (const [label,indicator] of [['Gamma','gamma'],['IV','iv'],['Precio','price']]) {
+  for (const [label,indicator] of [['IV','iv'],['Precio','price']]) {
     fireEvent.click(screen.getByRole('button',{name:label}));
     fireEvent.click(screen.getByRole('button',{name:'AAPL en watchlist'}));
     expect(screen.getByLabelText('Mercado activo')).toHaveTextContent(`AAPL ${indicator}`);
@@ -54,7 +54,7 @@ test('watchlist abre Precio desde Inicio y Lab y conserva el indicador al cambia
   expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('price');
   fireEvent.click(screen.getByRole('button',{name:'inicio'}));
   fireEvent.click(screen.getByRole('button',{name:'gex'}));
-  expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('price');  // BF-0007: Mercado abre en Precio
+  expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('price');
 });
 
 test('recargar conserva Chat y monta su contenido sin pasar por Inicio', async () => {
@@ -88,13 +88,13 @@ test('no restaura la pantalla guardada de otra persona', async () => {
   expect(screen.queryByText('Chat del usuario')).not.toBeInTheDocument();
 });
 
-test('el buscador conserva Gamma e IV dentro de Mercado y abre Precio desde otra pantalla', async () => {
+test('el buscador conserva IV dentro de Mercado y abre Precio desde otra pantalla', async () => {
   mockUseGexStore.setState({selectedSymbol:'SPY',tickers:['SPY','QQQ'],rules:{} as any,rulesError:null});
   render(<App/>);
   await screen.findByText('Inicio del usuario');
   fireEvent.click(screen.getByRole('button',{name:'QQQ en buscador'}));
   await waitFor(()=>expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('QQQ price'));
-  for (const [label,indicator] of [['Gamma','gamma'],['IV','iv'],['Precio','price']]) {
+  for (const [label,indicator] of [['IV','iv'],['Precio','price']]) {
     fireEvent.click(screen.getByRole('button',{name:label}));
     fireEvent.click(screen.getByRole('button',{name:'SPY en watchlist'}));
     fireEvent.click(screen.getByRole('button',{name:'QQQ en buscador'}));

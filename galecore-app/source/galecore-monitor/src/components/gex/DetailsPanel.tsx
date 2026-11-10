@@ -3,6 +3,7 @@ import { DetailsGroup, GexAnalysisResponse } from '../../types/gex';
 import { MacroRegimeChecks, StructureInputs } from '../../types/api';
 import { fmtGex, fmtPrice } from '../../utils/formatters';
 import { CALL_COLOR, PUT_COLOR } from '../../utils/optionSideColors';
+import { cssRect } from '../../utils/appZoom';
 
 /**
  * Cuadro Details de la pestaña GEX: los once indicadores de contexto, agrupados por la PREGUNTA que
@@ -348,7 +349,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
   const handleEnter = (e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = cssRect(e.currentTarget);
     setPos({ x: rect.left + rect.width / 2, y: rect.bottom + 6 });
   };
 

@@ -735,7 +735,7 @@ namespace DataFeed.Application.App.GammaExposure
         /// expiración más cercana que tenga ese strike — sumarlos no tendría significado.
         /// Con una sola expiración devuelve exactamente sus strikes.
         /// </summary>
-        private static List<GammaExposureStrike> AggregateStrikes(
+        public static List<GammaExposureStrike> AggregateStrikes(
             List<Expiration> expirations,
             Dictionary<string, Dictionary<double, GammaExposureStrike>> byExpiry)
         {
@@ -804,7 +804,7 @@ namespace DataFeed.Application.App.GammaExposure
         /// Interpola el nivel donde Net GEX cruza de negativo a positivo.
         /// Si hay múltiples cruces, retorna el más cercano al spot (gamma flip relevante).
         /// </summary>
-        private double? CalculateGammaZero(List<GammaExposureStrike> strikes, double spot)
+        public static double? CalculateGammaZero(List<GammaExposureStrike> strikes, double spot)
         {
             if (strikes == null || strikes.Count < 2) return null;
 
