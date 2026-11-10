@@ -171,6 +171,10 @@ class SpaceClient:
                              body=body if isinstance(body, dict) else None)
         return r.json()
 
+    def get(self, path: str):
+        """GET <path> with this user's session; HTTP errors raise SpaceError (``status`` set)."""
+        return self._call("GET", path)
+
     def items(self, kind: str | None = None) -> dict:
         """{'items': [...own...], 'shared': [...shared by others...]}."""
         return self._call("GET", "/App/GaleCore/Space", params={"kind": kind} if kind else None)

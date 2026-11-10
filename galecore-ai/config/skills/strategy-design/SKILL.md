@@ -131,13 +131,13 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
 
 ### Parte B — paso a SHADOW (deciden los comandos; vos sólo frenás y preguntás)
 - **B1. Aprobación:** sólo con las palabras explícitas del owner para ese nombre y versión → `strategy approve --ref
-  <ref> --owner-words "<su sí>"` (usa el hash guardado; nunca pedirlo ni mostrarlo). Cubre SHADOW en GaleCore Dev.
-  Después `strategy install-spec --ref <ref>`.
+  <ref> --owner-words "<su sí>"` (usa el hash guardado; nunca pedirlo ni mostrarlo). Cubre SHADOW en el GaleCore de este Lab.
+  No hay que copiar la spec a ningún lado: el despliegue (B2) la registra por la API.
 - **B2. Despliegue:** si el owner pide desplegar esa versión aprobada en SHADOW → `strategy deploy --ref <ref>`:
-  chequea la aprobación, sube la spec guardada y despliega en GaleCore Dev, sin pasos a mano. Mostrale la instancia
+  chequea la aprobación, sube la spec guardada y despliega en el GaleCore de este Lab (el Lab de producción, en producción), sin pasos a mano. Mostrale la instancia
   (`instance_id`, y si reemplazó otra versión) y dónde seguirla: Estrategias → SHADOW en la plataforma. Nunca sin una
   aprobación explícita de esa versión; si GaleCore lo rechaza (otra versión corriendo, sin persistencia), decíselo
-  con sus palabras. Nunca PAPER, LIVE ni producción. (`galecore_dev.py deploy` y `strategy deploy-check` siguen
+  con sus palabras. Nunca PAPER ni LIVE. (`galecore_dev.py deploy` y `strategy deploy-check` siguen
   siendo la vía manual.)
 - **B3. Frenar y esperar al owner** antes de tocar una instancia corriendo: su estado, posiciones abiertas y qué hace
   frenarla (dejan de entrar; lo abierto se sigue valuando). «Pausá esta estrategia» = `galecore_dev.py stop --instance
