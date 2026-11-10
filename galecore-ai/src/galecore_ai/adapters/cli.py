@@ -1416,6 +1416,12 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
         _json_out({**report.model_dump(mode="json"), "spec_hash": galecore_spec_hash(text),
                    "design_gaps": design_gaps(content)},
                   exit_code=_EXIT_VALIDATION_ERROR if report.verdict == "INVALID" else _EXIT_SUCCESS)
+    if args.strategy_command == "stop":
+        from galecore_ai.application.strategy import stop_instance
+        try:
+            _json_out(stop_instance(args.instance))
+        except KnowledgeError as exc:
+            _knowledge_error_out(exc)
     kb = _build_knowledge_base()
     try:
         if args.strategy_command == "save":
@@ -2027,6 +2033,8 @@ def build_parser() -> _JsonArgumentParser:
     p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW (registers the spec, then "
                                                 "deploys it; GaleCore is not called without an intact approval)")
     p_st_dep.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_stop = st_sub.add_parser("stop", help="Stop a SHADOW instance (it stops entering; what is open keeps being valued)")
+    p_st_stop.add_argument("--instance", required=True, help="instance id (from `followup run` or `state`)")
 
     p_schema = sub.add_parser("schema", help="The JSON a save takes on stdin (research, evidence, proposal, critique)")
     p_schema.add_argument("kind", choices=["research", "evidence", "proposal", "critique"])

@@ -574,6 +574,19 @@ def deploy_strategy(*, kb: KnowledgeBase, key: str, deployer: Deployer | None = 
     return result
 
 
+def stop_instance(instance_id: str, client=None) -> dict:
+    """Stop a SHADOW instance in the GaleCore this process is connected to (same connection as the follow-up report),
+    in the name of the logged-in user. It stops entering; what is open keeps being valued. No retries."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+    try:
+        body = (client or SpaceClient(timeout=60.0)).post(f"/App/Runtime/Instances/{instance_id}/Stop")
+    except SpaceError as exc:
+        why = _HTTP_PROBLEMS.get(exc.status or 0, "GaleCore no pudo frenar la instancia")
+        raise KnowledgeError(f"{why} (instancia {instance_id}): no se sabe si quedó frenada, mirá Estrategias en la "
+                             "plataforma", [str(exc)]) from exc
+    return {"status": "STOPPED", "instance_id": instance_id, "galecore": body}
+
+
 def strategy_key(ref_or_key: str) -> str:
     key = ref_or_key.removeprefix("strategy:")
     try:

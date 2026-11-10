@@ -175,6 +175,10 @@ class SpaceClient:
         """GET <path> with this user's session; HTTP errors raise SpaceError (``status`` set)."""
         return self._call("GET", path)
 
+    def post(self, path: str, json=None):
+        """POST <path> with this user's session; HTTP errors raise SpaceError (``status`` set)."""
+        return self._call("POST", path, json=json)
+
     def items(self, kind: str | None = None) -> dict:
         """{'items': [...own...], 'shared': [...shared by others...]}."""
         return self._call("GET", "/App/GaleCore/Space", params={"kind": kind} if kind else None)

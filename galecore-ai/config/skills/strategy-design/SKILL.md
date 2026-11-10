@@ -140,7 +140,7 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   con sus palabras. Nunca PAPER ni LIVE. (`galecore_dev.py deploy` y `strategy deploy-check` siguen
   siendo la vía manual.)
 - **B3. Frenar y esperar al owner** antes de tocar una instancia corriendo: su estado, posiciones abiertas y qué hace
-  frenarla (dejan de entrar; lo abierto se sigue valuando). «Pausá esta estrategia» = `galecore_dev.py stop --instance
+  frenarla (dejan de entrar; lo abierto se sigue valuando). «Pausá esta estrategia» = `strategy stop --instance
   <id>`, nunca el interruptor de la plataforma (sólo para «pausá todo»). Reanudar = nuevo despliegue del mismo hash con
   palabras del owner (instancia nueva); registrar la decisión nombrando ambas instancias. Una condición de reanudación
   o fecha de revisión va a `supervise remind`.
