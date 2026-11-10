@@ -98,6 +98,19 @@ namespace DataFeed.Application.App.Gex
         }
 
         /// <summary>
+        /// Último barrido del símbolo (memoria o disco), sin importar su antigüedad y sin barrer
+        /// nada. null si nunca se barrió. Lo usa GET /App/Gex/Scope.
+        /// </summary>
+        public static GexAnalysisResponse? TryGetLast(string symbol)
+        {
+            symbol = symbol.ToUpperInvariant();
+            if (_cache.TryGetValue(symbol, out var cached)) return cached.Response;
+            var stored = GexAnalysisDisk.Load(symbol);
+            if (stored != null) _cache[symbol] = (stored, stored.Timestamp, string.Empty);
+            return stored;
+        }
+
+        /// <summary>
         /// Respuesta con el switch en OFF: lo último que haya en cache, sin importar su antigüedad,
         /// marcado como congelado. Si nunca se barrió, devuelve el envoltorio vacío para que el
         /// tablero muestre "detenido" en vez de un error.

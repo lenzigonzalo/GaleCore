@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Settings, Shield, User, LogOut } from 'lucide-react';
 import type { Tab } from './TabNav';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
-import { NAVIGATION } from './navigation';
+import { NAVIGATION, isMacroTab, lastMacroTab, rememberMacroTab } from './navigation';
 import { cssPx } from '../../utils/appZoom';
 export type WorkspaceMode = 'monitor' | 'operativa' | 'lab';
 interface Props { active: Tab; mode?: WorkspaceMode; onChange: (tab: Tab) => void; onLogout?: () => void; width?: number; onResize?: (width: number) => void }
@@ -18,6 +18,7 @@ export function WorkspaceNav({ active, onChange, onLogout, width, onResize }: Pr
     document.addEventListener('mousedown', close); document.addEventListener('keydown', key);
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', key); };
   }, [menu]);
+  useEffect(() => { if (isMacroTab(active)) rememberMacroTab(active); }, [active]);
   const compact = active === 'lab';
   const drag = (event: React.PointerEvent) => {
     if (!onResize) return; event.preventDefault();
@@ -27,7 +28,12 @@ export function WorkspaceNav({ active, onChange, onLogout, width, onResize }: Pr
   };
   const navigation = <aside id="workspace-navigation" className={'workspace-navigation' + (compact ? ' compact' : '')} style={!compact && width ? { width } : undefined}>
     <nav aria-label="Navegación del espacio">{NAVIGATION.map(group => <div className="workspace-nav-group" key={group.group}>
-      <span className="workspace-group-label">{group.group}</span>{group.entries.map(({ id, label, Icon }) => <button key={id} className="workspace-nav-entry" title={label} aria-label={label} aria-current={active === id ? 'page' : undefined} onClick={() => onChange(id)}><Icon size={19}/><span>{label}</span></button>)}
+      <span className="workspace-group-label">{group.group}</span>{group.entries.map(({ id, label, Icon, children }) => children
+        ? <div className="workspace-nav-parent" key={id}>
+          <button className="workspace-nav-entry" title={label} aria-label={label} aria-expanded={children.some(child => child.id === active)} onClick={() => onChange(lastMacroTab())}><Icon size={19}/><span>{label}</span></button>
+          {children.some(child => child.id === active) && <div className="workspace-nav-children" role="group" aria-label={label}>{children.map(child => <button key={child.id} className="workspace-nav-entry workspace-nav-child" title={child.label} aria-label={child.label} aria-current={active === child.id ? 'page' : undefined} onClick={() => onChange(child.id)}><span>{child.label}</span></button>)}</div>}
+        </div>
+        : <button key={id} className="workspace-nav-entry" title={label} aria-label={label} aria-current={active === id ? 'page' : undefined} onClick={() => onChange(id)}><Icon size={19}/><span>{label}</span></button>)}
     </div>)}</nav>
     <div className="workspace-nav-bottom"><button className="workspace-nav-entry" title="Configuración" aria-label="Configuración" onClick={() => onChange('config')}><Settings size={19}/><span>Configuración</span></button>
       <div ref={account} className="workspace-user"><button className="workspace-nav-entry" title={user?.username || 'Usuario'} aria-label="Menú de usuario" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(value => !value)}><User size={19}/><span>{user?.username || 'Usuario'}</span></button>

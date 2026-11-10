@@ -8,6 +8,7 @@ import type { Tab } from './components/layout/TabNav';
 import { DESTINATIONS } from './components/layout/navigation';
 import { Resumen } from './pages/Resumen';
 import { Macro } from './pages/Macro';
+import { Argentina } from './pages/Argentina';
 import { Biblioteca } from './pages/Biblioteca';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
 import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
@@ -130,7 +131,7 @@ function Dashboard({ onLogout, userId }: DashboardProps) {
   useApplyTextSizes();
 
   return (
-    <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '') + (isLabWorkspace ? ' watchlist-autohide' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
+    <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '') + (isLabWorkspace ? ' watchlist-autohide' : '')} style={{ height: 'calc(100 * var(--vh))', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
         <WorkspaceHeader status={<StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/>} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
@@ -162,6 +163,7 @@ function Dashboard({ onLogout, userId }: DashboardProps) {
           {tab === 'gex' && <Gex externalWatchlist indicator={marketIndicator} onIndicatorChange={setMarketIndicator} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
           {tab === 'macro' && <Macro />}
+          {tab === 'macro-ar' && <Argentina />}
           {tab === 'biblioteca' && <Biblioteca />}
           {strategiesVisited && <div hidden={tab !== 'estrategias'}><Shadow selectedSpec={selectedSpec} onSelectSpec={setSelectedSpec} onOpenChat={openProject} rpf={<Rpf acceptSuggestion={acceptSuggestion} dismissSuggestion={dismissSuggestion} subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg} socketStatus={socketStatus}/>} /></div>}
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}

@@ -1631,6 +1631,36 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// GEX agregado de los vencimientos pedidos (`expirations`, fechas yyyy-MM-dd separadas por
+        /// coma), sobre el último barrido de Gex/Analysis: no vuelve a barrer la cadena. Misma forma
+        /// que `gex.global`; los vencimientos que no estén en el barrido se ignoran
+        /// (`expirationsIncluded` dice cuántos entraron). 409 `gex_not_scanned` si el símbolo no
+        /// tiene barrido.
+        /// </summary>
+        [Tags("App.Gex")]
+        [HttpGet("Gex/Scope")]
+        [ProducesResponseType(typeof(GexScope), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+        public IActionResult GexScopeGet([FromQuery] string symbol, [FromQuery] string? expirations)
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+                return BadRequest(new ApiErrorResponse { Error = "symbol es obligatorio.", Code = "symbol_required" });
+
+            var wanted = (expirations ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var scope = GexScopeCalculator.ComputeFromLast(symbol.Trim().ToUpperInvariant(), wanted);
+            if (scope == null)
+                return Conflict(new ApiErrorResponse
+                {
+                    Error = $"{symbol.ToUpperInvariant()} todavía no tiene un barrido de GEX.",
+                    Code = "gex_not_scanned",
+                    Symbol = symbol.ToUpperInvariant(),
+                });
+
+            return Ok(scope);
+        }
+
+        /// <summary>
         /// Estado del switch de GEX. `source` dice qué nivel lo decidió: "platform" o "rules"
         /// (gex.enabled del JSON).
         /// </summary>

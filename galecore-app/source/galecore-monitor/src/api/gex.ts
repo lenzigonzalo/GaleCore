@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { GexAnalysisResponse, GexRules } from '../types/gex';
+import { GexAnalysisResponse, GexRules, GexScopeApi } from '../types/gex';
 
 /**
  * Switch de la estrategia. No hay funciones propias para leerlo ni escribirlo: el contrato es
@@ -27,6 +27,17 @@ export async function fetchGexAnalysis(
   const { data } = await apiClient.get<GexAnalysisResponse>('/App/Gex/Analysis', {
     params: { Symbol: symbol, Refresh: refresh },
     timeout: 300_000,
+  });
+  return data;
+}
+
+/**
+ * Muros, ZGL y Net GEX de los vencimientos elegidos, calculados por la API sobre el último barrido
+ * (no vuelve a barrer la cadena). 409 `gex_not_scanned` si el símbolo todavía no tiene barrido.
+ */
+export async function fetchGexScope(symbol: string, expirations: string[]): Promise<GexScopeApi> {
+  const { data } = await apiClient.get<GexScopeApi>('/App/Gex/Scope', {
+    params: { symbol, expirations: expirations.join(',') },
   });
   return data;
 }
