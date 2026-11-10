@@ -1,9 +1,10 @@
-"""Can this spec ever enter? Its risk limits in USD against the worst loss of its structure (WS-0098, increment 2).
+"""What the risk limits of a spec ask of its structure, in USD (WS-0098, increment 2).
 
 The limits are percentages of the simulated capital (per trade, open risk, one bet); the structure loses at most
-(width − credit) × 100 per contract. A cap that only a credit close to the whole width could meet never lets a position
-open: the SHADOW run of the Sandwich 1.3.0 (9 USD bet cap, 5-point wings) blocked for 10 days for that. Deterministic,
-no model call; it says what the numbers imply and never changes them. What the spec does not fix is listed, not guessed.
+(width − credit) × 100 per contract. The tightest limit says how much credit a candidate has to collect for one contract to
+fit: the SHADOW run of the Sandwich 1.3.0 (9 USD bet cap, 5-point wings) was stopped by that every day for a week. The limits
+and their defaults are the engine's (ShadowRiskControls.CapitalOf: what the spec does not declare is 100 %), and without a
+simulated capital there are none. Deterministic, no model call; it states what the numbers imply and never changes them.
 """
 
 from __future__ import annotations
@@ -11,8 +12,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
-IMPOSSIBLE_CREDIT_SHARE = 0.9   # proposed default, to confirm with the owner: collecting 90 % of the width never happens
 MULTIPLIER = 100
+DEFAULT_PCT = 100.0   # ShadowRiskControls.CapitalOf: an undeclared percentage is 100
 
 
 def _num(v: Any) -> float | None:
@@ -39,55 +40,53 @@ def _width(spec: dict) -> float | None:
     return max(widths) if widths else None
 
 
-def limits_usd(spec: dict, simulated_amount: float | None) -> dict:
-    """The spec's limits in USD: per trade, open risk and one bet (a share of the open risk)."""
+def limits_usd(spec: dict) -> dict:
+    """The spec's limits in USD, as the engine computes them (cents rounded): per trade (the lower of the percentage and
+    the fixed USD), open risk, and one bet (a share of the open risk). All None without a simulated capital."""
     rl = spec.get("risk_limits") or {}
-    capital = _num(rl.get("simulated_capital_usd")) or simulated_amount
-    out: dict = {"capital": capital}
-    per_trade = _num(rl.get("max_loss_per_trade_usd"))
+    capital = _num(rl.get("simulated_capital_usd"))
+    if capital is None:
+        return {"capital": None, "por_operacion": None, "riesgo_abierto": None, "por_apuesta": None}
     pct = _num(rl.get("max_risk_per_trade_pct"))
-    if per_trade is None and capital and pct is not None:
-        per_trade = capital * pct / 100
-    out["por_operacion"] = per_trade
+    by_pct = round(capital * (DEFAULT_PCT if pct is None else pct) / 100, 2)
+    fixed = _num(rl.get("max_loss_per_trade_usd"))
+    per_trade = min(by_pct, fixed) if fixed is not None and fixed > 0 else by_pct
     open_pct = _num(rl.get("max_open_risk_pct"))
-    out["riesgo_abierto"] = capital * open_pct / 100 if capital and open_pct is not None else None
+    open_risk = round(capital * (DEFAULT_PCT if open_pct is None else open_pct) / 100, 2)
     bet_pct = _num(rl.get("max_bet_pct"))
-    out["por_apuesta"] = (out["riesgo_abierto"] * bet_pct / 100
-                          if out["riesgo_abierto"] is not None and bet_pct is not None else None)
-    return out
+    return {"capital": capital, "por_operacion": per_trade, "riesgo_abierto": open_risk,
+            "por_apuesta": round(open_risk * (DEFAULT_PCT if bet_pct is None else bet_pct) / 100, 2)}
 
 
 def assess(spec: dict, simulated_amount: float | None = None) -> dict:
-    lim = limits_usd(spec, simulated_amount)
+    lim = limits_usd(spec)
     width = _width(spec)
     caps = {name: v for name, v in (("por operación", lim["por_operacion"]), ("por apuesta", lim["por_apuesta"]),
                                     ("riesgo abierto", lim["riesgo_abierto"])) if v is not None}
     out = {"limites_usd": lim, "ancho": width, "veredicto": None, "credito_minimo": None}
     if width is None or not caps:
         out["texto"] = ("no se puede cruzar con la pérdida máxima: " +
-                        ("la spec no fija el ancho de la estructura" if width is None else "la spec no fija límites en USD"))
+                        ("la spec no fija el ancho de la estructura" if width is None else "la spec no fija un capital simulado"))
         return out
     name, cap = min(caps.items(), key=lambda kv: kv[1])
     required = width - cap / MULTIPLIER          # credit per contract that keeps the worst loss inside the cap
     out["perdida_maxima_sin_credito_usd"] = width * MULTIPLIER
     out["limite_que_manda"] = {"cual": name, "usd": cap}
     out["credito_minimo"] = max(required, 0.0)
-    if required <= 0:
-        out["veredicto"] = "pasa"
-        out["texto"] = (f"con alas de {width:g} la pérdida máxima ({_usd(width * MULTIPLIER)} USD sin crédito) cabe en el "
-                        f"límite {name} de {_usd(cap)} USD aun sin cobrar crédito")
-        return out
-    share = required / width
-    # Rounded up to the cent: «4,91» is the least credit that fits, 4,90 does not.
-    shown = math.ceil(required * 100 - 1e-9) / 100
-    ask = f"el límite {name} de {_usd(cap)} USD exige un crédito ≥ {_usd(shown)} con alas de {width:g}"
-    if share >= IMPOSSIBLE_CREDIT_SHARE:
-        out["veredicto"] = "no puede entrar nunca"
-        out["texto"] = f"no puede entrar nunca: {ask} ({share * 100:.0f} % del ancho)"
-    else:
-        out["veredicto"] = "pasa"
-        out["texto"] = f"puede entrar: {ask} ({share * 100:.0f} % del ancho)"
     min_credit = _num((spec.get("candidate_construction") or {}).get("constraints", {}).get("min_credit"))
     if min_credit is not None:
         out["credito_minimo_de_la_spec"] = min_credit
+    spec_min = f" (mínimo de la spec: {_usd(min_credit)})" if min_credit is not None else ""
+    if required <= 0:
+        out["veredicto"] = "pasa"
+        out["texto"] = (f"con alas de {width:g} la pérdida máxima ({_usd(width * MULTIPLIER)} USD sin crédito) cabe en el "
+                        f"límite {name} de {_usd(cap)} USD aun sin cobrar crédito{spec_min}")
+    elif required >= width:
+        out["veredicto"] = "no puede entrar nunca"
+        out["texto"] = f"no puede entrar nunca: el límite {name} de {_usd(cap)} USD no deja ni el crédito máximo posible ({_usd(width)}){spec_min}"
+    else:
+        shown = math.ceil(required * 100 - 1e-9) / 100          # least credit that fits, to the cent: 4,91 yes, 4,90 no
+        out["veredicto"] = "pasa"
+        out["texto"] = (f"con este tope ({name}, {_usd(cap)} USD) necesitás cobrar ≥ {_usd(shown)} por cada {width:g} de ancho"
+                        f"{spec_min}")
     return out

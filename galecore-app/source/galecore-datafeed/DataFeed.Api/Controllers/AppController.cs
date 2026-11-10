@@ -1757,7 +1757,9 @@ namespace DataFeed.Controllers
         {
             var spec = _runtimeStore.GetSpec(name);
             if (spec == null) return NotFound($"Spec '{name}' not found");
-            return Ok(DataFeed.Application.App.Runtime.StrategyCard.Build(spec));
+            // «Por qué no opera»: un solo cálculo (StrategyStall) sobre los eventos de todas las instancias de esa spec.
+            var events = _runtimeStore.AllInstances().Where(i => i.SpecName == name).SelectMany(i => _runtimeStore.GetEvents(i.InstanceId)).ToList();
+            return Ok(DataFeed.Application.App.Runtime.StrategyCard.Build(spec, events));
         }
 
         /// <summary>

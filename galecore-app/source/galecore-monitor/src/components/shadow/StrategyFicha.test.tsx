@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PerformancePanel } from './PerformancePanel';
-import { agoText, gateLine, registryEntries, whyNotOperating } from './ficha';
+import { agoText, gateLine, registryEntries } from './ficha';
 import {
   deployShadowSpec, fetchPerformancePanel, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowEvents, fetchShadowMetrics, fetchStrategyCard, stopShadowInstance,
 } from '../../api/shadow';
@@ -82,37 +82,24 @@ test('sin versión conocida se muestra el hash corto, y los límites sin dato va
   expect(bar).toHaveTextContent('Entradas por día —');
 });
 
-test('el titular dice el bloqueo por tope por apuesta sin abrir ninguna pestaña', async () => {
-  discards.mockResolvedValue([skipped(3), skipped(2), skipped(1, '2026-11-04')]);
+const stall = { days: 4, since: '2026-11-03', until: '2026-11-10', cause: 'ENTRY_SKIPPED:max_bet', causeLabel: 'tope por apuesta',
+  reason: 'tope por apuesta (SPX unknown 2026-W46): abierto 0.00 + nueva 200.00 USD supera el tope de 9.00 USD',
+  text: '4 días hábiles seguidos sin entrar por tope por apuesta' };
+
+test('el titular muestra tal cual el «por qué no opera» que calcula la API, sin abrir ninguna pestaña', async () => {
+  cardApi.mockResolvedValue({ ...card, stall });
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
-  const headline = await screen.findByText('Hace 2 días no entra: tope por apuesta — 3 veces');
+  const headline = await screen.findByText('4 días hábiles seguidos sin entrar por tope por apuesta');
   expect(headline.parentElement).toHaveTextContent('supera el tope de 9.00 USD');
-  expect(discards).toHaveBeenCalledWith('i-1', 500, expect.arrayContaining(['ENTRY_SKIPPED', 'GATES_NOT_PASSED', 'CANDIDATE_NOT_VIABLE', 'RISK_CHECK_FAILED']));
+  expect(discards).not.toHaveBeenCalledWith('i-1', 500, expect.anything());   // la ficha no recuenta eventos
 });
 
-test('el titular se oculta si hay una posición abierta o la última novedad fue una apertura', async () => {
-  discards.mockResolvedValue([skipped(1)]);
-  (fetchPerformancePanel as jest.Mock).mockResolvedValue(panel(2));
-  const first = render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
-  await screen.findByText('Ganancia total');
-  await waitFor(() => expect(discards).toHaveBeenCalled());
-  expect(screen.queryByText(/no entra/)).not.toBeInTheDocument();
-  first.unmount();
-  (fetchPerformancePanel as jest.Mock).mockResolvedValue(panel(0));
-  discards.mockResolvedValue([skipped(1), { eventId: 'o', instanceId: 'i-1', eventType: 'POSITION_OPENED', symbol: 'SPX', timestamp: '2026-11-05T19:30:00Z', payload: {} }]);
+test('sin racha en la API no hay titular', async () => {
+  cardApi.mockResolvedValue({ ...card, stall: null });
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
-  await screen.findByText('Ganancia total');
-  await waitFor(() => expect(discards).toHaveBeenCalledTimes(2));
-  expect(screen.queryByText(/no entra/)).not.toBeInTheDocument();
-});
-
-test('agrupa por causa y toma la más frecuente de los últimos 10 días', () => {
-  const gates = (n: number): ShadowEvent => ({ eventId: `g${n}`, instanceId: 'i', eventType: 'GATES_NOT_PASSED', symbol: 'SPX', timestamp: `2026-11-0${n}T18:00:00Z`,
-    payload: { gates: [{ gate_id: 'vix_below_24', status: 'FAIL', value: 26.44, operator: 'LT', threshold: 24 }] } });
-  const old = { ...gates(1), eventId: 'old', timestamp: '2026-10-01T18:00:00Z' };
-  const why = whyNotOperating([gates(1), gates(2), gates(3), skipped(1), old, old, old, old], 0)!;
-  expect(why).toMatchObject({ label: 'Gates no cumplidos', count: 3, days: 3 });
-  expect(why.reason).toContain('vix_below_24');
+  await screen.findByLabelText('Estado de la estrategia');
+  await waitFor(() => expect(cardApi).toHaveBeenCalled());
+  expect(screen.queryByText(/sin entrar/)).not.toBeInTheDocument();
 });
 
 test('Pausar pide confirmación, avisa de las abiertas, llama a stop y refresca', async () => {

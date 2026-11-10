@@ -5,9 +5,6 @@ import { exitLabel } from './panelPresentation';
 
 /** Presentación de la ficha de una estrategia: sólo agrupa, cuenta y da formato a filas que ya calculó la API. */
 
-export const BLOCKING_EVENT_TYPES = ['ENTRY_SKIPPED', 'GATES_NOT_PASSED', 'CANDIDATE_NOT_VIABLE', 'RISK_CHECK_FAILED'] as const;
-const WINDOW_DAYS = 10;
-
 export const num = (n: number, max = 2, min = 0) => n.toLocaleString('es-AR', { minimumFractionDigits: min, maximumFractionDigits: max });
 export const usdAr = (n: number | null | undefined) => n === null || n === undefined ? '—' : `${num(n)} USD`;
 const signedUsd = (n: number) => `${n < 0 ? '−' : '+'}${num(Math.abs(n), 2, 2)} USD`;
@@ -27,28 +24,6 @@ const marketDay = (iso: string) => new Date(iso).toLocaleDateString('es-AR', { t
 const at = (e: ShadowEvent) => Date.parse(e.timestamp);
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const reasonOf = (e: ShadowEvent) => { const r = discardReason(e); return r === 'sin motivo registrado' ? '' : r; };
-
-export interface WhyNot { days: number; count: number; label: string; reason: string }
-
-/**
- * Por qué no opera: la causa de bloqueo más frecuente de los últimos 10 días (contados desde el último evento),
- * con su motivo textual más reciente. Nada si hay una posición abierta o el último evento fue una apertura.
- */
-export function whyNotOperating(events: ShadowEvent[], openPositions: number): WhyNot | null {
-  if (openPositions > 0 || !events.length) return null;
-  const sorted = [...events].sort((a, b) => at(b) - at(a));
-  if (sorted[0].eventType === 'POSITION_OPENED') return null;
-  const blocking = sorted.filter(e => (BLOCKING_EVENT_TYPES as readonly string[]).includes(e.eventType));
-  if (!blocking.length) return null;
-  const since = at(blocking[0]) - WINDOW_DAYS * 86400000;
-  const groups = new Map<string, ShadowEvent[]>();
-  blocking.filter(e => at(e) >= since).forEach(e => { const k = discardLabel(e); groups.set(k, [...(groups.get(k) ?? []), e]); });
-  const [label, list] = Array.from(groups.entries()).sort((a, b) => b[1].length - a[1].length)[0];
-  return { label, count: list.length, days: new Set(list.map(e => marketDay(e.timestamp))).size, reason: reasonOf(list[0]) };
-}
-export function whyNotText(w: WhyNot): string {
-  return `Hace ${w.days} ${w.days === 1 ? 'día' : 'días'} no entra: ${lowerFirst(w.label)} — ${w.count} ${w.count === 1 ? 'vez' : 'veces'}`;
-}
 
 const OPERATORS: Record<string, string> = { LT: '<', LTE: '≤', GT: '>', GTE: '≥', EQ: '=', NEQ: '≠', '<=': '≤', '>=': '≥', '<': '<', '>': '>', '=': '=' };
 const GATE_STATUS: Record<string, string> = { PASS: 'pasa', FAIL: 'no pasa', NO_DATA: 'sin dato' };

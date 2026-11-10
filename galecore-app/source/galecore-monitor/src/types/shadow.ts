@@ -226,4 +226,6 @@ export interface StrategyCard {
   window: { start: string; end: string; timezone: string } | null;
   maxEntriesPerDay: number | null;
   limitsUsd: { capital: number | null; perTrade: number | null; openRisk: number | null; perBet: number | null };
+  /** «Por qué no opera»: días hábiles seguidos sin entrar por la misma causa; lo calcula la API (StrategyStall). */
+  stall?: { days: number; since: string; until: string; cause: string; causeLabel: string; reason: string; text: string } | null;
 }

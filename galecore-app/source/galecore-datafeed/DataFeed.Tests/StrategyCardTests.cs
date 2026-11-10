@@ -47,10 +47,27 @@ public class StrategyCardTests
         Assert.Null(c.LimitsUsd.OpenRisk);
         Assert.Null(c.LimitsUsd.PerBet);
 
-        var d = StrategyCard.Build(Spec(new SpecRiskLimits { SimulatedCapitalUsd = 10000 }));
-        Assert.Null(d.LimitsUsd.PerTrade);
-        Assert.Null(d.LimitsUsd.OpenRisk);
-        Assert.Null(d.LimitsUsd.PerBet);
+    }
+
+    [Fact]
+    public void Undeclared_Limits_Use_The_Engines_Defaults_Of_100_Percent()
+    {
+        // ShadowRiskControls.CapitalOf: lo no declarado es 100 % (riesgo por operación, riesgo abierto y apuesta).
+        var c = StrategyCard.Build(Spec(new SpecRiskLimits { SimulatedCapitalUsd = 10000 }));
+        Assert.Equal(10000, c.LimitsUsd.PerTrade);
+        Assert.Equal(10000, c.LimitsUsd.OpenRisk);
+        Assert.Equal(10000, c.LimitsUsd.PerBet);
+
+        var onlyBet = StrategyCard.Build(Spec(new SpecRiskLimits { SimulatedCapitalUsd = 10000, MaxOpenRiskPct = 3 }));
+        Assert.Equal(300, onlyBet.LimitsUsd.OpenRisk);
+        Assert.Equal(300, onlyBet.LimitsUsd.PerBet);     // apuesta 100 % del riesgo abierto máximo
+    }
+
+    [Fact]
+    public void PerTrade_Is_The_Lower_Of_Pct_And_Fixed_Usd_Like_The_Engine()
+    {
+        var c = StrategyCard.Build(Spec(new SpecRiskLimits { SimulatedCapitalUsd = 10000, MaxRiskPerTradePct = 3, MaxLossPerTradeUsd = 250 }));
+        Assert.Equal(250, c.LimitsUsd.PerTrade);
     }
 
     [Fact]

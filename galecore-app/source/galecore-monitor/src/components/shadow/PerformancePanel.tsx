@@ -99,7 +99,7 @@ export function PerformancePanel({ spec, instance = null, instances, onInstanceC
       actions={<>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</>} />
     {!inDesign && <StrategyStatusBar spec={spec} instance={instance} canControl={stage === 'SHADOW' && !!instance} openPositions={panel?.tradesOpen} onInstanceChange={onInstanceChange} />}
     <StrategyOverview strategy={design.strategy} />
-    {!inDesign && <WhyNotOperating instanceId={instance?.instanceId} openPositions={panel ? panel.tradesOpen : error ? 0 : null} />}
+    {!inDesign && <WhyNotOperating spec={spec} />}
     <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Posiciones', 'Reglas', 'Registro'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
     {inDesign && (tab === 'Resumen' || tab === 'Posiciones') && <p>Esta estrategia está en diseño. Abrí su proyecto en el chat para prepararla para SHADOW.</p>}
     {(tab === 'Resumen' || tab === 'Posiciones') && loading && <div role="status" aria-label="Cargando rendimiento" className="performance-loading"><div className="performance-metrics">{Array.from({ length: 12 }, (_, i) => <div key={i} className="performance-skeleton metric-skeleton" />)}</div><div className="performance-skeleton chart-skeleton" /></div>}
