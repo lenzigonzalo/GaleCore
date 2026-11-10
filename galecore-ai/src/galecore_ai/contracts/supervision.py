@@ -25,6 +25,7 @@ class AlertKind(str, Enum):
     EVENT = "event"              # a macro release or FOMC decision before expiration, 2 business days ahead (E4)
     WATCH = "watch"              # a rule the owner asked for («avisame si SPY baja a 760») was met (P1-01b)
     BET_LIMIT = "bet_limit"      # one bet (underlying, direction, expiry week) is above the profile's cap (WS-0023)
+    STALLED = "stalled"          # N evaluated business days in a row stopped for the same cause, no position (WS-0098)
 
 
 # What the owner can answer to each kind of alert. The first one is what the rules already do.
@@ -36,6 +37,7 @@ OPTIONS: dict[AlertKind, list[str]] = {
     AlertKind.EVENT: ["mantener", "cerrar antes del dato"],
     AlertKind.WATCH: ["visto"],
     AlertKind.BET_LIMIT: ["aceptar", "revisar la exposición"],
+    AlertKind.STALLED: ["visto", "revisar los límites o las reglas"],
 }
 
 
