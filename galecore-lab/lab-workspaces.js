@@ -12,8 +12,9 @@ const fail = (message, status = 400) => Object.assign(new Error(message), { stat
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
 const TYPES = ['personal', 'analysis', 'strategy'];
-const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv|py|log)$/i;
-const IMAGE_TYPES = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp'};
+const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv|py|log|html|htm)$/i;
+const IMAGE_TYPES = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml'};
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg)$/i;
 function attachmentFile(dir, rel) {
   if(!/^adjuntos\/[\w.\- ]+$/.test(rel))throw fail('Adjunto no encontrado: '+rel,404);
   const base=fs.realpathSync(dir);let file;
@@ -33,13 +34,14 @@ function readProjectText(file) {
   const bytes = fs.readFileSync(file);
   return bytes.toString(bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf16le' : 'utf8').replace(/^\uFEFF/, '');
 }
-function safeFile(dir, relative) {
-  if (!relative || path.isAbsolute(relative) || PRIVATE.test(relative) || !TEXT.test(relative)) throw fail('Archivo no disponible.', 404);
+// Los tableros HTML embeben datos; el resto del texto conserva el límite de 512 KB.
+function safeFile(dir, relative, allowed = TEXT, limit = /\.html?$/i.test(relative) ? 2 * 1024 * 1024 : 512 * 1024) {
+  if (!relative || path.isAbsolute(relative) || PRIVATE.test(relative) || !allowed.test(relative)) throw fail('Archivo no disponible.', 404);
   const base = fs.realpathSync(dir), target = path.resolve(base, relative);
   if (!target.startsWith(base + path.sep)) throw fail('Archivo fuera del proyecto.', 403);
   let actual; try { actual = fs.realpathSync(target); } catch { throw fail('Archivo no encontrado.', 404); }
   if (!actual.startsWith(base + path.sep) || !fs.statSync(actual).isFile()) throw fail('Archivo fuera del proyecto.', 403);
-  if (fs.statSync(actual).size > 512 * 1024) throw fail('Archivo demasiado grande para la vista previa.', 413);
+  if (fs.statSync(actual).size > limit) throw fail('Archivo demasiado grande para la vista previa.', 413);
   return actual;
 }
 // Investigaciones (WS-0066): viven en knowledge/research/ (comunes); la que se guardó desde un proyecto lleva `project: <id>`
@@ -65,7 +67,7 @@ function tree(dir, prefix = '', depth = 0) {
   return fs.readdirSync(dir, { withFileTypes: true }).filter(e => !e.isSymbolicLink() && !PRIVATE.test(e.name)).slice(0,200).flatMap(e => {
     const rel = prefix + e.name;
     if(e.isDirectory()) return [{ path:rel, name:e.name, kind:'folder', children:tree(path.join(dir,e.name),rel+'/',depth+1) }];
-    return [{path:rel,name:e.name,kind:'file',...(TEXT.test(e.name)?{}:{text:false})}];
+    return [{path:rel,name:e.name,kind:'file',...(TEXT.test(e.name)?{}:{text:false,...(IMAGE_FILE.test(e.name)?{image:true}:{})})}];
   });
 }
 // Una ruta del explorador de Archivos (owner 17/10: crear, editar, renombrar, eliminar como en el explorador): dentro
@@ -519,6 +521,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];chat.tasks=[];delete chat.limitResetsAt;chat.mode=mode;chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'galecore-lab','skills','lab-strategy-bootstrap','SKILL.md');
     const mapaSkill=path.join(root,'galecore-lab','skills','mapa','SKILL.md');
+    const agentesSkill=path.join(root,'galecore-lab','skills','agentes-nube','SKILL.md');
     // El método de diseño es una sola copia, en galecore-ai/config/skills.
     const designSkill=path.join(root,'galecore-ai','config','skills','strategy-design','SKILL.md');
     // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
@@ -528,7 +531,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const product=fs.readFileSync(path.join(root,'galecore-ai','PRODUCT.md'),'utf8');
     const mine=p.strategies||[];
     const resume=mine.length&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.';
+    const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.'+' Si el trader pide un agente que corra solo («creame un agente que…»), aplicá la skill '+agentesSkill+'.';
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json','.mcp.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
@@ -632,6 +635,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const p=project(parts[1]), rel=url.searchParams.get('path')||'', file=attachmentFile(p.dir,rel);
       const type=IMAGE_TYPES[path.extname(rel).toLowerCase()];
       res.writeHead(200,{'Content-Type':type||'application/octet-stream','Content-Disposition':(type?'inline':'attachment')+'; filename="'+path.basename(rel)+'"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+      res.end(fs.readFileSync(file));return true;
+    }
+    if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='raw'&&parts.length===3){
+      // Imágenes de cualquier carpeta del proyecto para la vista previa (WS-0083 AC-10).
+      const p=project(parts[1]), rel=url.searchParams.get('path')||'', file=safeFile(p.dir,rel,IMAGE_FILE,15*1024*1024);
+      const type=IMAGE_TYPES[path.extname(rel).toLowerCase()];
+      res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...(type==='image/svg+xml'?{'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"}:{})});
       res.end(fs.readFileSync(file));return true;
     }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='attachments'){

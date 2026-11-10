@@ -159,19 +159,6 @@ export interface GexChartData {
    */
   expectedMove: number | null;
   strikes: GexStrike[];
-  /**
-   * Otros vencimientos elegidos para comparar: sólo sus niveles (muros y ZGL), que ya vienen
-   * calculados por la API para cada uno. Las barras son siempre las del vencimiento principal.
-   */
-  others?: GexOtherLevels[];
-}
-
-/** Los niveles de un vencimiento que se dibujan como líneas junto a los del principal. */
-export interface GexOtherLevels {
-  expiration: string;
-  callWall: number;
-  putWall: number;
-  zeroGammaLevel: number;
 }
 
 /**

@@ -1,6 +1,6 @@
 import apiClient from './client';
 import {
-  DISCARD_EVENT_TYPES, PerformancePanelParams, PerformancePanelResponse, PerformanceSummary, ShadowEvaluation, ShadowEvent, ShadowPosition, ShadowStatus, SpecVersionMetrics,
+  DISCARD_EVENT_TYPES, PerformancePanelParams, PerformancePanelResponse, PerformanceSummary, ShadowEvaluation, ShadowEvent, ShadowPosition, ShadowStatus, SpecVersionMetrics, StrategyCard,
 } from '../types/shadow';
 
 /**
@@ -25,11 +25,29 @@ export async function fetchShadowEvaluations(instanceId: string, limit = 20): Pr
   return data;
 }
 
-export async function fetchShadowDiscards(instanceId: string, limit = 20): Promise<ShadowEvent[]> {
+export async function fetchShadowDiscards(instanceId: string, limit = 20, types: readonly string[] = DISCARD_EVENT_TYPES): Promise<ShadowEvent[]> {
   const { data } = await apiClient.get<ShadowEvent[]>(
     `/App/Runtime/Instances/${encodeURIComponent(instanceId)}/Events`,
-    { params: { types: DISCARD_EVENT_TYPES.join(','), limit } });
+    { params: { types: types.join(','), limit } });
   return data;
+}
+
+/** Todos los eventos de la instancia, sin filtrar por tipo (el Registro de la ficha). */
+export async function fetchShadowEvents(instanceId: string, limit = 200): Promise<ShadowEvent[]> {
+  const { data } = await apiClient.get<ShadowEvent[]>(
+    `/App/Runtime/Instances/${encodeURIComponent(instanceId)}/Events`, { params: { limit } });
+  return data;
+}
+
+/** Ventana de entrada, tope diario y límites en USD de la estrategia; 404 si la API no la conoce. */
+export async function fetchStrategyCard(name: string): Promise<StrategyCard> {
+  const { data } = await apiClient.get<StrategyCard>(`/App/Runtime/Strategies/${encodeURIComponent(name)}/Card`);
+  return data;
+}
+
+/** Vuelve a prender una estrategia detenida: crea una instancia nueva de la misma versión (409 si la vigente es otra, 503 sin persistencia). */
+export async function deployShadowSpec(specName: string, expectedHash: string): Promise<void> {
+  await apiClient.post('/App/Runtime/Deploy', { specName, expectedHash });
 }
 
 export async function fetchShadowPositions(instanceId: string): Promise<ShadowPosition[]> {

@@ -13,6 +13,8 @@ export interface ShadowInstance {
   mode: string;
   createdAt: string;
   updatedAt: string;
+  /** Quién la desplegó (la API lo guarda en la instancia). */
+  deployedBy?: string | null;
 }
 
 export interface ShadowRecoveryReport {
@@ -216,4 +218,12 @@ export interface PerformancePanelResponse {
   execution: { tradesMeasured: number; tradesWithoutQuotes: number; avgCrossingCost: Metric;
     totalCrossingCost: Metric; realizedMeasured: Metric; realizedAfterCrossing: Metric;
     winRateAfterCrossing: Metric; notIncluded: string };
+}
+
+/** GET /App/Runtime/Strategies/{name}/Card: ventana, tope diario y límites de la versión vigente; lo calcula la API. */
+export interface StrategyCard {
+  specName: string; version: string | null; contentHash: string | null;
+  window: { start: string; end: string; timezone: string } | null;
+  maxEntriesPerDay: number | null;
+  limitsUsd: { capital: number | null; perTrade: number | null; openRisk: number | null; perBet: number | null };
 }

@@ -37,6 +37,9 @@ namespace DataFeed.Repositories
         public DbSet<SharedProjectMember> SharedProjectMembers => Set<SharedProjectMember>();
         public DbSet<SharedProjectChange> SharedProjectChanges => Set<SharedProjectChange>();
         public DbSet<PlatformConnection> PlatformConnections => Set<PlatformConnection>();
+        public DbSet<AgentKey> AgentKeys => Set<AgentKey>();
+        public DbSet<AgentFireToken> AgentFireTokens => Set<AgentFireToken>();
+        public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
         public DbSet<StrategySettingEntity> StrategySettings => Set<StrategySettingEntity>();
 
         // ── Runtime (Trading Runtime SHADOW) ──
@@ -112,6 +115,51 @@ namespace DataFeed.Repositories
                 e.Property(x => x.SecretCipher);
                 e.Property(x => x.SecretHint).HasMaxLength(16);
                 e.Property(x => x.LastTestMessage).HasMaxLength(500);
+            });
+
+            // Agentes que corren solos (WS-0079): clave de identidad por usuario, token de disparo y corridas.
+            b.Entity<AgentKey>(e =>
+            {
+                e.ToTable("agent_keys");
+                e.HasKey(x => x.OwnerId);
+                e.Property(x => x.OwnerId).ValueGeneratedNever();
+                e.Property(x => x.KeyHash).HasMaxLength(64).IsRequired();
+                e.Property(x => x.KeyHint).HasMaxLength(8).IsRequired();
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+                e.HasIndex(x => x.KeyHash).IsUnique();
+            });
+            b.Entity<AgentFireToken>(e =>
+            {
+                e.ToTable("agent_fire_tokens");
+                e.HasKey(x => new { x.OwnerId, x.AgentKey });
+                e.Property(x => x.AgentKey).HasMaxLength(64);
+                e.Property(x => x.TriggerId).HasMaxLength(200).IsRequired();
+                e.Property(x => x.TokenCipher).IsRequired();
+                e.Property(x => x.TokenHint).HasMaxLength(8).IsRequired();
+                e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+            });
+            b.Entity<AgentRun>(e =>
+            {
+                e.ToTable("agent_runs", t =>
+                {
+                    t.HasCheckConstraint("ck_agent_runs_origin", "origin IN ('" + string.Join("','", AgentRun.Origins) + "')");
+                    t.HasCheckConstraint("ck_agent_runs_status", "status IN ('" + string.Join("','", AgentRun.Statuses) + "')");
+                });
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.AgentKey).HasMaxLength(64).IsRequired();
+                e.Property(x => x.Origin).HasMaxLength(10).IsRequired();
+                e.Property(x => x.Status).HasMaxLength(10).IsRequired();
+                e.Property(x => x.Summary).HasMaxLength(AgentRun.MaxSummaryLength);
+                e.Property(x => x.ReasonCode).HasMaxLength(64);
+                e.Property(x => x.TriggerId).HasMaxLength(200);
+                e.Property(x => x.SessionUrl).HasMaxLength(500);
+                e.Property(x => x.SessionId).HasMaxLength(200);
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+                e.HasIndex(x => new { x.OwnerId, x.AgentKey, x.CreatedAt });
             });
 
             // ── Runtime tables (Trading Runtime SHADOW) ──

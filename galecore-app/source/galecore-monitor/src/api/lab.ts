@@ -46,7 +46,7 @@ export interface ChatTask { id: string; kind: 'agent' | 'command'; label: string
 export interface ChatUsage { turns: { at: string; input: number; output: number; cached: number; costUsd?: number }[]; context?: { used: number; window: number }; limit?: { status?: string; resetsAt?: number; windows?: Record<string, { utilization?: number; resetsAt?: number }> } }
 export interface ChatOptions { models: string[]; efforts: string[]; defaultModel?: string; modelEfforts?: Record<string, string[]> }
 export interface WorkspaceState { update?: { commit: string | null; updatable: boolean; notice: string | null }; defaultProvider?: 'codex' | 'claude'; projects: WorkspaceProject[]; chats: Omit<WorkspaceChat, 'messages'>[]; providers: LabProvider[]; chatOptions?: Partial<Record<'codex' | 'claude', ChatOptions>> }
-export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; text?: false; children?: WorkspaceFile[] }
+export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; text?: false; image?: boolean; children?: WorkspaceFile[] }
 
 /** Sube un adjunto del chat a adjuntos/ del proyecto (WS-0036); devuelve la ruta que se nombra en el mensaje. */
 export async function labUpload(projectId: string, file: File, dir?: string): Promise<{ path: string; name: string; size: number }> {
@@ -73,3 +73,14 @@ export async function labAttachment(projectId: string, path: string): Promise<Bl
 
 /** Shell del proyecto (owner 17/10): PowerShell en la carpeta del proyecto, por WebSocket con el token del Lab. */
 export const labShellUrl = () => LAB_URL.replace(/^http/, 'ws') + '/shell';
+
+/** Imagen de cualquier carpeta del proyecto, para la vista previa (misma autenticación que el adjunto). */
+export async function labRaw(projectId: string, path: string): Promise<Blob> {
+  const send = async () => request('/workspaces/' + encodeURIComponent(projectId) + '/raw?path=' + encodeURIComponent(path), {
+    headers: { Authorization: 'Bearer ' + await labToken() },
+  }, 120000);
+  let r = await send();
+  if (r.status === 401) { token = null; r = await send(); }
+  if (!r.ok) throw new Error('No se pudo abrir la imagen.');
+  return r.blob();
+}

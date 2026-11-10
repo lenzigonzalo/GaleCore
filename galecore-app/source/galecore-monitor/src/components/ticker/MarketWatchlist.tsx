@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { cssPx, cssRect } from '../../utils/appZoom';
 
 /** Sólo cambia el espacio de la lista: no altera sus datos ni suscripciones. */
 export function MarketWatchlist({ children }: { children: React.ReactNode }) {
@@ -12,7 +13,7 @@ export function MarketWatchlist({ children }: { children: React.ReactNode }) {
       aria-label="Ancho de watchlist" aria-orientation="vertical" aria-valuemin={300} aria-valuemax={620} aria-valuenow={width}
       onKeyDown={e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); setWidth(w => clamp(w + (e.key === 'ArrowLeft' ? 20 : -20))); } }}
       onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); }}
-      onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) { const right = e.currentTarget.parentElement!.getBoundingClientRect().right; setWidth(clamp(right - e.clientX)); } }}
+      onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) { const right = cssRect(e.currentTarget.parentElement!).right; setWidth(clamp(right - cssPx(e.clientX))); } }}
       onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }} />}
     <div className="market-watchlist-heading">
       {!collapsed && <h2>Watchlist</h2>}

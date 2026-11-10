@@ -22,6 +22,10 @@ public class MacroController(IMediator mediator, IConfiguration config) : Contro
     [HttpGet("Board")]
     public async Task<IActionResult> Board(CancellationToken ct) => Ok(await mediator.Send(new MacroBoardRequest(), ct));
 
+    /// <summary>Tablero Argentina (WS-0095): dólares, tasas, inflación, bonos, reservas, futuros y balanza; un bloque caído no tumba a los demás.</summary>
+    [HttpGet("Argentina")]
+    public async Task<IActionResult> Argentina(CancellationToken ct) => Ok(await mediator.Send(new MacroArgentinaRequest(), ct));
+
     [HttpGet("Snapshot")]
     public async Task<IActionResult> Snapshot([FromQuery] MacroSnapshotRequest request, CancellationToken ct)
     {

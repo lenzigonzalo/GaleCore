@@ -45,11 +45,14 @@ namespace DataFeed
             {
                 options.AddPolicy("ReactAppPolicy", policy =>
                 {
-                    policy.WithOrigins("http://localhost:3039", "https://localhost:3039",
-                                       "http://localhost:5173", "https://localhost:5173",
-                                       "https://galecore-monitor.vercel.app",
-                                       "https://gale-core-monitor.vercel.app",
-                                       "https://galecore.vercel.app")
+                    string[] origins = { "http://localhost:3039", "https://localhost:3039",
+                                         "http://localhost:5173", "https://localhost:5173",
+                                         "https://galecore-monitor.vercel.app",
+                                         "https://gale-core-monitor.vercel.app",
+                                         "https://galecore.vercel.app" };
+                    // En Dev, cualquier puerto de localhost: cada pieza en paralelo levanta su monitor en otro puerto (WS-0095).
+                    policy.SetIsOriginAllowed(o => origins.Contains(o) || (builder.Environment.IsDevelopment()
+                              && Uri.TryCreate(o, UriKind.Absolute, out var u) && u.IsLoopback))
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
@@ -212,6 +215,7 @@ namespace DataFeed
             builder.Services.AddHostedService(sp => sp.GetRequiredService<DxLinkStreamingService>());
             builder.Services.AddHostedService<SkewSnapshotService>();
             builder.Services.AddHostedService<GexWarmService>();
+            builder.Services.AddHostedService<ArgentinaWarmService>();
 
             // Orquestación RPF (Fase 6a) — store in-memory + loop. El loop arranca INERTE:
             // no corre la cascada ni emite hasta state_machine.enabled=true en galecore_rules_rpf.json.
@@ -271,6 +275,22 @@ namespace DataFeed
                     sp.GetRequiredService<ITokenProtector>(), sp.GetRequiredService<IHttpClientFactory>(),
                     sp.GetRequiredService<ILogger<DataFeed.Application.App.Connections.PlatformConnectionsService>>());
             });
+
+            // Agentes que corren solos (WS-0079): clave de agentes, reporte de corridas, token de disparo y ejecución sin PC.
+            // Sin base no se registra y AgentsController contesta 503.
+            if (dbConfigured)
+            {
+                builder.Services.AddSingleton<DataFeed.Application.App.Agents.IRoutineFireClient, DataFeed.Application.App.Agents.AnthropicRoutineFireClient>();
+                builder.Services.AddSingleton<DataFeed.Application.App.Agents.AgentsService>(sp =>
+                {
+                    var dbOptions = new DbContextOptionsBuilder<GaleCoreDbContext>()
+                        .UseNpgsql(galeCoreDb).UseSnakeCaseNamingConvention().Options;
+                    return new DataFeed.Application.App.Agents.AgentsService(
+                        new DataFeed.Application.App.Agents.EfAgentStore(() => new GaleCoreDbContext(dbOptions)),
+                        sp.GetRequiredService<ITokenProtector>(),
+                        sp.GetRequiredService<DataFeed.Application.App.Agents.IRoutineFireClient>());
+                });
+            }
 
             // ABM de operadores desde Administrator: crea, edita y borra usuarios en Supabase Auth.
             // Se registra siempre; adentro comprueba si tiene la service_role key y, si no, los

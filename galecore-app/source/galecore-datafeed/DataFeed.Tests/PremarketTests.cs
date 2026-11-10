@@ -9,8 +9,7 @@ public class PremarketTests
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-30T12:00:00Z");
     private static JObject Trade(string timestamp = "2026-10-30T11:58:00Z", double price = 99) => new()
     {
-        ["eventType"] = "TimeAndSale", ["index"] = 1L, ["eventFlags"] = 0, ["type"] = "NEW",
-        ["extendedTradingHours"] = true, ["validTick"] = true, ["spreadLeg"] = false,
+        ["eventType"] = "TradeETH", ["eventSymbol"] = "SPY",
         ["price"] = price, ["time"] = DateTimeOffset.Parse(timestamp).ToUnixTimeMilliseconds(),
     };
     private static JObject Summary() => new()
@@ -103,7 +102,7 @@ public class PremarketTests
         var response = await new PremarketHandler(feed).Handle(new PremarketRequest { Symbols = " spy,SPY, googl " }, default);
         Assert.Equal(new[] { "SPY", "GOOGL" }, response.Select(q => q.Symbol));
         Assert.Equal(4, feed.Subscriptions.Count);
-        Assert.All(feed.Subscriptions, s => Assert.Contains(s.EventType, new[] { "TimeAndSale", "Summary" }));
+        Assert.All(feed.Subscriptions, s => Assert.Contains(s.EventType, new[] { "Candle", "Summary" }));
         Assert.All(response, q => Assert.Null(q.Price));
     }
 
@@ -121,7 +120,7 @@ public class PremarketTests
         Assert.Equal(1, feed.Calls);
         await handler.Handle(new PremarketRequest { Symbols = "SPY,IWM" }, default);
         Assert.Equal(2, feed.Calls);
-        Assert.Equal(new[] { "IWM", "IWM" }, feed.Subscriptions.Select(s => s.Symbol));
+        Assert.Equal(new[] { "IWM{=1m,tho=false}", "IWM" }, feed.Subscriptions.Select(s => s.Symbol));
     }
 
     [Fact]
@@ -156,61 +155,14 @@ public class PremarketTests
     }
 
     [Fact]
-    public void Regular_or_unidentified_trade_is_not_premarket_even_inside_the_window()
+    public void Eth_trade_computes_change_against_dated_reference()
     {
-        var regular = Trade(); regular["extendedTradingHours"] = false;
-        Assert.Null(PremarketMath.Build("SPY", regular, Summary(), Now).Price);
-        regular.Remove("extendedTradingHours");
-        Assert.Null(PremarketMath.Build("SPY", regular, Summary(), Now).Price);
-    }
-
-    [Fact]
-    public void Observed_feed_timestamp_from_yesterdays_regular_session_is_not_current_premarket()
-    {
-        // Reproducción del evento real archivado en dxlink-observed.json; no prueba una operación de hoy.
-        var observed = new JObject { ["eventType"] = "Trade", ["price"] = 769.49,
-            ["time"] = 1793303999904L, ["extendedTradingHours"] = true };
-        var quote = PremarketMath.Build("SPY", observed, Summary(), Now);
-        Assert.Null(quote.ChangePercent);
-        Assert.Null(quote.Price);
-        Assert.Equal("missing_extended_hours", quote.Reason);
-    }
-
-    [Fact]
-    public void Observed_valid_eth_execution_computes_change_against_dated_reference()
-    {
-        // Reproducción de TimeAndSale real archivado en compact-diagnosis/feed-validity.json.
         var sale = Trade("2026-10-30T13:11:35.916Z", 761.03);
-        sale["index"] = 7702447872628846376L;
         var summary = Summary(); summary["prevDayClosePrice"] = 769.36;
         var quote = PremarketMath.Build("SPY", sale, summary, DateTimeOffset.Parse("2026-10-30T13:11:36Z"));
         Assert.Equal(761.03, quote.Price);
         Assert.Equal(-1.08, quote.ChangePercent);
         Assert.Equal("fresh", quote.Freshness);
-    }
-
-    [Theory]
-    [InlineData("validTick", false)]
-    [InlineData("spreadLeg", true)]
-    [InlineData("extendedTradingHours", false)]
-    public void Non_price_forming_events_do_not_populate_premarket(string field, bool value)
-    {
-        var sale = Trade(); sale[field] = value;
-        Assert.Null(PremarketMath.Build("SPY", sale, Summary(), Now).Price);
-    }
-
-    [Fact]
-    public void Corrections_and_cancellations_replace_the_same_execution_index()
-    {
-        var earlier = Trade("2026-10-30T11:57:00Z", 98); earlier["index"] = 1;
-        var latest = Trade(); latest["index"] = 2;
-        var correction = (JObject)latest.DeepClone(); correction["type"] = "CORRECTION"; correction["price"] = 97;
-        Assert.Equal(97, PremarketMath.LatestSale([earlier, latest, correction])!.Value<double>("price"));
-        var cancel = (JObject)correction.DeepClone(); cancel["type"] = "CANCEL";
-        Assert.Equal(98, PremarketMath.LatestSale([earlier, latest, correction, cancel])!.Value<double>("price"));
-        Assert.Null(PremarketMath.LatestSale([latest, cancel]));
-        Assert.Equal("execution_revised", PremarketMath.FromSales("SPY", [latest, cancel], Summary(), Now).Reason);
-        Assert.Equal("missing_extended_hours", PremarketMath.FromSales("SPY", [], Summary(), Now).Reason);
     }
 
     [Fact]
@@ -225,15 +177,49 @@ public class PremarketTests
         Assert.Null(PremarketMath.Build("SPY", Trade("2026-11-02T12:58:00Z"), reference, monday).ChangePercent);
     }
 
+    private static JObject Candle(string ts, double close, double? volume = 10) => new()
+    {
+        ["eventType"] = "Candle", ["eventSymbol"] = "SPY{=m,tho=false}", ["eventFlags"] = 0,
+        ["time"] = DateTimeOffset.Parse(ts).ToUnixTimeMilliseconds(), ["close"] = close, ["volume"] = volume,
+    };
+
+    [Fact]
+    public void Latest_candle_with_volume_in_window_is_used()
+    {
+        var c = PremarketMath.LatestCandle([Candle("2026-10-30T11:50:00Z", 98), Candle("2026-10-30T11:57:00Z", 99),
+            Candle("2026-10-30T11:58:00Z", 99.5, 0), Candle("2026-10-30T13:40:00Z", 120), Candle("2026-10-29T11:57:00Z", 50)], Now);
+        Assert.Equal(99, c!.Value<double>("price"));
+        Assert.Null(PremarketMath.LatestCandle([Candle("2026-10-30T11:58:00Z", 99, 0)], Now));
+    }
+
+    [Fact]
+    public async Task Handler_builds_quotes_from_candle_and_summary_and_completes_on_snapshot_end()
+    {
+        var sum = new JObject(Summary()) { ["eventType"] = "Summary", ["eventSymbol"] = "SPY" };
+        var feed = new SnapshotFeed { Events = [Candle("2026-10-30T11:57:00Z", 99), sum] };
+        var q = (await new PremarketHandler(feed, new PremarketCache(null, new FixedNow())).Handle(new PremarketRequest { Symbols = "SPY" }, default)).Single();
+        Assert.Equal(99, q.Price);
+        Assert.Equal("DXLink Candle 1m ETH/Summary", q.Source);
+        Assert.Contains(feed.Subscriptions, s => s.Symbol == "SPY{=1m,tho=false}" && s.EventType == "Candle" && s.FromTime > 0);
+        Assert.False(feed.Complete!(Candle("2026-10-30T11:57:00Z", 99)));
+        Assert.True(feed.Complete!(new JObject { ["eventType"] = "Candle", ["eventFlags"] = 0x8 }));
+        Assert.True(feed.Complete!(sum));
+    }
+
+    private sealed class FixedNow : TimeProvider { public override DateTimeOffset GetUtcNow() => Now; }
+
     private sealed class SnapshotFeed : IDxLinkStreamingService
     {
         public IReadOnlyList<(string Symbol, string EventType, long? FromTime)> Subscriptions { get; private set; } = [];
         public TimeSpan LastTimeout { get; private set; }
         public int Calls { get; private set; }
+        public IReadOnlyList<JObject>? Events { get; init; }
+        public Func<JObject, bool>? Complete { get; private set; }
         public Task<IReadOnlyList<JObject>> RequestSnapshotAsync(IReadOnlyList<(string Symbol, string EventType, long? FromTime)> subs,
             Func<JObject, bool> isSymbolComplete, TimeSpan timeout, CancellationToken cancellationToken)
         {
-            Subscriptions = subs; LastTimeout = timeout; Calls++;
+            Complete = isSymbolComplete; Subscriptions = subs; LastTimeout = timeout; Calls++;
+            if (Events != null) return Task.FromResult(Events);
             return Task.FromResult<IReadOnlyList<JObject>>([new JObject { ["eventSymbol"] = "SPY", ["eventType"] = "Trade", ["price"] = 500 }]);
         }
         public Task SubscribeAsync(string symbol, string[] eventTypes) => throw new NotSupportedException();

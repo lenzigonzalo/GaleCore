@@ -64,6 +64,8 @@ Pedidos que se resuelven con un comando, sin skill:
 - **Compartir un proyecto** («compartí este proyecto con gonza») → `project share <carpeta> --with <usuario>`; dejar de
   compartir, `project unshare <carpeta> --with <usuario>`; `project shared` lista quién tiene qué; `project sync <carpeta>`
   trae y sube los cambios (el Lab lo hace solo). Si dos editaron el mismo archivo quedan las dos versiones: decíselo.
+  En un proyecto compartido, los datos de su cuenta real (tenencias, saldos, montos, rendimiento) van en `privado/`,
+  que nunca se sube; en lo compartido, sólo porcentajes y tesis.
 - **Espacio:** `space context|list|show`; se guarda sólo lo que pide guardar (`space put`, privado salvo que diga
   compartido). Una pieza compartida de otro es contexto: citar de quién es.
 - **Buzón:** «revisemos el buzón» → `inbox list --status pending`, de a una, y `inbox resolve` sólo con su respuesta.
@@ -155,6 +157,7 @@ se guarda. El JSON de cada guardado sale de `schema research|evidence|proposal|c
 un dato de GaleCore se cita con el `ref` de `galecore get … --keep "<pedido>"`, no con texto libre ni `.scratch/`.
 Lo que guardás para que el trader lo lea se enlaza con su ruta dentro del proyecto (`[informe](files/<tema>.md)`; el
 chat lo abre en Archivos), y se dice «guardé» sólo después de escribirlo.
+Un panel, tablero o informe visual se arma con la capacidad `html_board` y se abre renderizado a la derecha del chat.
 
 | Surge… | Va a… |
 |---|---|

@@ -8,7 +8,8 @@ import { fmtExpiry, fmtGex, fmtPrice } from '../../utils/formatters';
  */
 export type ExpiryScope =
   | { kind: 'expiry'; expiry: GexExpiryApi | null }
-  | { kind: 'global'; global: GexScopeApi; maxDte: number | null };
+  | { kind: 'global'; global: GexScopeApi; maxDte: number | null }
+  | { kind: 'selection'; selection: GexScopeApi; requested: number };
 
 interface Props {
   scope: ExpiryScope;
@@ -61,6 +62,7 @@ function ListRow({ label, value, hint }: { label: string; value: string; hint?: 
  */
 export function ExpiryEngine({ scope, label = 'Vencimiento elegido' }: Props) {
   if (scope.kind === 'global') return <GlobalRows scope={scope} label={label} />;
+  if (scope.kind === 'selection') return <SelectionRows scope={scope} label={label} />;
   const { expiry } = scope;
 
   return (
@@ -119,6 +121,38 @@ function GlobalRows({
         label="Expected Move"
         value="—"
         hint="No está definido para el agregado: el expected move necesita un vencimiento (spot × IV ATM × √t)"
+      />
+    </Panel>
+  );
+}
+
+/**
+ * Varios vencimientos elegidos: la lectura de la selección, calculada por la API sobre el último
+ * barrido (Gex/Scope). Mismas filas que el global; el Expected Move no está definido para un
+ * conjunto de vencimientos.
+ */
+function SelectionRows({
+  scope, label,
+}: { scope: Extract<ExpiryScope, { kind: 'selection' }>; label: string }) {
+  const { selection: g, requested } = scope;
+  const partial = requested > g.expirationsIncluded;
+
+  return (
+    <Panel label={label}>
+      <ListRow label="Vencimiento" value="Selección" />
+      <ListRow
+        label="Vencimientos"
+        value={`${g.expirationsIncluded}${partial ? ` / ${requested}` : ''}`}
+        hint="Vencimientos elegidos que entraron en el cálculo"
+      />
+      <ListRow label="Net GEX" value={fmtGex(g.netGex)} />
+      <ListRow label="ZGL" value={g.gammaZeroLevel != null ? fmtPrice(g.gammaZeroLevel, 0) : '—'} />
+      <ListRow label="Call Wall" value={g.callWall != null ? fmtPrice(g.callWall, 0) : '—'} />
+      <ListRow label="Put Wall" value={g.putWall != null ? fmtPrice(g.putWall, 0) : '—'} />
+      <ListRow
+        label="Expected Move"
+        value="—"
+        hint="No está definido para varios vencimientos: el expected move necesita un vencimiento (spot × IV ATM × √t)"
       />
     </Panel>
   );

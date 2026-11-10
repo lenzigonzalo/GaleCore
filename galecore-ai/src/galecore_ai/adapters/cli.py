@@ -38,6 +38,8 @@ Usage:
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
+    python -m galecore_ai.adapters.cli agent pending|body KEY|applied KEY|new|env   (cloud agents, WS-0079)
+    python -m galecore_ai.adapters.cli agent report AGENT_KEY --status ok|error|skipped (--summary-file PATH|- | --summary "...")         [--reason-code X] [--trigger-id ID] [--fired-at ISO] [--finished-at ISO]
     python -m galecore_ai.adapters.cli clock [--at ISO]
     python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list [--bugfix]
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
@@ -198,10 +200,7 @@ class _JsonArgumentParser(argparse.ArgumentParser):
         _error_out(f"Argument error: {message}", exit_code=_EXIT_VALIDATION_ERROR)
 
 
-def _build_dispatcher() -> CapabilityDispatcher:
-    base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
-    api_key = os.environ.get("GALECORE_API_KEY")
-
+def _check_base_url(base_url: str) -> None:
     local_mode = os.environ.get("LOCAL_VALIDATION", "true").lower() == "true"
     if local_mode:
         from urllib.parse import urlparse
@@ -210,6 +209,13 @@ def _build_dispatcher() -> CapabilityDispatcher:
         allowed = urlparse(os.environ.get("GALECORE_ALLOWED_BASE_URL", "")).hostname
         if host not in ("localhost", "127.0.0.1", "::1") and host != allowed:
             _error_out(f"LOCAL_VALIDATION=true but host is '{host}'")
+
+
+def _build_dispatcher() -> CapabilityDispatcher:
+    base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
+    api_key = os.environ.get("GALECORE_API_KEY")
+
+    _check_base_url(base_url)
 
     registry = CapabilityRegistry()
     registry.register_many(KNOWN_CAPABILITIES)
@@ -946,6 +952,90 @@ def _cmd_project_shared(args: argparse.Namespace) -> None:
         _error_out(str(exc), exit_code=1)
 
 
+def _cmd_agent_cloud(args: argparse.Namespace) -> None:
+    """`agent pending|body|applied|new|env`: the cloud agents the Lab turns into claude.ai routines (WS-0079)."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+    from galecore_ai.application import agent_cloud as ac
+
+    c = args.agent_command
+    try:
+        if c == "env":
+            if args.set:
+                _json_out({"status": "SAVED", "environment_id": ac.set_environment(args.set)})
+            else:
+                _json_out({"environment_id": ac.environment_id()})
+            return
+        client = SpaceClient()
+        client.login()
+        if c == "pending":
+            _json_out({"pending": ac.pending(client)})
+        elif c == "body":
+            _json_out(ac.body(client, args.agent_key))
+        elif c == "applied":
+            _json_out({"status": "APPLIED", **ac.applied(client, args.agent_key, args.trigger_id, args.url, args.error)})
+        else:
+            try:
+                when = json.loads(args.when)
+            except ValueError:
+                _error_out("Argument error: --when es un JSON con frequency (daily|weekdays|days), time, timezone "
+                           "y days si hace falta", exit_code=_EXIT_VALIDATION_ERROR)
+                return
+            _json_out({"status": "REQUESTED", **ac.new(client, args.name, args.what, when)})
+    except ac.AgentCloudError as exc:
+        _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+    except SpaceError as exc:
+        _error_out(str(exc), exit_code=1)
+
+
+def _cmd_agent(args: argparse.Namespace) -> None:
+    """`agent report <agent_key> ...`: a cloud routine reports its run to GaleCore (WS-0079)."""
+    from galecore_ai.application import agent_report as ar
+
+    if args.agent_command != "report":
+        _cmd_agent_cloud(args)
+        return
+
+    secret = os.environ.get("GALECORE_AGENT_KEY", "").strip()
+    if not secret:
+        _error_out("Falta GALECORE_AGENT_KEY (la clave de agentes, prefijo gca_) en el entorno: no se llamó a la API.",
+                   exit_code=_EXIT_VALIDATION_ERROR)
+    try:
+        if args.summary_file is not None:
+            if args.summary_file == "-":
+                summary = _read_stdin()
+            else:
+                summary = Path(args.summary_file).read_text(encoding="utf-8-sig")
+        else:
+            summary = args.summary
+        if not summary.strip():
+            _error_out("Argument error: el resumen está vacío", exit_code=_EXIT_VALIDATION_ERROR)
+        trigger_id = args.trigger_id or os.environ.get("GALECORE_TRIGGER_ID") or None
+        fired_at = args.fired_at or os.environ.get("GALECORE_FIRED_AT") or None
+        if fired_at:
+            ar.check_iso(fired_at, flag="--fired-at")
+        if args.finished_at:
+            ar.check_iso(args.finished_at, flag="--finished-at")
+    except (OSError, UnicodeDecodeError) as exc:
+        _error_out(f"No pude leer el resumen: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    except ValueError as exc:
+        _error_out(f"Argument error: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        return
+
+    base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
+    _check_base_url(base_url)
+    body = ar.build_body(status=args.status, summary=summary, reason_code=args.reason_code,
+                         trigger_id=trigger_id, fired_at=fired_at, finished_at=args.finished_at)
+    try:
+        run = ar.post_run(base_url=base_url, api_key=os.environ.get("GALECORE_API_KEY"), agent_secret=secret,
+                          agent_key=args.agent_key, body=body,
+                          timeout=float(os.environ.get("GALECORE_TIMEOUT_SECONDS", "30")))
+    except ar.AgentReportError as exc:
+        _error_out(str(exc), exit_code=_EXIT_PREPARE_FAILED)
+        return
+    _json_out({"status": "REPORTED", "run": run})
+
+
 def _cmd_users(args: argparse.Namespace) -> None:
     """`users search <q>`: who can I share with (username and name only; WS-0064)."""
     from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
@@ -1322,10 +1412,18 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
         except KnowledgeError as exc:
             _knowledge_error_out(exc)
             raise AssertionError("unreachable") from exc
+        from galecore_ai.application import feasibility
         from galecore_ai.contracts.strategy import design_gaps
         _json_out({**report.model_dump(mode="json"), "spec_hash": galecore_spec_hash(text),
-                   "design_gaps": design_gaps(content)},
+                   "design_gaps": design_gaps(content),
+                   "factibilidad": feasibility.assess(json.loads(text), content.simulated_amount_usd)},
                   exit_code=_EXIT_VALIDATION_ERROR if report.verdict == "INVALID" else _EXIT_SUCCESS)
+    if args.strategy_command == "stop":
+        from galecore_ai.application.strategy import stop_instance
+        try:
+            _json_out(stop_instance(args.instance))
+        except KnowledgeError as exc:
+            _knowledge_error_out(exc)
     kb = _build_knowledge_base()
     try:
         if args.strategy_command == "save":
@@ -1469,6 +1567,12 @@ async def _cmd_task(args: argparse.Namespace) -> None:
             task = t.set_scan(kb=kb, task_id=args.id, rule=rule, prompt=args.prompt)
             _json_out({"status": "CHANGED", "task": args.id, "scan": task.scan.model_dump() if task.scan else None,
                        "task_status": task.status})
+        elif c == "move":
+            task = t.move(kb=kb, scheduler=sch, task_id=args.id, to=args.to, prompt=args.prompt)
+            _json_out({"status": "MOVED", "task": args.id, "runs_on": task.runs_on})
+        elif c == "serve":
+            from galecore_ai.application import task_service
+            _json_out({"status": "SERVED", "runs": task_service.serve(kb, once=args.once, interval=args.interval)})
         elif c == "rebind":
             task = t.rebind(kb=kb, scheduler=sch, task_id=args.id, code_path=Path(args.code_path), prompt=args.prompt)
             _json_out({"status": "REBOUND", "code_path": task.code_path, "scheduler": sch.query(task.scheduler_name)})
@@ -1629,6 +1733,34 @@ def build_parser() -> _JsonArgumentParser:
     p_ideas_list.add_argument("--source", choices=["inbox", "gap", "feedback"])
     p_ideas_list.add_argument("--status", help="e.g. pending")
     p_ideas_list.add_argument("--mine", action="store_true", help="Only yours")
+
+    p_agent = sub.add_parser("agent", help="A cloud routine reports its run to GaleCore (WS-0079)")
+    ag_sub = p_agent.add_subparsers(dest="agent_command", required=True)
+    p_ag_rep = ag_sub.add_parser("report", help="Report this run (needs GALECORE_AGENT_KEY in the environment)")
+    p_ag_rep.add_argument("agent_key", help="The agent's key, e.g. oportunidades")
+    p_ag_rep.add_argument("--status", required=True, choices=["ok", "error", "skipped"])
+    ag_sum = p_ag_rep.add_mutually_exclusive_group(required=True)
+    ag_sum.add_argument("--summary-file", help="File with the summary in markdown; - reads stdin")
+    ag_sum.add_argument("--summary", help="The summary in markdown (cut to 4000 characters)")
+    p_ag_rep.add_argument("--reason-code", help="Short reason code (max 64)")
+    p_ag_rep.add_argument("--trigger-id", help="Default: GALECORE_TRIGGER_ID")
+    p_ag_rep.add_argument("--fired-at", help="ISO-8601; default: GALECORE_FIRED_AT")
+    p_ag_rep.add_argument("--finished-at", help="ISO-8601; default: now (UTC)")
+    ag_sub.add_parser("pending", help="Cloud agents with a request nobody applied yet (JSON)")
+    ag_sub.add_parser("body", help="What RemoteTrigger gets for a cloud agent: create, update or run (JSON)"
+                      ).add_argument("agent_key")
+    p_ag_app = ag_sub.add_parser("applied", help="The Lab applied (or failed) the request of a cloud agent")
+    p_ag_app.add_argument("agent_key")
+    p_ag_app.add_argument("--trigger-id", help="The routine's id")
+    p_ag_app.add_argument("--url", help="The routine's link in claude.ai")
+    p_ag_app.add_argument("--error", help="Why it could not be applied")
+    p_ag_new = ag_sub.add_parser("new", help="Ask for a cloud agent from the chat (the Lab creates its routine)")
+    p_ag_new.add_argument("--name", required=True)
+    p_ag_new.add_argument("--what", required=True, help="What the agent does")
+    p_ag_new.add_argument("--when", required=True, metavar="JSON",
+                          help='e.g. {"frequency":"daily","time":"08:00","timezone":"America/New_York"}')
+    p_ag_env = ag_sub.add_parser("env", help="The claude.ai environment the cloud agents run in (Lab config)")
+    p_ag_env.add_argument("--set", metavar="LINK_OR_ID", help="Save it (the env_… id or the claude.ai link)")
 
     p_users = sub.add_parser("users", help="Other GaleCore users (to pick who to share a project with)")
     us_sub = p_users.add_subparsers(dest="users_command", required=True)
@@ -1851,6 +1983,13 @@ def build_parser() -> _JsonArgumentParser:
     p_tr.add_argument("id")
     p_tr.add_argument("--code-path", dest="code_path", required=True, help="galecore-ai/ checkout with tools/task_runner.py")
     p_tr.add_argument("--prompt", required=True)
+    p_tm = t_sub.add_parser("move", help="Change which side runs the task: the PC's Windows scheduler or the VPS runner")
+    p_tm.add_argument("id")
+    p_tm.add_argument("--to", required=True, choices=["pc", "vps"])
+    p_tm.add_argument("--prompt", required=True)
+    p_tv = t_sub.add_parser("serve", help="The VPS runner: every minute runs the tasks of this knowledge base that are due")
+    p_tv.add_argument("--once", action="store_true", help="One pass and exit")
+    p_tv.add_argument("--interval", type=int, default=60, help="Seconds between passes")
     for name in ("pause", "resume", "cancel"):
         p = t_sub.add_parser(name)
         p.add_argument("id")
@@ -1896,6 +2035,8 @@ def build_parser() -> _JsonArgumentParser:
     p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW (registers the spec, then "
                                                 "deploys it; GaleCore is not called without an intact approval)")
     p_st_dep.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_stop = st_sub.add_parser("stop", help="Stop a SHADOW instance (it stops entering; what is open keeps being valued)")
+    p_st_stop.add_argument("--instance", required=True, help="instance id (from `followup run` or `state`)")
 
     p_schema = sub.add_parser("schema", help="The JSON a save takes on stdin (research, evidence, proposal, critique)")
     p_schema.add_argument("kind", choices=["research", "evidence", "proposal", "critique"])
@@ -1965,6 +2106,8 @@ def main() -> None:
             asyncio.run(_cmd_ideas(args))
         elif args.command == "users":
             _cmd_users(args)
+        elif args.command == "agent":
+            _cmd_agent(args)
         elif args.command == "accept":
             asyncio.run(_cmd_accept(args))
         elif args.command == "record" and args.record_command == "outcome":
