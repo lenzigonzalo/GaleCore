@@ -42,7 +42,7 @@ const open = async (trades: PerformancePanelResponse['closedTrades'], opens: Per
   api.mockResolvedValue(panel(trades, opens, over));
   render(<PerformancePanel spec={plainFixture.spec} />);
   await screen.findByText('Ganancia total');
-  return () => fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
+  return () => fireEvent.click(screen.getByRole('tab', { name: 'Posiciones' }));
 };
 const detail = (name: RegExp) => { fireEvent.click(screen.getByLabelText(name)); return screen.getByRole('dialog'); };
 
