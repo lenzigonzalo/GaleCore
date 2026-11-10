@@ -224,3 +224,12 @@ def test_the_cli_runs_a_space_skill_and_records_it(folder, tmp_path, monkeypatch
     assert stop.value.code == 0 and out["result"] == {"x": 1} and out["source"] == "space" and out["skill"] == "mi-calculo"
     row = json.loads((tmp_path / "kb" / "skill_runs.jsonl").read_text(encoding="utf-8"))
     assert row["source"] == "space" and row["version"] == out["version"] and row["skill"] == "mi-calculo"
+
+
+def test_scripts_import_the_galecore_ai_that_launched_them(folder, monkeypatch):
+    import galecore_ai
+    monkeypatch.setenv("PYTHONPATH", "relativo/que/no/existe")
+    (folder / "scripts" / "w.py").write_text(
+        "import json, galecore_ai\nprint(json.dumps({'file': galecore_ai.__file__}))\n", encoding="utf-8")
+    result = skill_run.run_script(folder, "w.py", [])   # cwd is the skill folder, not the package
+    assert Path(result["result"]["file"]).resolve() == Path(galecore_ai.__file__).resolve()

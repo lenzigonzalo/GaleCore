@@ -66,6 +66,14 @@ def script_path(folder: Path, script: str) -> Path:
     return path.resolve()
 
 
+def _script_env() -> dict[str, str]:
+    """The script imports the same galecore_ai that launched it (not another one installed): its root goes first."""
+    import galecore_ai
+    root = str(Path(galecore_ai.__file__).resolve().parent.parent)
+    current = os.environ.get("PYTHONPATH")
+    return {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONPATH": root + (os.pathsep + current if current else "")}
+
+
 def run_script(folder: Path, script: str, args: list[str], timeout_s: float = DEFAULT_TIMEOUT_S) -> dict:
     """Run it and report: ``ok`` is exit code 0 within the time cap; stdout JSON is parsed into ``result``."""
     path = script_path(folder, script)
@@ -74,7 +82,7 @@ def run_script(folder: Path, script: str, args: list[str], timeout_s: float = DE
     try:
         proc = subprocess.run([sys.executable, "-B", str(path), *args], cwd=folder, capture_output=True,
                               text=True, encoding="utf-8", errors="replace", timeout=timeout_s, check=False,
-                              env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+                              env=_script_env())
     except subprocess.TimeoutExpired:
         return {"ok": False, **out, "exit_code": None, "error": f"timeout after {timeout_s:g}s",
                 "duration_ms": round((time.monotonic() - started) * 1000)}
