@@ -1412,9 +1412,11 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
         except KnowledgeError as exc:
             _knowledge_error_out(exc)
             raise AssertionError("unreachable") from exc
+        from galecore_ai.application import feasibility
         from galecore_ai.contracts.strategy import design_gaps
         _json_out({**report.model_dump(mode="json"), "spec_hash": galecore_spec_hash(text),
-                   "design_gaps": design_gaps(content)},
+                   "design_gaps": design_gaps(content),
+                   "factibilidad": feasibility.assess(json.loads(text), content.simulated_amount_usd)},
                   exit_code=_EXIT_VALIDATION_ERROR if report.verdict == "INVALID" else _EXIT_SUCCESS)
     if args.strategy_command == "stop":
         from galecore_ai.application.strategy import stop_instance

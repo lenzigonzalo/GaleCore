@@ -28,6 +28,7 @@ from galecore_ai.adapters.strategy_store import (
     StrategyStoreError,
     split_key,
 )
+from galecore_ai.application import feasibility
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, resolve_ref
 from galecore_ai.application.project import load_log
 from galecore_ai.contracts.project import EntryKind
@@ -456,7 +457,8 @@ def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_sp
         raise KnowledgeError(f"deploy of strategy:{key} refused", problems)
     return {"status": "DEPLOY_ALLOWED", "strategy": f"strategy:{key}", "spec_file": doc.spec_file,
             "spec_hash": doc.spec_hash, "approval_recorded_at": approval.recorded_at.isoformat(),
-            "scope": approval.scope}
+            "scope": approval.scope,
+            "factibilidad": feasibility.assess(json.loads(doc.spec_json), doc.content.simulated_amount_usd)}
 
 
 # ── deploy into SHADOW ───────────────────────────────────────

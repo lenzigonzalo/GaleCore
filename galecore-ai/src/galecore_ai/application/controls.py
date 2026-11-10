@@ -24,6 +24,7 @@ import json
 import math
 from collections.abc import Callable
 
+from galecore_ai.application import feasibility
 from galecore_ai.application.knowledge import KnowledgeError
 from galecore_ai.contracts.strategy import RuntimeStatus, StrategyDocument
 
@@ -137,8 +138,13 @@ def classify(doc: StrategyDocument, checker: SpecChecker | None = None) -> dict:
     elif not math.isclose(declared, amount, rel_tol=0, abs_tol=0.005):
         missing.append(f"capital de la spec ({CAPITAL_PATH} = {declared:g} USD no es el monto simulado del diseño, "
                        f"{amount:g} USD: un solo monto)")
+    # WS-0098 inc. 2: the limits in USD against the worst loss of the structure; one that can never enter is not approved.
+    feasible = feasibility.assess(spec, amount)
+    if feasible["veredicto"] == "no puede entrar nunca":
+        missing.append(f"factibilidad ({feasible['texto']})")
     return {
         "estrategia": f"strategy:{doc.name}/{doc.version}", "spec_hash": doc.spec_hash,
+        "factibilidad": feasible,
         "reglas": rules,
         "vigilancia_del_supervisor": [{"control": c, "como": how, "clase": "vigilada"} for c, how in SUPERVISED
                                       if not (equity and c in OPTIONS_ONLY_SUPERVISED)],
