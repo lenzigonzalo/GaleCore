@@ -45,11 +45,14 @@ namespace DataFeed
             {
                 options.AddPolicy("ReactAppPolicy", policy =>
                 {
-                    policy.WithOrigins("http://localhost:3039", "https://localhost:3039",
-                                       "http://localhost:5173", "https://localhost:5173",
-                                       "https://galecore-monitor.vercel.app",
-                                       "https://gale-core-monitor.vercel.app",
-                                       "https://galecore.vercel.app")
+                    string[] origins = { "http://localhost:3039", "https://localhost:3039",
+                                         "http://localhost:5173", "https://localhost:5173",
+                                         "https://galecore-monitor.vercel.app",
+                                         "https://gale-core-monitor.vercel.app",
+                                         "https://galecore.vercel.app" };
+                    // En Dev, cualquier puerto de localhost: cada pieza en paralelo levanta su monitor en otro puerto (WS-0095).
+                    policy.SetIsOriginAllowed(o => origins.Contains(o) || (builder.Environment.IsDevelopment()
+                              && Uri.TryCreate(o, UriKind.Absolute, out var u) && u.IsLoopback))
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
@@ -212,6 +215,7 @@ namespace DataFeed
             builder.Services.AddHostedService(sp => sp.GetRequiredService<DxLinkStreamingService>());
             builder.Services.AddHostedService<SkewSnapshotService>();
             builder.Services.AddHostedService<GexWarmService>();
+            builder.Services.AddHostedService<ArgentinaWarmService>();
 
             // Orquestación RPF (Fase 6a) — store in-memory + loop. El loop arranca INERTE:
             // no corre la cascada ni emite hasta state_machine.enabled=true en galecore_rules_rpf.json.

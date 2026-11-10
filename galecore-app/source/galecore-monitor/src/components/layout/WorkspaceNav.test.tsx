@@ -25,12 +25,23 @@ test('administración sólo aparece en el menú de un admin; usuario puede salir
   expect(screen.queryByRole('menuitem',{ name:'Administración' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('menuitem',{ name:'Salir' })); expect(logout).toHaveBeenCalled();
 });
-test('Macro tiene su propia entrada (owner, 14/10)',()=>{
- render(<WorkspaceNav active="macro" onChange={()=>{}}/>);
- expect(screen.getByRole('button',{name:'Macro'})).toHaveAttribute('aria-current','page');
+test('Macro tiene su propia entrada y se despliega en Global y Argentina (WS-0095)',()=>{
+ try{localStorage.removeItem('galecore:macro:last');}catch{}
+ const change=jest.fn();
+ const {rerender}=render(<WorkspaceNav active="gex" onChange={change}/>);
+ expect(screen.queryByRole('button',{name:'Global'})).not.toBeInTheDocument();   // cerrado fuera de Macro
+ fireEvent.click(screen.getByRole('button',{name:'Macro'}));expect(change).toHaveBeenLastCalledWith('macro');   // por defecto Global
+ rerender(<WorkspaceNav active="macro" onChange={change}/>);
+ expect(screen.getByRole('button',{name:'Macro'})).toHaveAttribute('aria-expanded','true');
+ expect(screen.getByRole('button',{name:'Global'})).toHaveAttribute('aria-current','page');
+ expect(screen.getByRole('button',{name:'Argentina'})).not.toHaveAttribute('aria-current');
  expect(screen.getByRole('button',{name:'Mercado'})).not.toHaveAttribute('aria-current');
+ fireEvent.click(screen.getByRole('button',{name:'Argentina'}));expect(change).toHaveBeenLastCalledWith('macro-ar');
+ rerender(<WorkspaceNav active="macro-ar" onChange={change}/>);
+ expect(screen.getByRole('button',{name:'Argentina'})).toHaveAttribute('aria-current','page');
+ rerender(<WorkspaceNav active="gex" onChange={change}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Macro'}));expect(change).toHaveBeenLastCalledWith('macro-ar');   // vuelve al último hijo usado
 });
-
 
 test('Chat libera la columna y revela la navegación desde el borde, teclado o toque; conserva el menú de cuenta', () => {
   const change=jest.fn();
