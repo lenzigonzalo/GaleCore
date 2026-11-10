@@ -30,13 +30,25 @@ class SkillRunError(Exception):
     """The skill or the script cannot be run; the message says why."""
 
 
-def skill_dir(ref: str) -> Path:
-    """Folder of a catalog skill, by capability id or by skill name (hyphens or underscores)."""
+class SkillNotInCatalog(SkillRunError):
+    """The skill is not in the catalog (it may be one saved in the trader's space)."""
+
+
+def find_skill_dir(ref: str) -> Path | None:
+    """Folder of a catalog skill, by capability id or by skill name (hyphens or underscores); None if not there."""
     wanted = ref.replace("-", "_")
     for entry in load_catalog().entries:
         if entry.id == wanted or Path(entry.skill).parent.name.replace("-", "_") == wanted:
             return (asset_root() / entry.skill).parent
-    raise SkillRunError(f"No skill {ref!r} in the catalog")
+    return None
+
+
+def skill_dir(ref: str) -> Path:
+    """Folder of a catalog skill, by capability id or by skill name (hyphens or underscores)."""
+    found = find_skill_dir(ref)
+    if found is None:
+        raise SkillNotInCatalog(f"No skill {ref!r} in the catalog")
+    return found
 
 
 def script_path(folder: Path, script: str) -> Path:
@@ -88,7 +100,7 @@ def record_run(base: Path, result: dict, args: list[str], by: str | None = None)
     row = {"at": datetime.now(UTC).isoformat(), "by": by or who(), "skill": result.get("skill"),
            "script": result.get("script"), "sha256": result.get("sha256"), "args": args, "ok": bool(result.get("ok")),
            "exit_code": result.get("exit_code"), "duration_ms": result.get("duration_ms"),
-           "error": error[-ERROR_MAX:] or None}
+           "source": result.get("source"), "version": result.get("version"), "error": error[-ERROR_MAX:] or None}
     base.mkdir(parents=True, exist_ok=True)
     with (base / RUNS_FILE).open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")

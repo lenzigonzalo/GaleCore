@@ -572,11 +572,43 @@ async def _cmd_inventory(args: argparse.Namespace) -> None:
 
 
 def _cmd_skill(args: argparse.Namespace) -> None:
-    from galecore_ai.application.skill_run import SkillRunError, record_run, run_script, skill_dir
+    from galecore_ai.application import skill_space
+    from galecore_ai.application.skill_run import (
+        SkillNotInCatalog,
+        SkillRunError,
+        record_run,
+        run_script,
+        skill_dir,
+    )
+    if getattr(args, "skill_command", "run") in ("save", "pull"):
+        from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+        try:
+            client = SpaceClient()
+            if args.skill_command == "save":
+                _json_out(skill_space.save(client, Path(args.folder), key=args.key, shared=args.shared, test=args.test))
+            else:
+                _json_out(skill_space.pull(client, args.key, Path(args.folder)))
+        except (SkillRunError, SpaceError) as exc:
+            _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    source, version = "catalog", None
     try:
-        result = run_script(skill_dir(args.skill), args.script, args.script_args, args.timeout)
+        try:
+            folder = skill_dir(args.skill)
+        except SkillNotInCatalog:   # not in the catalog: the trader's space (own first, then shared)
+            from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+            try:
+                folder, version = skill_space.materialize(SpaceClient(), args.skill)
+            except SpaceError as exc:
+                raise SkillRunError(f"No skill {args.skill!r} in the catalog; the space is not reachable: {exc}") from exc
+            source = "space"
+        result = run_script(folder, args.script, args.script_args, args.timeout)
+        result.update({"source": source, "version": version})
+        if source == "space":   # the cache folder is named by version; the skill is its key
+            result["skill"] = args.skill
     except (SkillRunError, CatalogError) as exc:
-        result = {"ok": False, "skill": args.skill, "script": args.script, "error": str(exc)}
+        result = {"ok": False, "skill": args.skill, "script": args.script, "error": str(exc), "source": source,
+                  "version": version}
         exit_code = _EXIT_VALIDATION_ERROR
     else:
         exit_code = _EXIT_SUCCESS if result["ok"] else _EXIT_INTERNAL_ERROR
@@ -1628,11 +1660,21 @@ def build_parser() -> _JsonArgumentParser:
 
     p_skill = sub.add_parser("skill", help="Scripts of a skill folder (WS-0073)")
     sk_sub = p_skill.add_subparsers(dest="skill_command", required=True)
-    p_sk_run = sk_sub.add_parser("run", help="Run one script of the skill's scripts/ folder; JSON on stdout")
-    p_sk_run.add_argument("skill", help="skill id or name, e.g. revisar-swing-etfs")
+    p_sk_run = sk_sub.add_parser("run", help="Run one script of the skill's scripts/ folder (catalog, else your "
+                                             "space); JSON on stdout")
+    p_sk_run.add_argument("skill", help="skill id or name, e.g. revisar-swing-etfs; or the key of one saved in the space")
     p_sk_run.add_argument("script", help="file name inside scripts/, e.g. revision_swing.py")
     p_sk_run.add_argument("--timeout", type=float, default=180, help="seconds before it is stopped (default 180); goes before the skill name")
     p_sk_run.add_argument("script_args", nargs=argparse.REMAINDER, help="arguments passed to the script")
+
+    p_sk_save = sk_sub.add_parser("save", help="Save a skill folder with code in your space (WS-0099)")
+    p_sk_save.add_argument("folder", help="folder with SKILL.md (name, description), scripts/*.py, references/, assets/")
+    p_sk_save.add_argument("--key", help="piece key (default: slug of the skill name)")
+    p_sk_save.add_argument("--shared", action="store_true", help="visible to every user (default: private)")
+    p_sk_save.add_argument("--test", metavar='"SCRIPT [ARGS]"', help="run this script first; it must exit 0 with JSON")
+    p_sk_pull = sk_sub.add_parser("pull", help="Bring a skill of the space (own or shared) to a folder to edit it")
+    p_sk_pull.add_argument("key")
+    p_sk_pull.add_argument("folder")
 
     p_an = sub.add_parser("analyze", help="On-demand analysis: macro, technical, fundamental or flow (P1-05)")
     an_sub = p_an.add_subparsers(dest="analyze_command", required=True)
