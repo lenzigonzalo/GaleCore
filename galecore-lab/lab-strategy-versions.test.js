@@ -59,3 +59,15 @@ test('duplicate: si el CLI rechaza, 409 y no se crea proyecto',async t=>{
   assert.equal(r.status,409);assert.equal(r.v.error,'el nombre ya existe');
   assert.ok(!service.listProjects().some(p=>p.id==='tomada'));
 });
+
+test('duplicate: el CLI real deja la carpeta de la estrategia (y el Lab la lista como legada): el proyecto se crea igual, sin tocar sus archivos',async t=>{
+  const base=fs.mkdtempSync(path.join(os.tmpdir(),'gc-dup-'));t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
+  const kb=path.join(base,'knowledge'),local=path.join(base,'local');fs.mkdirSync(kb);fs.mkdirSync(local);
+  const dir=path.join(kb,'strategies','spy_ic_b');
+  const execute=(bin,args,opts,cb)=>{fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'1.0.0.proposal.json'),'{}');cb(null,JSON.stringify({ref:'strategy:spy_ic_b/1.0.0'}));};
+  const service=createWorkspaces({root:base,kb,local,binaries:{},environment:()=>({}),instructions:()=>'',legacyProjects:()=>fs.existsSync(dir)?[{id:'spy_ic_b',label:'spy_ic_b'}]:[],legacySessions:()=>[],execute});
+  let out;await service.route({method:'POST'},{},new URL('/strategies/spy_ic/duplicate','http://localhost'),(res,status,v)=>{out={status,v};},async()=>({version:'1.3.2',newName:'spy_ic_b',user:'gonza'}));
+  assert.equal(out.status,200,JSON.stringify(out.v));assert.equal(out.v.projectId,'spy_ic_b');
+  assert.equal(fs.readFileSync(path.join(dir,'1.0.0.proposal.json'),'utf8'),'{}');
+  assert.ok(fs.existsSync(path.join(dir,'workspace.json')));
+});

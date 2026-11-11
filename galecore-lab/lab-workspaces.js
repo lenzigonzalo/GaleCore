@@ -424,12 +424,14 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const label=String(body.label||'').trim(), type=body.type||'analysis';   // owner 19/10: se crea sólo con nombre; la estrategia llega por intención (mark_strategy.py)
     if(!label || label.length>100 || !TYPES.includes(type))throw fail('Indicá el nombre del proyecto.');
     const slug=label.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,60);
-    if(!ID.test(slug) || listProjects().some(p=>p.id===slug))throw fail('Ya existe ese proyecto o el nombre no es válido.',409);
+    // adopt: la carpeta de la estrategia ya la creó el CLI (duplicar) y cuenta como proyecto legado; sólo se le da el proyecto, sin tocar lo que tiene.
+    const adopt=body.adopt===true&&type==='strategy';
+    if(!ID.test(slug) || (adopt?registry.some(p=>p.id===slug):listProjects().some(p=>p.id===slug)))throw fail('Ya existe ese proyecto o el nombre no es válido.',409);
     const relative=(type==='strategy'?'strategies/':'workspaces/')+slug, dir=path.join(kb,relative);
-    if(fs.existsSync(dir))throw fail('La carpeta ya existe. No se modificó su contenido.',409);
+    if(fs.existsSync(dir)&&!(adopt&&!fs.existsSync(path.join(dir,'workspace.json'))))throw fail('La carpeta ya existe. No se modificó su contenido.',409);
     fs.mkdirSync(path.dirname(dir),{recursive:true});
     if(!fs.realpathSync(path.dirname(dir)).startsWith(fs.realpathSync(kb)+path.sep))throw fail('Carpeta fuera del conocimiento local.',403);
-    fs.mkdirSync(dir);
+    fs.mkdirSync(dir,{recursive:adopt});
     fs.writeFileSync(path.join(dir,'README.md'),'# '+label+'\n\nWorkspace de '+(type==='strategy'?'estrategia':type==='personal'?'trabajo personal':'análisis')+'.\n\nLos resultados y memorias se guardan acá. Las conversaciones permanecen en el historial local del Lab.\n',{flag:'wx'});
     fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y memory/README.md (el criterio vigente, por tema) y recuperá antecedentes antes de preguntar.\nUsá galecore-ai/ para memoria canónica y GaleCore (galecore-app/) para datos/cálculos financieros.\n'+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
     fs.mkdirSync(path.join(dir,'memory'),{recursive:true});if(type!=='personal')fs.writeFileSync(path.join(dir,'memory','README.md'),'# Memoria de '+label+'\n\nCriterio vigente del proyecto, una página por tema. Índice:\n\n',{flag:'wx'});fs.mkdirSync(path.join(dir,'files'),{recursive:true});
@@ -590,7 +592,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
         const r=await cli(['duplicate','--ref','strategy:'+name+'/'+version,'--as',newName,'--host-provider','monitor','--host-model','ficha']);
         if(!r.ok)return reply(r);
-        const created=createProject({label:newName,type:'strategy'});
+        const created=createProject({label:newName,type:'strategy',adopt:true});
         if(created.id!==newName){json(res,500,{error:'El proyecto creado no coincide con la estrategia duplicada.'});return true;}
         json(res,200,{ref:r.data.ref,duplicatedFrom:r.data.duplicatedFrom||r.data.duplicated_from||'strategy:'+name+'/'+version,projectId:created.id});return true;
       }
