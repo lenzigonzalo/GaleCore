@@ -76,8 +76,9 @@ function recordClaudeInit(local, event) {
 }
 function claudeSeen(local) { return readJson(local, 'connectors-seen.json', {}).claude || null; }
 
-// Sonda corta: abre el CLI, espera el init y lo corta (no llega a llamar al modelo).
-function probeClaude({ local, binary, env, spawnProcess = spawn, timeout = 20000 }) {
+// Sonda corta: abre el CLI, espera el init y lo corta (no llega a llamar al modelo). El init tarda ~20 s: espera a que
+// conecten los conectores de claude.ai.
+function probeClaude({ local, binary, env, spawnProcess = spawn, timeout = 60000 }) {
   return new Promise(done => {
     let buf = '', ok = false;
     const proc = spawnProcess(binary, ['-p', 'ok', '--output-format', 'stream-json', '--verbose', '--model', 'haiku',
@@ -94,14 +95,14 @@ function probeClaude({ local, binary, env, spawnProcess = spawn, timeout = 20000
     });
   });
 }
-// Catálogo de Claude: lo último visto en un init; se refresca con la sonda si falta o tiene más de 5 minutos (una a la vez).
+// Catálogo de Claude: lo último visto en un init. Si tiene más de 5 minutos se refresca con la sonda en segundo plano
+// y se devuelve el que hay; sólo se espera la sonda cuando no hay ninguno (una a la vez).
 let claudeProbe = null;
 async function claudeCatalog(opts) {
   let seen = claudeSeen(opts.local);
   if (opts.binary && (!seen || Date.now() - seen.at > 300000)) {
     claudeProbe = claudeProbe || probeClaude(opts).finally(() => { claudeProbe = null; });
-    await claudeProbe;
-    seen = claudeSeen(opts.local);
+    if (!seen) { await claudeProbe; seen = claudeSeen(opts.local); }
   }
   return seen ? seen.servers : [];
 }
