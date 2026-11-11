@@ -151,6 +151,25 @@ namespace DataFeed.Controllers
             return r.Outcome == AgentOutcome.Ok ? Ok(Dto(r.Value!)) : Failure(r);
         }
 
+        /// <summary>
+        /// Una rutina baja una skill del espacio para correrla (<c>skill run</c>): la suya o una compartida por otro. Misma
+        /// autenticación que el reporte; esta clave no lee ningún otro kind ni escribe nada.
+        /// </summary>
+        [HttpGet("GaleCore/Agents/Skills/{key}")]
+        public async Task<IActionResult> GetSkill(string key, CancellationToken ct)
+        {
+            var svc = Service;
+            if (svc == null) return Unavailable();
+            var owner = await svc.ResolveKeyAsync(Request.Headers[AgentKeyHeader].ToString(), ct);
+            if (owner == null)
+                return Unauthorized(new ApiErrorResponse { Error = "Clave de agentes inválida.", Code = "invalid_agent_key" });
+            var r = await svc.GetSkillAsync(owner.Value, key, ct);
+            if (r.Outcome != AgentOutcome.Ok) return Failure(r);
+            var s = r.Value!;
+            return Ok(new { kind = s.Kind, key = s.Key, title = s.Title, content = s.Content, format = s.Format,
+                            visibility = s.Visibility, version = s.Version, updatedAt = s.UpdatedAt, owner = s.Owner });
+        }
+
         // ── Corridas, token de disparo y ejecución (login del usuario) ─────────────────────────────────────────
 
         /// <summary>Corridas de uno de tus agentes, más recientes primero (últimas 50).</summary>

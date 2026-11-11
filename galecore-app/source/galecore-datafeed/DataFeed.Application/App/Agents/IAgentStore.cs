@@ -9,6 +9,11 @@ namespace DataFeed.Application.App.Agents
     public sealed record AgentFireTokenRow(
         Guid OwnerId, string AgentKey, string TriggerId, string TokenCipher, string TokenHint, DateTime UpdatedAt, DateTime? LastFiredAt);
 
+    /// <summary>Pieza <c>skill</c> del espacio tal como la lee la clave de agentes (mismos campos que un ítem de GET GaleCore/Space).</summary>
+    public sealed record AgentSkillRow(
+        string Kind, string Key, string Title, string Content, string Format, string Visibility, int Version, DateTime UpdatedAt,
+        string Owner, Guid OwnerId);
+
     /// <summary>Acceso a las tablas de agentes (WS-0079); existe para probar el servicio sin base.</summary>
     public interface IAgentStore
     {
@@ -20,6 +25,9 @@ namespace DataFeed.Application.App.Agents
 
         /// <summary>¿El usuario tiene un ítem <c>agent</c> con esa clave en su espacio?</summary>
         Task<bool> AgentExistsAsync(Guid ownerId, string agentKey, CancellationToken ct);
+
+        /// <summary>Piezas <c>skill</c> con esa clave que el usuario puede leer: las suyas y las compartidas por otros.</summary>
+        Task<IReadOnlyList<AgentSkillRow>> GetSkillsAsync(Guid ownerId, string skillKey, CancellationToken ct);
 
         Task<AgentFireTokenRow?> GetFireTokenAsync(Guid ownerId, string agentKey, CancellationToken ct);
         /// <summary>Guarda trigger y token cifrado; limpia el último disparo.</summary>
@@ -84,6 +92,16 @@ namespace DataFeed.Application.App.Agents
             await using var db = _newContext();
             return await db.TraderSpaceItems.AsNoTracking()
                 .AnyAsync(i => i.OwnerId == ownerId && i.Kind == "agent" && i.Key == agentKey, ct);
+        }
+
+        public async Task<IReadOnlyList<AgentSkillRow>> GetSkillsAsync(Guid ownerId, string skillKey, CancellationToken ct)
+        {
+            await using var db = _newContext();
+            return await db.TraderSpaceItems.AsNoTracking()
+                .Where(i => i.Kind == "skill" && i.Key == skillKey && (i.OwnerId == ownerId || i.Visibility == "shared"))
+                .Select(i => new AgentSkillRow(i.Kind, i.Key, i.Title, i.Content, i.Format, i.Visibility, i.Version, i.UpdatedAt,
+                    i.Owner.Username, i.OwnerId))
+                .ToListAsync(ct);
         }
 
         private static AgentFireTokenRow ToRow(AgentFireToken t) =>

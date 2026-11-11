@@ -87,6 +87,22 @@ namespace DataFeed.Application.App.Agents
                 ? row.OwnerId : null;
         }
 
+        // ── Lectura de skills (clave de agentes) ───────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// La skill con esa clave para el dueño de la clave: primero la suya, si no una compartida por otro. Sólo el kind
+        /// <c>skill</c>; una privada de otro o cualquier otro kind es NotFound.
+        /// </summary>
+        public async Task<AgentResult<AgentSkillRow>> GetSkillAsync(Guid ownerId, string skillKey, CancellationToken ct)
+        {
+            var rows = await _store.GetSkillsAsync(ownerId, skillKey, ct);
+            var skill = rows.Where(r => r.Kind == "skill" && r.Key == skillKey)
+                .Where(r => r.OwnerId == ownerId || r.Visibility == "shared")
+                .OrderByDescending(r => r.OwnerId == ownerId).ThenByDescending(r => r.UpdatedAt)
+                .FirstOrDefault();
+            return skill == null ? new(AgentOutcome.NotFound, Error: "No existe esa skill, o no es tuya ni compartida.") : new(AgentOutcome.Ok, skill);
+        }
+
         // ── Reporte de corridas ────────────────────────────────────────────────────────────────────────────────
 
         public async Task<AgentResult<AgentRunView>> ReportAsync(Guid ownerId, string agentKey, ReportInput input, CancellationToken ct)

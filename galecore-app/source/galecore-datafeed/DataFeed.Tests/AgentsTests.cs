@@ -48,6 +48,11 @@ public class AgentsTests
         public HashSet<(Guid, string)> Agents { get; } = new();
         public Dictionary<(Guid, string), AgentFireTokenRow> Tokens { get; } = new();
         public List<AgentRun> Runs { get; } = new();
+        public List<AgentSkillRow> Space { get; } = new();
+
+        // Devuelve a propósito más de lo que corresponde: el servicio es quien filtra kind y visibilidad.
+        public Task<IReadOnlyList<AgentSkillRow>> GetSkillsAsync(Guid o, string key, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<AgentSkillRow>>(Space.Where(s => s.Key == key).ToList());
 
         public Task<AgentKeyRow?> GetKeyByOwnerAsync(Guid o, CancellationToken ct) => Task.FromResult(Keys.GetValueOrDefault(o));
         public Task<AgentKeyRow?> GetKeyByHashAsync(string h, CancellationToken ct) => Task.FromResult(Keys.Values.FirstOrDefault(k => k.KeyHash == h));
@@ -83,6 +88,60 @@ public class AgentsTests
 
     private static ReportInput Report(string status = "ok", string? summary = "todo bien", string? trigger = null) =>
         new(status, summary, null, trigger, null, null);
+
+    // ── lectura de skills con la clave de agentes (WS-0099) ───────────────────────────────────────────────────
+
+    private static AgentSkillRow Skill(Guid owner, string name, string kind = "skill", string visibility = "private", string content = "{}", int hour = 0) =>
+        new(kind, "cierre", "Cierre", content, "json", visibility, 1, new DateTime(2026, 11, 9, hour, 0, 0, DateTimeKind.Utc), name, owner);
+
+    [Fact]
+    public async Task LaClaveLeeUnaSkillPropiaYPrefiereLaPropiaSobreUnaCompartida()
+    {
+        var r = NewRig();
+        r.Store.Space.Add(Skill(Beto, "beto", visibility: "shared", content: "{de-beto}", hour: 9));
+        r.Store.Space.Add(Skill(Ana, "ana", content: "{de-ana}"));
+
+        var own = await r.Svc.GetSkillAsync(Ana, "cierre", default);
+
+        Assert.Equal(AgentOutcome.Ok, own.Outcome);
+        Assert.Equal("{de-ana}", own.Value!.Content);
+        Assert.Equal("ana", own.Value.Owner);
+    }
+
+    [Fact]
+    public async Task LaClaveLeeUnaSkillCompartidaPorOtro()
+    {
+        var r = NewRig();
+        r.Store.Space.Add(Skill(Beto, "beto", visibility: "shared", content: "{de-beto}"));
+
+        var shared = await r.Svc.GetSkillAsync(Ana, "cierre", default);
+
+        Assert.Equal(AgentOutcome.Ok, shared.Outcome);
+        Assert.Equal("beto", shared.Value!.Owner);
+        Assert.Equal("{de-beto}", shared.Value.Content);
+    }
+
+    [Fact]
+    public async Task UnaSkillPrivadaDeOtroUnKindDistintoOUnaInexistenteSonNotFound()
+    {
+        var r = NewRig();
+        r.Store.Space.Add(Skill(Beto, "beto", visibility: "private"));
+        r.Store.Space.Add(Skill(Beto, "beto", kind: "memory", visibility: "shared"));
+        r.Store.Space.Add(Skill(Ana, "ana", kind: "agent"));
+
+        Assert.Equal(AgentOutcome.NotFound, (await r.Svc.GetSkillAsync(Ana, "cierre", default)).Outcome);
+        Assert.Equal(AgentOutcome.NotFound, (await r.Svc.GetSkillAsync(Ana, "otra", default)).Outcome);
+    }
+
+    [Fact]
+    public async Task UnaClaveInvalidaNoResuelveDuenoYPorEndeNoLeeSkills()
+    {
+        var r = NewRig();
+        r.Store.Space.Add(Skill(Ana, "ana"));
+
+        Assert.Null(await r.Svc.ResolveKeyAsync("gca_inventada", default));
+        Assert.Null(await r.Svc.ResolveKeyAsync("", default));
+    }
 
     // ── clave de agentes ───────────────────────────────────────────────────────────────────────────────────────
 
