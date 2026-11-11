@@ -172,11 +172,19 @@ def folder_of(piece: dict) -> dict:
     return data
 
 
-def pull(client, key: str, dest: Path) -> dict:
-    data = folder_of(find_piece(client, key))
-    write_files(data["files"], dest)
-    return {"status": "PULLED", "key": key, "version": data.get("version"), "dir": str(dest),
-            "files": sorted(data["files"])}
+def pull(client, key: str, dest: Path, finder=None) -> dict:
+    """Write a skill of the space into ``dest``; a plain markdown skill becomes its SKILL.md. `finder(key)` replaces the
+    space lookup (the cloud routine reads it with its agents key, without a login)."""
+    piece = finder(key) if finder else find_piece(client, key)
+    data = parse_piece(piece)
+    if data is None:
+        files = {"SKILL.md": piece.get("content") or ""}
+        version = version_of(files)
+    else:
+        files, version = data["files"], data.get("version")
+    write_files(files, dest)
+    return {"status": "PULLED", "key": key, "version": version, "dir": str(dest), "scripts": bool(scripts_of({"files": files})),
+            "files": sorted(files)}
 
 
 def cache_root() -> Path:

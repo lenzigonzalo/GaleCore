@@ -188,6 +188,32 @@ def test_pull_reproduces_the_files(folder, tmp_path):
     assert skill_space.save(FakeClient(), tmp_path / "bajada")["version"] == out["version"]
 
 
+def test_pull_of_a_markdown_skill_writes_its_skill_md_and_the_finder_replaces_the_space(tmp_path):
+    client = FakeClient()
+    client.own["notas"] = {"kind": "skill", "key": "notas", "title": "N", "content": "# Notas\nhacé X", "format": "markdown",
+                           "visibility": "private"}
+    out = skill_space.pull(client, "notas", tmp_path / "n")
+    assert out["files"] == ["SKILL.md"] and out["scripts"] is False
+    assert (tmp_path / "n" / "SKILL.md").read_text(encoding="utf-8") == "# Notas\nhacé X"
+    other = skill_space.pull(None, "x", tmp_path / "x", finder=lambda key: {**client.own["notas"], "key": key})
+    assert other["key"] == "x" and (tmp_path / "x" / "SKILL.md").is_file()
+
+
+def test_the_cli_pulls_a_skill_with_the_agents_key_and_no_login(folder, tmp_path, monkeypatch, capsys):
+    import argparse
+
+    from galecore_ai.adapters import cli
+    client = saved(FakeClient(), folder)
+    piece = client.own["mi-calculo"]
+    monkeypatch.setenv("GALECORE_AGENT_KEY", "gca_secreto")
+    monkeypatch.setenv("GALECORE_BASE_URL", "http://localhost:7001")
+    monkeypatch.setattr(cli, "_agent_key_skill_finder", lambda: (lambda key: piece))
+    with pytest.raises(SystemExit):
+        cli._cmd_skill(argparse.Namespace(skill_command="pull", key="mi-calculo", folder=str(tmp_path / "bajada")))
+    out = json.loads(capsys.readouterr().out)
+    assert out["status"] == "PULLED" and out["scripts"] is True and (tmp_path / "bajada" / "scripts" / "calc.py").is_file()
+
+
 def test_the_context_names_skills_with_code_by_description(folder):
     client = saved(FakeClient(), folder)
     client.own["md"] = {"kind": "skill", "key": "md", "title": "Vieja", "content": "Primera línea.\nOtra",

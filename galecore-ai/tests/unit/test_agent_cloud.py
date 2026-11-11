@@ -335,64 +335,61 @@ def test_a_market_hours_agent_builds_its_routine(galecore, lab):  # noqa: F811
         ac.new(client, "Cada 30", "x", {**when, "minutes": 30})
 
 
-def test_an_agent_with_a_skill_runs_it_and_reports_without_evaluating_on_failure(galecore, lab, tmp_path):  # noqa: F811
+def test_an_agent_with_skills_pulls_them_follows_their_skill_md_and_reports_without_evaluating_on_failure(galecore, lab, tmp_path):  # noqa: F811
     fake, client = galecore
     configured(lab)
     with_skill(client, tmp_path)
-    ac.new(client, "Cierre SPY", "Decí si cerró arriba", DAILY, skill={"key": "cierre", "script": "cierre.py",
-                                                                      "args": "SPY --tf '1 h'"})
+    ac.new(client, "Cierre SPY", "Decí si cerró arriba", DAILY, skills=["cierre"])
     p = piece_of(fake, "cierre-spy")
-    assert p["skill"] == {"key": "cierre", "script": "cierre.py", "args": "SPY --tf '1 h'"} == p["request"]["create"]["skill"]
+    assert p["skills"] == ["cierre"] == p["request"]["create"]["skills"] and "skill" not in p
     text = routine_text(ac.body(client, "cierre-spy", NOV))
-    assert "2. Corré `source ~/.galecore.env && python3 -m galecore_ai.adapters.cli skill run cierre cierre.py SPY --tf '1 h' > /tmp/resultado.json`" in text
-    assert "--summary-file /tmp/resumen.md --result-file /tmp/resultado.json`" in text
+    assert "   - `source ~/.galecore.env && python3 -m galecore_ai.adapters.cli skill pull cierre /tmp/skills/cierre`" in text
+    assert "leé su `SKILL.md` y seguilo" in text and "skill run <clave> <script>" in text
     assert 'empieza con "Sin evaluar:"' in text and "no repitas ni deduzcas conclusiones de corridas anteriores" in text
     assert "--status error" in text and "galecore get <capacidad>" not in text
-    assert text.index("skill run") < text.index("Tarea: Decí si cerró arriba") < text.index("agent report")
+    assert text.index("skill pull") < text.index("Tarea: Decí si cerró arriba") < text.index("agent report")
 
 
-def test_without_a_skill_the_instruction_is_the_same_as_before():
+def test_without_skills_the_instruction_is_the_same_as_before():
     text = ac.instruction({"id": "Resumen", "objective": "Resumí SPY"})
     assert "2. Hacé esta tarea del usuario, con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` " in text
-    assert "skill run" not in text and "Sin evaluar" not in text and "--result-file" not in text
-    assert ac.instruction({"id": "Resumen", "objective": "Resumí SPY", "skill": None}) == text
+    assert "skill pull" not in text and "Sin evaluar" not in text
+    assert ac.instruction({"id": "Resumen", "objective": "Resumí SPY", "skills": None}) == text
 
 
-def test_the_args_of_the_script_are_quoted_for_the_shell():
-    text = ac.instruction({"id": "A", "objective": "x", "skill": {"key": "k", "script": "s.py", "args": "SPY; rm -rf /"}})
-    assert "skill run k s.py 'SPY;' rm -rf / > /tmp/resultado.json`" in text      # one token each: `;` can never end the command
+def test_several_skills_are_pulled_one_by_one_and_their_keys_are_quoted():
+    text = ac.instruction({"id": "A", "objective": "x", "skills": ["uno", "dos"]})
+    assert text.index("skill pull uno /tmp/skills/uno") < text.index("skill pull dos /tmp/skills/dos")
+    assert "skill pull 'a b' /tmp/skills/'a b'" in ac.instruction({"id": "A", "objective": "x", "skills": ["a b"]})
 
 
-def test_new_checks_that_the_skill_and_script_exist(galecore, tmp_path):  # noqa: F811
+def test_new_checks_that_every_skill_exists_and_how_many(galecore, tmp_path):  # noqa: F811
     _, client = galecore
     with_skill(client, tmp_path)
+    client.put("skill", "notas", title="Notas", content="# Notas\n", fmt="markdown")
     with pytest.raises(ac.AgentCloudError, match="No encuentro la skill «nada»"):
-        ac.new(client, "A", "x", DAILY, skill={"key": "nada", "script": "x.py"})
-    with pytest.raises(ac.AgentCloudError, match=r"no tiene el script «otro.py» \(tiene: cierre.py\)"):
-        ac.new(client, "A", "x", DAILY, skill={"key": "cierre", "script": "otro.py"})
-    with pytest.raises(ac.AgentCloudError, match="una línea"):
-        ac.new(client, "A", "x", DAILY, skill={"key": "cierre", "script": "cierre.py", "args": "a\nb"})
-    with pytest.raises(ac.AgentCloudError, match="una línea"):
-        ac.new(client, "A", "x", DAILY, skill={"key": "cierre", "script": "cierre.py", "args": "a" * 301})
-    with pytest.raises(ac.AgentCloudError, match="comillas"):
-        ac.new(client, "A", "x", DAILY, skill={"key": "cierre", "script": "cierre.py", "args": "'abierta"})
-    made = ac.new(client, "B", "x", DAILY, skill={"key": "cierre", "script": "cierre.py"})
+        ac.new(client, "A", "x", DAILY, skills=["nada"])
+    with pytest.raises(ac.AgentCloudError, match="de 1 a 5"):
+        ac.new(client, "A", "x", DAILY, skills=["cierre", "cierre"])
+    with pytest.raises(ac.AgentCloudError, match="de 1 a 5"):
+        ac.new(client, "A", "x", DAILY, skills=[f"s{i}" for i in range(6)])
+    made = ac.new(client, "B", "x", DAILY, skills=["cierre", "notas"])      # code and markdown skills both count
     assert made == {"agent": "b", "status": "pending"}
 
 
-def test_settings_can_set_and_remove_the_skill():
-    skill = {"key": "cierre", "script": "cierre.py"}
+def test_settings_can_set_and_remove_the_skills():
     base = {"id": "A", "objective": "x", "schedule_spec": DAILY}
-    on = ac.effective({**base, "request": {"settings": {"skill": skill}}})
-    assert on["skill"] == skill
-    off = ac.effective({**base, "skill": skill, "request": {"settings": {"skill": None}}})
-    assert off["skill"] is None and "skill run" not in ac.instruction({**off, "key": "a"})
+    on = ac.effective({**base, "request": {"settings": {"skills": ["cierre"]}}})
+    assert on["skills"] == ["cierre"]
+    off = ac.effective({**base, "skills": ["cierre"], "request": {"settings": {"skills": None}}})
+    assert off["skills"] is None and "skill pull" not in ac.instruction({**off, "key": "a"})
 
 
-def test_cli_agent_new_takes_skill_and_script_together(galecore, monkeypatch, capsys, tmp_path):  # noqa: F811
+def test_cli_agent_new_takes_skill_repeated(galecore, monkeypatch, capsys, tmp_path):  # noqa: F811
     from galecore_ai.adapters import galecore_space
     fake, client = galecore
     with_skill(client, tmp_path)
+    client.put("skill", "notas", title="Notas", content="# Notas\n", fmt="markdown")
     monkeypatch.setattr(galecore_space, "SpaceClient", lambda: client)
 
     def run(*extra):
@@ -401,9 +398,6 @@ def test_cli_agent_new_takes_skill_and_script_together(galecore, monkeypatch, ca
             cli.main()
         return stop.value.code, json.loads(capsys.readouterr().out)
 
-    assert run("--skill", "cierre")[0] == 3
-    assert run("--script", "cierre.py")[0] == 3
-    assert run("--script-args", "SPY")[0] == 3
-    code, out = run("--skill", "cierre", "--script", "cierre.py", "--script-args", "SPY")
+    code, out = run("--skill", "cierre", "--skill", "notas")
     assert code == 0 and out["agent"] == "cierre-spy"
-    assert piece_of(fake, "cierre-spy")["skill"] == {"key": "cierre", "script": "cierre.py", "args": "SPY"}
+    assert piece_of(fake, "cierre-spy")["skills"] == ["cierre", "notas"]
