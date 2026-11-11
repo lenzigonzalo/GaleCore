@@ -107,6 +107,21 @@ test('el interruptor viejo de brókers es el valor por defecto de IOL e IBKR en 
   assert.ok(deny.includes('mcp__claude_ai_Gmail') && deny.includes('mcp__claude_ai_LSEG'));
 });
 
+test('Claude: con un catálogo viejo la lista sale enseguida y la sonda refresca en segundo plano', async t => {
+  const local = tmp(t);
+  recordClaudeInit(local, init);
+  const file = path.join(local, 'connectors-seen.json');
+  const old = JSON.parse(fs.readFileSync(file, 'utf8')); old.claude.at -= 600000; fs.writeFileSync(file, JSON.stringify(old));
+  const { EventEmitter } = require('events');
+  let probes = 0;
+  const spawnProcess = () => { probes++; const p = new EventEmitter(); p.stdout = new EventEmitter(); p.kill = () => p.emit('close'); return p; };
+  const start = Date.now();
+  const r = await listConnectors({ local, binary: 'claude', spawnProcess, timeout: 2000 });
+  assert.ok(Date.now() - start < 1000);
+  assert.equal(probes, 1);
+  assert.equal(r.claude.length, 4);
+});
+
 test('lista por motor con estado e interruptor; sin binarios usa lo visto y IOL e IBKR para Codex', async t => {
   const local = tmp(t);
   recordClaudeInit(local, init);
