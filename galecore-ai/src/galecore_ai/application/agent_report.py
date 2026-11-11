@@ -97,7 +97,7 @@ def read_results(folder: str) -> tuple[dict | None, list[dict], list[str]]:
             for a in salida["avisos"]:
                 if (isinstance(a, dict) and isinstance(a.get("id"), str) and isinstance(a.get("titulo"), str)
                         and 0 < len(a["id"]) <= 100 and 0 < len(a["titulo"]) <= 200):
-                    alerts.append({"id": a["id"], "titulo": a["titulo"]})
+                    alerts.append({"id": a["id"], "title": a["titulo"]})
     return result, alerts[:ALERTS_MAX], unevaluated
 
 

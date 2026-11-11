@@ -227,7 +227,7 @@ def test_the_report_carries_every_corrida_of_the_results_dir_and_the_valid_alert
     assert code == 0 and body["status"] == "ok" and "Sin evaluar" not in body["summary"]
     assert [(c["skill"], c["script"], c["ok"]) for c in body["result"]["corridas"]] == [("cierre", "cierre.py", True), ("gex", "gex.py", True)]
     assert body["result"]["corridas"][0]["salida"]["valores"] == {"spy": 600} and body["result"]["corridas"][0]["version"] == "v1"
-    assert body["alerts"] == [{"id": "ruptura-1", "titulo": "Rompió"}]
+    assert body["alerts"] == [{"id": "ruptura-1", "title": "Rompió"}]
 
 
 def test_a_failed_corrida_turns_ok_into_error_names_what_is_unevaluated_and_leaves_no_alert_of_it(results, monkeypatch, capsys):
@@ -236,7 +236,7 @@ def test_a_failed_corrida_turns_ok_into_error_names_what_is_unevaluated_and_leav
     fake = FakeGaleCore()
     _, body = _report(monkeypatch, capsys, fake)
     assert body["status"] == "error" and body["summary"].startswith("Sin evaluar: cierre/cierre.py: boom")
-    assert body["result"]["corridas"][0]["ok"] is False and body["alerts"] == [{"id": "g1", "titulo": "Gamma"}]
+    assert body["result"]["corridas"][0]["ok"] is False and body["alerts"] == [{"id": "g1", "title": "Gamma"}]
 
 
 def test_a_summary_that_already_says_sin_evaluar_is_not_prefixed_twice(results, monkeypatch, capsys):
