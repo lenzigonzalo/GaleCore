@@ -139,22 +139,74 @@ function ScheduleFields({ value, onChange, market }: { value: ScheduleSpec; onCh
 }
 
 /** Skills del espacio (propias y compartidas), con código o sólo markdown; el agente baja la carpeta completa. */
-interface SkillOption { key: string; title: string }
+interface SkillOption { key: string; title: string; description: string; code: boolean; shared: boolean }
 const SKILLS_MAX = 5;
+
+/** Descripción de una skill: `description` del frontmatter de su SKILL.md (skill-folder/1) o primera línea de texto de la pieza. */
+function skillInfo(i: SpaceItem): { description: string; code: boolean } {
+  let md = i.content ?? '';
+  let code = false;
+  if (i.format === 'json') {
+    try {
+      const files = (JSON.parse(i.content) as { files?: Record<string, string> }).files ?? {};
+      md = typeof files['SKILL.md'] === 'string' ? files['SKILL.md'] : '';
+      code = Object.keys(files).some(f => /^scripts\/[^/]+\.py$/.test(f));
+    } catch { md = ''; }
+  }
+  const front = /^---\s*\r?\n([\s\S]*?)\r?\n---/.exec(md);
+  if (front) {
+    const d = /^description:\s*(.+)$/m.exec(front[1]);
+    return { description: d ? d[1].trim().replace(/^["']|["']$/g, '') : '', code };
+  }
+  const line = md.split(/\r?\n/).map(l => l.trim()).find(l => l && !l.startsWith('#') && l !== '---');
+  return { description: line ?? '', code };
+}
+
 function skillOptions(items: SpaceItem[]): SkillOption[] {
   const out: SkillOption[] = [];
-  for (const i of items) if (i.kind === 'skill' && !out.some(o => o.key === i.key)) out.push({ key: i.key, title: i.title });
+  for (const i of items) if (i.kind === 'skill' && !out.some(o => o.key === i.key)) out.push({ key: i.key, title: i.title, ...skillInfo(i), shared: !i.isOwn });
   return out;
 }
 
+/** Selector con buscador: varias a la vez, sólo las que todavía no están elegidas, hasta el tope. */
+function SkillPicker({ options, taken, onAdd, onClose }: { options: SkillOption[]; taken: string[]; onAdd: (keys: string[]) => void; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState<string[]>([]);
+  const room = SKILLS_MAX - taken.length;
+  const needle = q.trim().toLowerCase();
+  const rows = options.filter(o => !taken.includes(o.key) && (!needle || `${o.title} ${o.description}`.toLowerCase().includes(needle)));
+  const toggle = (k: string) => setSel(sel.includes(k) ? sel.filter(x => x !== k) : [...sel, k]);
+  return <div className="agents-modal-backdrop" onClick={e => { e.stopPropagation(); onClose(); }}>
+    <div className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="skill-picker-title" onClick={e => e.stopPropagation()}
+      onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+      <div className="agents-modal-title"><h2 id="skill-picker-title">Añadir skill</h2><button type="button" aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
+      <input className="agents-skill-search" type="search" aria-label="Buscar skill" placeholder="Buscar" autoFocus value={q} onChange={e => setQ(e.target.value)} />
+      <ul className="agents-skill-list">{rows.map(o => {
+        const on = sel.includes(o.key);
+        const off = !on && sel.length >= room;
+        return <li key={o.key}><label className={`agents-skill-row${on ? ' on' : ''}${off ? ' off' : ''}`}>
+          <input type="checkbox" checked={on} disabled={off} onChange={() => toggle(o.key)} aria-label={o.title} />
+          <span className="agents-skill-text"><strong>{o.title}</strong>{o.description && <span>{o.description}</span>}</span>
+          {o.code && <em className="agents-skill-tag">Con cálculo</em>}{o.shared && <em className="agents-skill-tag">Compartida</em>}
+        </label></li>;
+      })}</ul>
+      <div className="agents-edit-actions"><button className="agents-primary" type="button" disabled={!sel.length} onClick={() => onAdd(sel)}>
+        {room <= 0 ? `Máximo ${SKILLS_MAX}` : sel.length >= room ? `Añadir (${sel.length}, máximo ${SKILLS_MAX})` : `Añadir (${sel.length})`}</button>
+        <button className="agents-text-button" type="button" onClick={onClose}>Cancelar</button></div>
+    </div></div>;
+}
+
 function SkillFields({ value, options, onChange }: { value: string[]; options: SkillOption[]; onChange: (v: string[]) => void }) {
-  const known = options.map(o => o.key);
-  const all = [...options, ...value.filter(k => !known.includes(k)).map(k => ({ key: k, title: k }))];
-  if (!all.length) return null;
-  const toggle = (k: string) => onChange(value.includes(k) ? value.filter(x => x !== k) : [...value, k]);
+  const [adding, setAdding] = useState(false);
+  const full = value.length >= SKILLS_MAX;
   return <fieldset className="agents-fieldset"><legend>Skills</legend>
-    <div className="agents-days">{all.map(o => <label key={o.key} className={value.includes(o.key) ? 'on' : ''}>
-      <input type="checkbox" checked={value.includes(o.key)} disabled={!value.includes(o.key) && value.length >= SKILLS_MAX} onChange={() => toggle(o.key)} />{o.title}</label>)}</div>
+    {!!value.length && <ul className="agents-skill-chosen">{value.map(k => {
+      const o = options.find(x => x.key === k) ?? { key: k, title: k, description: '', code: false, shared: false };
+      return <li key={k}><span className="agents-skill-text"><strong>{o.title}</strong>{o.description && <span>{o.description}</span>}</span>
+        <button type="button" aria-label={`Quitar ${o.title}`} onClick={() => onChange(value.filter(x => x !== k))}><X size={16} /></button></li>;
+    })}</ul>}
+    <button className="agents-text-button" type="button" disabled={full} onClick={() => setAdding(true)}><Plus size={14} />Añadir skill</button>
+    {adding && <SkillPicker options={options} taken={value} onAdd={keys => { onChange([...value, ...keys].slice(0, SKILLS_MAX)); setAdding(false); }} onClose={() => setAdding(false)} />}
   </fieldset>;
 }
 

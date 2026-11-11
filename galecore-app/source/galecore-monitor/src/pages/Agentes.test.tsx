@@ -364,25 +364,49 @@ test('con el borrado pedido se avisa y no se ofrece Borrar', async () => {
 
 // ── WS-0099: agente que corre una skill y «cada 1 h en rueda» ──────────────────
 
-const skillFiles = { 'SKILL.md': '---\nname: Cierre\ndescription: x\n---\n', 'scripts/cierre.py': 'print(1)', 'scripts/otro.py': 'print(2)' };
+const skillFiles = { 'SKILL.md': '---\nname: Cierre\ndescription: Cómo cerró SPY\n---\n', 'scripts/cierre.py': 'print(1)', 'scripts/otro.py': 'print(2)' };
 const skillItem = (key: string, title: string, own: boolean, format: 'json' | 'markdown' = 'json', content = JSON.stringify({ format: 'skill-folder/1', files: skillFiles })): SpaceItem =>
   ({ ...item, key, title, kind: 'skill', format, content, isOwn: own });
 
-test('Nuevo agente ofrece las skills del espacio como casillas (con código o no) y manda las elegidas en el alta', async () => {
+const openPicker = () => fireEvent.click(screen.getByRole('button', { name: 'Añadir skill' }));
+
+test('Nuevo agente: «Añadir skill» abre el selector con buscador, marcas, elegir dos y confirmar; ✕ quita una', async () => {
   (fetchSpace as jest.Mock).mockResolvedValue({
-    items: [skillItem('cierre', 'Cierre de SPY', true), skillItem('texto', 'Sólo texto', true, 'markdown', '# hola')],
+    items: [skillItem('cierre', 'Cierre de SPY', true), skillItem('texto', 'Sólo texto', true, 'markdown', '# hola\nExplica el texto')],
     shared: [skillItem('ajena', 'Compartida', false)],
   });
   render(<Agentes />);
   fireEvent.click(await screen.findByRole('button', { name: 'Nuevo agente' }));
   const group = screen.getByRole('group', { name: 'Skills' });
-  expect(within(group).getAllByRole('checkbox').map(c => c.parentElement?.textContent)).toEqual(['Cierre de SPY', 'Sólo texto', 'Compartida']);
+  expect(within(group).queryByRole('list')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Cierre SPY' } });
   fireEvent.change(screen.getByLabelText('Qué hace'), { target: { value: 'Decí cómo cerró' } });
   fireEvent.change(screen.getByRole('combobox', { name: 'Frecuencia' }), { target: { value: 'market_hours' } });
-  expect(screen.queryByLabelText('Hora')).not.toBeInTheDocument();
-  fireEvent.click(within(group).getByRole('checkbox', { name: 'Cierre de SPY' }));
-  fireEvent.click(within(group).getByRole('checkbox', { name: 'Compartida' }));
+  openPicker();
+  const picker = screen.getByRole('dialog', { name: 'Añadir skill' });
+  expect(within(picker).getAllByRole('checkbox')).toHaveLength(3);
+  expect(within(picker).getAllByText('Cómo cerró SPY')).toHaveLength(2);
+  expect(within(picker).getByText('Explica el texto')).toBeInTheDocument();
+  expect(within(picker).getAllByText('Con cálculo')).toHaveLength(2);
+  expect(within(picker).getAllByText('Compartida', { selector: 'em' })).toHaveLength(1);
+  fireEvent.change(within(picker).getByLabelText('Buscar skill'), { target: { value: 'texto' } });
+  expect(within(picker).getAllByRole('checkbox').map(c => c.getAttribute('aria-label'))).toEqual(['Sólo texto']);
+  fireEvent.change(within(picker).getByLabelText('Buscar skill'), { target: { value: '' } });
+  fireEvent.click(within(picker).getByRole('checkbox', { name: 'Cierre de SPY' }));
+  fireEvent.click(within(picker).getByRole('checkbox', { name: 'Compartida' }));
+  fireEvent.click(within(picker).getByRole('button', { name: 'Añadir (2)' }));
+  expect(screen.queryByRole('dialog', { name: 'Añadir skill' })).not.toBeInTheDocument();
+  expect(within(group).getAllByRole('listitem')).toHaveLength(2);
+  fireEvent.click(within(group).getByRole('button', { name: 'Quitar Compartida' }));
+  expect(within(group).getAllByRole('listitem')).toHaveLength(1);
+  openPicker();
+  expect(within(screen.getByRole('dialog', { name: 'Añadir skill' })).queryByRole('checkbox', { name: 'Cierre de SPY' })).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('dialog', { name: 'Añadir skill' }), { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Añadir skill' })).not.toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Nuevo agente' })).toBeInTheDocument();
+  openPicker();
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Añadir skill' })).getByRole('checkbox', { name: 'Compartida' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Añadir (1)' }));
   fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
   await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
   const piece = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
@@ -393,13 +417,18 @@ test('Nuevo agente ofrece las skills del espacio como casillas (con código o no
 });
 
 test('no se pueden elegir más de 5 skills', async () => {
-  const many = Array.from({ length: 6 }, (_, n) => skillItem(`s${n}`, `Skill ${n}`, true));
+  const many = Array.from({ length: 7 }, (_, n) => skillItem(`s${n}`, `Skill ${n}`, true));
   (fetchSpace as jest.Mock).mockResolvedValue({ items: many, shared: [] });
   render(<Agentes />);
   fireEvent.click(await screen.findByRole('button', { name: 'Nuevo agente' }));
-  const group = screen.getByRole('group', { name: 'Skills' });
-  for (let n = 0; n < 5; n++) fireEvent.click(within(group).getByRole('checkbox', { name: `Skill ${n}` }));
-  expect(within(group).getByRole('checkbox', { name: 'Skill 5' })).toBeDisabled();
+  openPicker();
+  const picker = screen.getByRole('dialog', { name: 'Añadir skill' });
+  for (let n = 0; n < 5; n++) fireEvent.click(within(picker).getByRole('checkbox', { name: `Skill ${n}` }));
+  expect(within(picker).getByRole('checkbox', { name: 'Skill 5' })).toBeDisabled();
+  expect(within(picker).getByRole('button', { name: 'Añadir (5, máximo 5)' })).toBeInTheDocument();
+  fireEvent.click(within(picker).getByRole('button', { name: /^Añadir/ }));
+  expect(within(screen.getByRole('group', { name: 'Skills' })).getAllByRole('listitem')).toHaveLength(5);
+  expect(screen.getByRole('button', { name: 'Añadir skill' })).toBeDisabled();
 });
 
 test('la tarjeta lista las skills y editar las cambia o las quita con request.settings', async () => {
@@ -411,7 +440,7 @@ test('la tarjeta lista las skills y editar las cambia o las quita con request.se
   expect(screen.getByText('Skills: Cierre de SPY, Sólo texto')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
   expect(screen.getByRole('combobox', { name: 'Frecuencia' })).toHaveValue('market_hours');
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Sólo texto' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Quitar Sólo texto' }));
   fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
   await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
   const saved = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
