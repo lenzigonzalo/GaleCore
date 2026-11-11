@@ -14,7 +14,7 @@ Todos los comandos son `python -m galecore_ai.adapters.cli agent …`.
 1. Pedí sólo lo que falte de tres cosas: nombre, qué hace, cuándo (una vez por día: todos los días, de lunes a viernes o días elegidos, con hora y zona; o cada 1 h en rueda).
 2. Si necesita archivos de la PC o correr cada menos de 1 hora, no es de la nube: es una tarea de la PC y sigue el camino de siempre (`capability_builder`).
 3. `agent new --name "<nombre>" --what "<qué hace>" --when '{"frequency":"daily","time":"08:00","timezone":"America/New_York"}'` (`frequency`: `daily`, `weekdays` o `days` con `"days":["mon","wed"]`; cada 1 h en rueda es `{"frequency":"market_hours","minutes":60,"timezone":"America/New_York"}`).
-   Si quiere que el agente corra un cálculo, ofrecé una skill con código de su espacio (`space list --kind skill` o el contexto) y sumá `--skill <clave> --script <nombre>.py` (y `--script-args "<una línea>"` si hace falta). Si la skill no existe, primero se crea con `skills-con-codigo`.
+   Si quiere que el agente use una skill (con código o sólo markdown), ofrecé las de su espacio (`space list --kind skill` o el contexto) y sumá `--skill <clave>` por cada una, de 1 a 5 (el flag se repite). El agente baja la carpeta completa y sigue su `SKILL.md`; los cálculos los corre con `skill run`. Las corridas y los avisos quedan guardados solos. Si la skill no existe, primero se crea con `skills-con-codigo`.
 4. Decí en una línea: «en menos de un minuto aparece en Agentes». No la apliques vos: el Lab lo hace solo. Si `agent env` dice que falta configurar el entorno, decilo en una línea y seguí.
 
 ## Entrada 2: aplicar pendientes (sólo el Lab, sin chat)

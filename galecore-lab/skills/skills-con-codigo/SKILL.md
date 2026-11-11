@@ -24,6 +24,18 @@ Todos los comandos son `python -B -m galecore_ai.adapters.cli skill …`.
 
 `skill pull <clave> skills/<nombre>` baja los archivos (propia o compartida); editá; `skill save skills/<nombre> --key <clave> --test "…"`. Sólo se puede guardar encima de una propia: si la clave era de otro, guardala con otra `--key`.
 
+## Si la va a correr un agente programado
+
+El JSON del script puede seguir esta convención; ninguna clave es obligatoria y GaleCore muestra solo estas:
+
+- `evaluado_en` y `ultima_vela` (fechas ISO), `calidad` (`"completa"` o qué falta).
+- `valores`: `{nombre: número o texto}`.
+- `condiciones`: `[{"nombre": "…", "estado": "cumplida" | "pendiente" | "fallida"}]`.
+- `cambios`: `["qué cambió desde la corrida anterior"]`.
+- `avisos`: `[{"id": "…", "titulo": "…"}]`. Un aviso sale una sola vez por `id`, así que el `id` lleva lo que lo hace nuevo (p. ej. `ruptura-2026-11-10`): si la condición se cae y vuelve, con otro `id` avisa de nuevo. `id` hasta 100 caracteres, `titulo` hasta 200, máximo 10 por corrida.
+
+Si el cálculo no se puede hacer, el script sale con error o imprime `"estado": "sin evaluar"`; el agente lo reporta como «Sin evaluar» y no repite una conclusión anterior.
+
 ## Límites
 
 - Hasta ~190.000 caracteres en total; sólo `SKILL.md`, `scripts/*.py`, `references/*`, `assets/*`.
