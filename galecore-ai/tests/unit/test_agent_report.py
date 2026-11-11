@@ -196,62 +196,92 @@ def test_get_skill_escapes_the_key_in_the_url(env, monkeypatch):
     assert seen == ["/App/GaleCore/Agents/Skills/a%2Fb%3Fc%23d"]
 
 
-def _result_file(tmp_path, data) -> str:
-    f = tmp_path / "r.json"
-    f.write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
-    return str(f)
+def _leave(folder, name, data):
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / name).write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
 
 
-def _skill_out(**salida):
-    return {"ok": True, "skill": "cierre", "version": 2, "source": "space", "result": salida, "error": None}
+def _out(skill="cierre", script="cierre.py", ok=True, error=None, **salida):
+    return {"ok": ok, "skill": skill, "script": script, "version": "v1", "source": "space", "error": error,
+            "result": salida if ok else None, "stderr": "", "exit_code": 0 if ok else 1}
 
 
-def test_result_file_sends_result_and_valid_alerts(env, monkeypatch, capsys, tmp_path):
-    fake = FakeGaleCore()
+@pytest.fixture
+def results(env, monkeypatch, tmp_path):
+    folder = tmp_path / "resultados"
+    monkeypatch.setenv("GALECORE_RESULTS_DIR", str(folder))
+    return folder
+
+
+def _report(monkeypatch, capsys, fake, status="ok", summary="resumen"):
+    code, _, _ = run(monkeypatch, capsys, ["a1", "--status", status, "--summary", summary], fake)
+    return code, json.loads(fake.requests[0].content)
+
+
+def test_the_report_carries_every_corrida_of_the_results_dir_and_the_valid_alerts(results, monkeypatch, capsys):
     avisos = [{"id": "ruptura-1", "titulo": "Rompió"}, {"id": "x" * 101, "titulo": "largo"}, {"id": "a"}, "mal"]
-    path = _result_file(tmp_path, _skill_out(valores={"spy": 600}, avisos=avisos))
-    code, _, _ = run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "ok", "--result-file", path], fake)
-    body = json.loads(fake.requests[0].content)
-    assert code == 0 and body["status"] == "ok"
-    assert body["result"]["skill"] == "cierre" and body["result"]["version"] == 2 and body["result"]["ok"] is True
-    assert body["result"]["salida"]["valores"] == {"spy": 600}
+    _leave(results, "01-cierre-cierre.py.json", _out(valores={"spy": 600}, avisos=avisos))
+    _leave(results, "02-gex-gex.py.json", _out(skill="gex", script="gex.py", nivel=5))
+    fake = FakeGaleCore()
+    code, body = _report(monkeypatch, capsys, fake)
+    assert code == 0 and body["status"] == "ok" and "Sin evaluar" not in body["summary"]
+    assert [(c["skill"], c["script"], c["ok"]) for c in body["result"]["corridas"]] == [("cierre", "cierre.py", True), ("gex", "gex.py", True)]
+    assert body["result"]["corridas"][0]["salida"]["valores"] == {"spy": 600} and body["result"]["corridas"][0]["version"] == "v1"
     assert body["alerts"] == [{"id": "ruptura-1", "titulo": "Rompió"}]
 
 
-def test_result_file_failed_skill_turns_ok_into_error_without_alerts(env, monkeypatch, capsys, tmp_path):
+def test_a_failed_corrida_turns_ok_into_error_names_what_is_unevaluated_and_leaves_no_alert_of_it(results, monkeypatch, capsys):
+    _leave(results, "01-cierre-cierre.py.json", _out(ok=False, error="boom", avisos=[{"id": "a", "titulo": "b"}]))
+    _leave(results, "02-gex-gex.py.json", _out(skill="gex", script="gex.py", avisos=[{"id": "g1", "titulo": "Gamma"}]))
     fake = FakeGaleCore()
-    path = _result_file(tmp_path, {"ok": False, "skill": "cierre", "version": 2, "result": {"avisos": [{"id": "a", "titulo": "b"}]},
-                                   "error": "boom"})
-    run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "ok", "--result-file", path], fake)
-    body = json.loads(fake.requests[0].content)
-    assert body["status"] == "error" and body["result"]["ok"] is False and body["result"]["error"] == "boom"
-    assert "alerts" not in body
+    _, body = _report(monkeypatch, capsys, fake)
+    assert body["status"] == "error" and body["summary"].startswith("Sin evaluar: cierre/cierre.py: boom")
+    assert body["result"]["corridas"][0]["ok"] is False and body["alerts"] == [{"id": "g1", "titulo": "Gamma"}]
 
 
-@pytest.mark.parametrize("content", [None, "no es json", "[1]"])
-def test_result_file_missing_or_not_json_still_reports(env, monkeypatch, capsys, tmp_path, content):
+def test_a_summary_that_already_says_sin_evaluar_is_not_prefixed_twice(results, monkeypatch, capsys):
+    _leave(results, "01-cierre-cierre.py.json", _out(ok=False, error="boom"))
     fake = FakeGaleCore()
-    path = str(tmp_path / "nada.json") if content is None else _result_file(tmp_path, content)
-    run(monkeypatch, capsys, ["a1", "--status", "skipped", "--summary", "s", "--result-file", path], fake)
-    body = json.loads(fake.requests[0].content)
-    assert body["status"] == "skipped" and body["result"] == {"ok": False, "error": "sin resultado del cálculo"}
+    _, body = _report(monkeypatch, capsys, fake, status="error", summary="Sin evaluar: falló boom")
+    assert body["summary"] == "Sin evaluar: falló boom"
 
 
-def test_result_file_too_big_is_not_sent(env, monkeypatch, capsys, tmp_path):
+def test_no_corrida_is_an_error_unless_every_pulled_skill_is_only_markdown(results, monkeypatch, capsys):
     fake = FakeGaleCore()
-    path = _result_file(tmp_path, _skill_out(texto="x" * 60_000))
-    code, _, _ = run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "s", "--result-file", path], fake)
+    _, body = _report(monkeypatch, capsys, fake)                                        # nothing pulled, nothing ran
+    assert body["status"] == "error" and body["result"] == {"corridas": [], "error": "sin resultado del cálculo"}
+    _leave(results, "_skills.json", [{"key": "cierre", "scripts": True}])
+    fake = FakeGaleCore()
+    assert _report(monkeypatch, capsys, fake)[1]["status"] == "error"                   # a skill with scripts and no corrida
+    _leave(results, "_skills.json", [{"key": "notas", "scripts": False}])
+    fake = FakeGaleCore()
+    _, body = _report(monkeypatch, capsys, fake)
+    assert body["status"] == "ok" and "result" not in body and "alerts" not in body       # markdown only: nothing to calculate
+
+
+def test_an_unreadable_output_is_an_unevaluated_corrida(results, monkeypatch, capsys):
+    _leave(results, "01-cierre-cierre.py.json", "no es json")
+    fake = FakeGaleCore()
+    _, body = _report(monkeypatch, capsys, fake)
+    assert body["status"] == "error" and body["result"]["corridas"][0]["error"] == "salida ilegible"
+
+
+def test_a_too_big_result_is_not_sent(results, monkeypatch, capsys):
+    _leave(results, "01-cierre-cierre.py.json", _out(texto="x" * 60_000))
+    fake = FakeGaleCore()
+    code, _, _ = run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "s"], fake)
     assert code != 0 and fake.requests == []
 
 
-def test_alerts_capped_at_ten(env, monkeypatch, capsys, tmp_path):
+def test_alerts_are_capped_at_ten(results, monkeypatch, capsys):
+    _leave(results, "01-cierre-cierre.py.json", _out(avisos=[{"id": f"i{n}", "titulo": "t"} for n in range(15)]))
     fake = FakeGaleCore()
-    path = _result_file(tmp_path, _skill_out(avisos=[{"id": f"i{n}", "titulo": "t"} for n in range(15)]))
-    run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "s", "--result-file", path], fake)
-    assert len(json.loads(fake.requests[0].content)["alerts"]) == 10
+    _, body = _report(monkeypatch, capsys, fake)
+    assert len(body["alerts"]) == 10
 
 
-def test_without_result_file_body_is_unchanged(env, monkeypatch, capsys):
+def test_without_a_results_dir_the_body_is_unchanged(env, monkeypatch, capsys):
+    monkeypatch.delenv("GALECORE_RESULTS_DIR", raising=False)
     fake = FakeGaleCore()
     run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "s"], fake)
     body = json.loads(fake.requests[0].content)

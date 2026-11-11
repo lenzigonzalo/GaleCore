@@ -28,6 +28,7 @@ CLOUD_FREQUENCIES = ("daily", "weekdays", "days", "market_hours")   # once a day
 FREQUENCY_ERROR = ("Un agente en la nube corre una vez por día (diario, de lunes a viernes o días elegidos) "
                    "o cada 1 h en rueda.")
 SKILLS_MAX = 5
+RESULTS_VAR, RESULTS_DIR = "GALECORE_RESULTS_DIR", "/tmp/resultados"     # where `skill run` leaves each output for `agent report`
 NO_ENVIRONMENT = "Falta configurar el entorno de los agentes en la nube (pasale al Lab el link del entorno de claude.ai)."
 ENV_ID = re.compile(r"env_[A-Za-z0-9]+")
 REQUEST_KEYS = ("create", "settings", "status", "run", "delete")
@@ -158,7 +159,7 @@ def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
               "No crees ni modifiques archivos en el repo.")
     install = "cd galecore-ai && python3 -m pip install -q -e . && cd .."
     if variables:
-        lines = "\n".join(f"export {n}={shlex.quote(v)}" for n, v in variables.items())
+        lines = "\n".join(f"export {n}={shlex.quote(v)}" for n, v in {**variables, **({RESULTS_VAR: RESULTS_DIR} if skills else {})}.items())
         step1 = ("1. Guardá las variables en un archivo (cada comando que use GaleCore lo carga con `source`) e instalá el "
                  f"harness, desde la raíz del repo:\n```\ncat > ~/.galecore.env <<'EOF'\n{lines}\nEOF\n"
                  f"chmod 600 ~/.galecore.env\n{install}\n```")

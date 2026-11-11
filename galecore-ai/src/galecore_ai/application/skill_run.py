@@ -24,6 +24,46 @@ STDERR_MAX = 2000
 RUNS_FILE = "skill_runs.jsonl"   # in the knowledge base: one line per `skill run` (WS-0073)
 RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # set by a scheduled run (model_run.py); its parent folder is the task id
 ERROR_MAX = 300
+RESULTS_ENV = "GALECORE_RESULTS_DIR"   # a cloud routine: every `skill run` leaves its output here for `agent report`
+MANIFEST = "_skills.json"              # what `skill pull` brought: [{"key", "scripts"}]
+
+
+def _results_dir() -> Path | None:
+    configured = os.environ.get(RESULTS_ENV, "").strip()
+    return Path(configured) if configured else None
+
+
+def _slug(text: str) -> str:
+    return "".join(c if c.isalnum() or c in "-_." else "-" for c in str(text))[:60] or "x"
+
+
+def save_output(result: dict) -> None:
+    """With GALECORE_RESULTS_DIR set, keep this run's output as ``<n>-<skill>-<script>.json`` (never fails the run)."""
+    folder = _results_dir()
+    if folder is None:
+        return
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        n = sum(1 for p in folder.glob("*.json") if p.name != MANIFEST) + 1
+        name = f"{n:02d}-{_slug(result.get('skill'))}-{_slug(result.get('script'))}.json"
+        (folder / name).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def note_pulled(key: str, has_scripts: bool) -> None:
+    """With GALECORE_RESULTS_DIR set, remember that this skill was brought and whether it has scripts to run."""
+    folder = _results_dir()
+    if folder is None:
+        return
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / MANIFEST
+        rows = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
+        rows = [r for r in rows if r.get("key") != key] + [{"key": key, "scripts": has_scripts}]
+        path.write_text(json.dumps(rows), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
 
 
 class SkillRunError(Exception):

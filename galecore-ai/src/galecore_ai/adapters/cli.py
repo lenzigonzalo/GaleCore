@@ -39,7 +39,7 @@ Usage:
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
     python -m galecore_ai.adapters.cli agent pending|body KEY|applied KEY|new|env   (cloud agents, WS-0079)
-    python -m galecore_ai.adapters.cli agent report AGENT_KEY --status ok|error|skipped (--summary-file PATH|- | --summary "...")         [--result-file PATH] [--reason-code X] [--trigger-id ID] [--fired-at ISO] [--finished-at ISO]
+    python -m galecore_ai.adapters.cli agent report AGENT_KEY --status ok|error|skipped (--summary-file PATH|- | --summary "...")         [--reason-code X] [--trigger-id ID] [--fired-at ISO] [--finished-at ISO]
     python -m galecore_ai.adapters.cli clock [--at ISO]
     python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list [--bugfix]
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
@@ -586,8 +586,10 @@ def _cmd_skill(args: argparse.Namespace) -> None:
     from galecore_ai.application.skill_run import (
         SkillNotInCatalog,
         SkillRunError,
+        note_pulled,
         record_run,
         run_script,
+        save_output,
         skill_dir,
     )
     if getattr(args, "skill_command", "run") in ("save", "pull"):
@@ -595,10 +597,13 @@ def _cmd_skill(args: argparse.Namespace) -> None:
         try:
             if args.skill_command == "save":
                 _json_out(skill_space.save(SpaceClient(), Path(args.folder), key=args.key, shared=args.shared, test=args.test))
-            elif os.environ.get("GALECORE_AGENT_KEY", "").strip():   # a cloud routine: no login, the agents key reads it
-                _json_out(skill_space.pull(None, args.key, Path(args.folder), finder=_agent_key_skill_finder()))
             else:
-                _json_out(skill_space.pull(SpaceClient(), args.key, Path(args.folder)))
+                if os.environ.get("GALECORE_AGENT_KEY", "").strip():   # a cloud routine: no login, the agents key reads it
+                    pulled = skill_space.pull(None, args.key, Path(args.folder), finder=_agent_key_skill_finder())
+                else:
+                    pulled = skill_space.pull(SpaceClient(), args.key, Path(args.folder))
+                note_pulled(args.key, pulled["scripts"])
+                _json_out(pulled)
         except (SkillRunError, SpaceError, AgentReportError) as exc:
             _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
         return
@@ -629,6 +634,7 @@ def _cmd_skill(args: argparse.Namespace) -> None:
         exit_code = _EXIT_VALIDATION_ERROR
     else:
         exit_code = _EXIT_SUCCESS if result["ok"] else _EXIT_INTERNAL_ERROR
+    save_output(result)
     try:   # the record never changes the run's outcome
         record_run(knowledge_dir(), result, args.script_args)
     except (OSError, KnowledgeBaseError):
@@ -1075,17 +1081,21 @@ def _cmd_agent(args: argparse.Namespace) -> None:
     _check_base_url(base_url)
     status = args.status
     extra: dict = {}
-    if args.result_file:
+    results_dir = os.environ.get("GALECORE_RESULTS_DIR", "").strip()
+    if results_dir:   # the agent runs skills: what they calculated travels with the report, whatever the model wrote
         try:
-            result, alerts, skill_ok = ar.read_result(args.result_file)
+            result, alerts, unevaluated = ar.read_results(results_dir)
         except ValueError as exc:
             _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
             return
-        extra["result"] = result
+        if result is not None:
+            extra["result"] = result
         if alerts:
             extra["alerts"] = alerts
-        if status == "ok" and not skill_ok:
+        if unevaluated and status == "ok":
             status = "error"   # the conclusion cannot stand without the calculation
+        if unevaluated and not summary.lstrip().lower().startswith("sin evaluar"):
+            summary = "Sin evaluar: " + "; ".join(unevaluated) + "\n\n" + summary
     body = ar.build_body(status=status, summary=summary, reason_code=args.reason_code,
                          trigger_id=trigger_id, fired_at=fired_at, finished_at=args.finished_at)
     body.update(extra)
@@ -1815,7 +1825,6 @@ def build_parser() -> _JsonArgumentParser:
     ag_sum = p_ag_rep.add_mutually_exclusive_group(required=True)
     ag_sum.add_argument("--summary-file", help="File with the summary in markdown; - reads stdin")
     ag_sum.add_argument("--summary", help="The summary in markdown (cut to 4000 characters)")
-    p_ag_rep.add_argument("--result-file", help="Output of `skill run` (JSON): goes with the run, its avisos become alerts")
     p_ag_rep.add_argument("--reason-code", help="Short reason code (max 64)")
     p_ag_rep.add_argument("--trigger-id", help="Default: GALECORE_TRIGGER_ID")
     p_ag_rep.add_argument("--fired-at", help="ISO-8601; default: GALECORE_FIRED_AT")

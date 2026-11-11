@@ -335,6 +335,16 @@ def test_a_market_hours_agent_builds_its_routine(galecore, lab):  # noqa: F811
         ac.new(client, "Cada 30", "x", {**when, "minutes": 30})
 
 
+def test_an_agent_with_skills_exports_the_results_dir_and_one_without_does_not(galecore, lab, tmp_path):  # noqa: F811
+    _, client = galecore
+    configured(lab)
+    with_skill(client, tmp_path)
+    ac.new(client, "Con skill", "x", DAILY, skills=["cierre"])
+    ac.new(client, "Sin skill", "x", DAILY)
+    assert "export GALECORE_RESULTS_DIR=/tmp/resultados\n" in routine_text(ac.body(client, "con-skill", NOV))
+    assert "GALECORE_RESULTS_DIR" not in routine_text(ac.body(client, "sin-skill", NOV))
+
+
 def test_an_agent_with_skills_pulls_them_follows_their_skill_md_and_reports_without_evaluating_on_failure(galecore, lab, tmp_path):  # noqa: F811
     fake, client = galecore
     configured(lab)

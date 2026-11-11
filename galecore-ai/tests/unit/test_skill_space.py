@@ -259,3 +259,24 @@ def test_scripts_import_the_galecore_ai_that_launched_them(folder, monkeypatch):
         "import json, galecore_ai\nprint(json.dumps({'file': galecore_ai.__file__}))\n", encoding="utf-8")
     result = skill_run.run_script(folder, "w.py", [])   # cwd is the skill folder, not the package
     assert Path(result["result"]["file"]).resolve() == Path(galecore_ai.__file__).resolve()
+
+
+def test_with_a_results_dir_run_leaves_each_output_and_pull_notes_the_skill(folder, tmp_path, monkeypatch, capsys):
+    import argparse
+
+    from galecore_ai.adapters import cli, galecore_space
+    client = saved(FakeClient(), folder)
+    monkeypatch.setattr(galecore_space, "SpaceClient", lambda: client)
+    monkeypatch.setattr(cli, "knowledge_dir", lambda: tmp_path / "kb")
+    results = tmp_path / "resultados"
+    monkeypatch.setenv("GALECORE_RESULTS_DIR", str(results))
+    for _ in range(2):
+        with pytest.raises(SystemExit):
+            cli._cmd_skill(argparse.Namespace(skill_command="run", skill="mi-calculo", script="calc.py", script_args=[], timeout=30))
+    with pytest.raises(SystemExit):
+        cli._cmd_skill(argparse.Namespace(skill_command="pull", key="mi-calculo", folder=str(tmp_path / "bajada")))
+    capsys.readouterr()
+    assert sorted(p.name for p in results.iterdir()) == ["01-mi-calculo-calc.py.json", "02-mi-calculo-calc.py.json", "_skills.json"]
+    first = json.loads((results / "01-mi-calculo-calc.py.json").read_text(encoding="utf-8"))
+    assert first["ok"] is True and first["result"] == {"x": 1} and first["script"] == "calc.py"
+    assert json.loads((results / "_skills.json").read_text(encoding="utf-8")) == [{"key": "mi-calculo", "scripts": True}]
