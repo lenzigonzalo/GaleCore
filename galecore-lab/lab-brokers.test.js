@@ -85,6 +85,19 @@ test('Claude: IOL prendido permite sólo consultas y niega validaciones y lo que
   assert.match(both.instructions, /IBKR e IOL/);
 });
 
+test('Claude: las escrituras conocidas de IOL e IBKR se niegan por nombre aunque el catálogo visto no las traiga', t => {
+  const local = tmp(t);
+  recordClaudeInit(local, { mcp_servers: [{ name: 'claude.ai IoL', status: 'needs-auth' }, { name: 'claude.ai Interactive Brokers (IBKR)', status: 'needs-auth' }], tools: [] });
+  setConnector(local, 'claude', 'claude.ai IoL', true);
+  setConnector(local, 'claude', 'claude.ai Interactive Brokers (IBKR)', true);
+  const { allow, deny } = claudeConnectors(local);
+  for (const name of ['create_order_instruction', 'delete_order_instruction', 'create_alert', 'edit_watchlist', 'update_saved_screener']) {
+    assert.ok(deny.includes('mcp__claude_ai_Interactive_Brokers_IBKR__' + name), name);
+  }
+  for (const name of ['validate_order', 'update_access_mode']) assert.ok(deny.includes('mcp__claude_ai_IoL__' + name), name);
+  assert.ok(!allow.some(s => deny.includes(s)));
+});
+
 test('el interruptor viejo de brókers es el valor por defecto de IOL e IBKR en Claude, pero un conector nuevo nace apagado', t => {
   const local = tmp(t);
   recordClaudeInit(local, init);
