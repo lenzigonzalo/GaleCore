@@ -273,3 +273,14 @@ def test_revise_validates_times_and_cli_roundtrip(kb, research_ref):  # noqa: F8
     code, out = _cli("strategy", "revise", "--ref", f"strategy:{NAME}/1.2.0", "--set", "identity/name=x",
                      "--host-model", "t", env=env)
     assert code == 3 and out["status"] == "REJECTED"
+
+
+def test_revise_renames_the_edited_versions_own_mentions_in_the_text(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    stored(kb, research_ref)   # its approval question names strategy:<name>/1.0.3
+    ref, _ = revise(kb, KEY, {"risk_limits/max_loss_per_trade_usd": 240}, "", HOST, now=NOW, checker=fake_checker())
+    new = kb.strategies.load(ref.removeprefix("strategy:"))
+    text = json.dumps(new.content.model_dump(mode="json")["owner_decisions"], ensure_ascii=False)
+    assert ref.endswith("/1.0.4") and f"strategy:{NAME}/1.0.4" in text and "1.0.3" not in text
+    assert "se reescribieron como 1.0.4" in new.content.pending[-1]
+    assert new.content.change.from_version == "1.0.3"

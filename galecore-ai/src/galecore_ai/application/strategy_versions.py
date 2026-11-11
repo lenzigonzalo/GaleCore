@@ -270,6 +270,17 @@ def revise(kb: KnowledgeBase, key: str, changes: dict, reason: str, host: Record
     spec_json = _dump(spec) + "\n"
     text = "; ".join(lines) + (f". {reason.strip()}" if reason and reason.strip() else "")
     base = src.content.model_dump(mode="json")
+    # As in duplicate: the text that names the edited version's own number (an old «¿Activás … 1.3.2?» question) names
+    # the new one; another version named there still refuses the revision.
+    rewritten = False
+    for field in OPERATIVE_FIELDS:
+        before = json.dumps(base[field], ensure_ascii=False)
+        changed_text = re.sub(rf"(?<![\d.]){re.escape(from_version)}(?![\d.])", version,
+                              before.replace(f"strategy:{name}/{from_version}", f"strategy:{name}/{version}"))
+        if changed_text != before:
+            base[field], rewritten = json.loads(changed_text), True
+    if rewritten:
+        base["pending"] = [*base["pending"], f"las menciones de la versión {from_version} en el texto se reescribieron como {version}"]
     content = ProposalContent.model_validate({**base, "version": version, "change": {
         "from_version": from_version, "reason": text, "refs": [f"strategy:{key}"]}})
     if wrong := other_version_mentions(content):
