@@ -335,18 +335,20 @@ def load_proposal(kb: KnowledgeBase, key: str) -> StrategyDocument:
 
 
 def approve(*, kb: KnowledgeBase, key: str, spec_hash: str | None = None, owner_words: str, host: RecordHost,
-            now: datetime | None = None) -> tuple[ApprovalDocument, str]:
+            now: datetime | None = None, require_critique: bool = True) -> tuple[ApprovalDocument, str]:
     """Record the owner's approval of exactly this version. The owner says yes to the named version in plain words;
-    the hash is the stored one (an explicit ``spec_hash`` must still match it)."""
+    the hash is the stored one (an explicit ``spec_hash`` must still match it). ``require_critique=False`` is the
+    ficha's path (owner decision, WS-0098): the confirmed click is the approval, a critique does not gate it."""
     doc = load_proposal(kb, key)
     spec_hash = spec_hash or doc.spec_hash
     if spec_hash != doc.spec_hash:
         raise KnowledgeError(f"strategy:{key}: the approved hash {spec_hash} is not this version's {doc.spec_hash}")
     if doc.check.verdict == "INVALID":
         raise KnowledgeError(f"strategy:{key}: an INVALID proposal cannot be approved")
-    review = load_critique(kb, key)
-    if problem := critique_problem(review, doc):
-        raise KnowledgeError(f"strategy:{key}: {problem}", review.content.why_not if review else [])
+    if require_critique:
+        review = load_critique(kb, key)
+        if problem := critique_problem(review, doc):
+            raise KnowledgeError(f"strategy:{key}: {problem}", review.content.why_not if review else [])
     others = sorted({v for v in VERSION_MENTION_RE.findall(owner_words) if v != doc.version})
     if others:
         raise KnowledgeError(f"strategy:{key}: the owner's words name version(s) {others}, not {doc.version}")
@@ -426,7 +428,8 @@ def critique(*, kb: KnowledgeBase, key: str, content: CritiqueContent, host: Rec
     return review, str(path)
 
 
-def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_spec_json: str | None = None) -> dict:
+def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_spec_json: str | None = None,
+                 require_critique: bool = True) -> dict:
     """Allow a deploy only if an intact approval exists for this version and GaleCore reports its hash.
 
     ``galecore_hash`` is what GaleCore says it loaded (``App/Runtime/Specs/<name>``); when GaleCore
@@ -447,7 +450,7 @@ def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_sp
             problems.append("the approval is for another spec hash")
     # Also for versions approved before the critique was required (owner, 08/10): the approval stays as recorded,
     # a new deploy needs a valid critique of this exact version.
-    if problem := critique_problem(load_critique(kb, key), doc):
+    if require_critique and (problem := critique_problem(load_critique(kb, key), doc)):
         problems.append(problem)
     if galecore_hash != doc.spec_hash:
         problems.append(f"GaleCore loaded {galecore_hash}, the approved version is {doc.spec_hash}")
@@ -540,11 +543,12 @@ def galecore_deployer(base_url: str | None = None, timeout: float = 60.0,
     return deploy
 
 
-def deploy_strategy(*, kb: KnowledgeBase, key: str, deployer: Deployer | None = None) -> dict:
+def deploy_strategy(*, kb: KnowledgeBase, key: str, deployer: Deployer | None = None,
+                    require_critique: bool = True) -> dict:
     """Deploy an approved version in SHADOW: GaleCore is only called with an intact approval of this exact spec,
     and only deploys what it hashes to the approved hash."""
     doc = load_proposal(kb, key)
-    allowed = deploy_check(kb=kb, key=key, galecore_hash=doc.spec_hash)   # intact approval and critique, no GaleCore
+    allowed = deploy_check(kb=kb, key=key, galecore_hash=doc.spec_hash, require_critique=require_critique)   # intact approval and critique, no GaleCore
     approval = kb.strategies.load_approval(key)
     if approval.strategy_ref != f"strategy:{key}" or approval.scope != "SHADOW:galecore-dev":
         raise KnowledgeError(f"deploy of strategy:{key} refused", ["the approval is not of this version in SHADOW"])

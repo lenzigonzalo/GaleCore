@@ -158,3 +158,36 @@ def test_cli_versions_and_duplicate_refusal(kb, research_ref):  # noqa: F811
     assert code == 0 and out == {"strategy": "no_existe_nada", "versions": []}
     code, out = _cli("strategy", "duplicate", "--ref", f"strategy:{KEY}", "--as", NAME, "--host-model", "t", env=env)
     assert code == 3 and out["status"] == "REJECTED"
+
+
+# ── activar desde la ficha sin crítica (WS-0098): require_critique=False ──
+
+def test_approve_and_deploy_without_critique_only_with_the_flag(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy import deploy_check, deploy_strategy, galecore_deployer
+    from tests.unit.fake_galecore import galecore_deploy_server
+    from tests.unit.test_strategy import SESSION
+    doc, _ = stored(kb, research_ref, criticised=False)
+    with pytest.raises(KnowledgeError, match="no critique"):
+        approve(kb=kb, key=KEY, owner_words="Apruebo", host=HOST, now=NOW)
+    approval, _ = approve(kb=kb, key=KEY, owner_words="Apruebo", host=HOST, now=NOW, require_critique=False)
+    assert approval.spec_hash == doc.spec_hash
+    with pytest.raises(KnowledgeError) as exc:
+        deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)
+    assert any(p.startswith("no critique of this version") for p in exc.value.problems)
+    assert deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash, require_critique=False)["status"] == "DEPLOY_ALLOWED"
+    with galecore_deploy_server() as (base, calls):
+        with pytest.raises(KnowledgeError):
+            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
+        assert calls == []
+        out = deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION), require_critique=False)
+    assert out["status"] == "DEPLOYED"
+
+
+def test_without_critique_does_not_skip_the_other_approval_rules(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref, criticised=False)
+    with pytest.raises(KnowledgeError, match="not this version's"):
+        approve(kb=kb, key=KEY, spec_hash="sha256:" + "0" * 64, owner_words="Apruebo", host=HOST, now=NOW,
+                require_critique=False)
+    with pytest.raises(KnowledgeError, match="the owner's words name version"):
+        approve(kb=kb, key=KEY, owner_words="Apruebo la 9.9.9", host=HOST, now=NOW, require_critique=False)
+    assert kb.strategies.load_approval(KEY) is None and doc
