@@ -327,6 +327,60 @@ function NewCloudAgent({ existing, skills, onCreate, onClose }: { existing: stri
 
 const RUN_LABELS: Record<string, string> = { ok: 'Completada', error: 'No se completó', skipped: 'Omitida', requested: 'Pedida', no_report: 'No reportó' };
 
+type Cond = { nombre: string; estado: 'cumplida' | 'pendiente' | 'fallida' };
+const COND_LABELS: Record<Cond['estado'], string> = { cumplida: 'Cumplida', pendiente: 'Pendiente', fallida: 'Fallida' };
+
+/** El cálculo bien hecho de una corrida (ok y con salida), o null. */
+function goodResult(run: AgentRun): Record<string, unknown> | null {
+  const r = run.result;
+  if (!r || r.ok === false || run.status === 'error') return null;
+  return r.salida && typeof r.salida === 'object' && !Array.isArray(r.salida) ? r.salida as Record<string, unknown> : null;
+}
+
+const text = (v: unknown): string => (typeof v === 'string' ? v : typeof v === 'number' ? v.toLocaleString('es-AR', { maximumFractionDigits: 4 }) : '');
+const label = (name: string): string => name.replace(/_/g, ' ');
+
+/** La convención de las skills con código (valores, condiciones, cambios...); lo que no está en ella no se muestra. */
+function SkillOutput({ out }: { out: Record<string, unknown> }) {
+  const valores = out.valores && typeof out.valores === 'object' && !Array.isArray(out.valores)
+    ? Object.entries(out.valores as Record<string, unknown>).filter(([, v]) => text(v) !== '') : [];
+  const condiciones = (Array.isArray(out.condiciones) ? out.condiciones : [])
+    .filter((c): c is Cond => !!c && typeof (c as Cond).nombre === 'string' && (c as Cond).estado in COND_LABELS);
+  const cambios = (Array.isArray(out.cambios) ? out.cambios : []).filter((c): c is string => typeof c === 'string' && c !== '');
+  const evaluado = typeof out.evaluado_en === 'string' ? out.evaluado_en : null;
+  const vela = typeof out.ultima_vela === 'string' ? out.ultima_vela : null;
+  const calidad = typeof out.calidad === 'string' ? out.calidad : null;
+  return <>
+    {(evaluado || vela || calidad) && <div className="agents-run-meta">
+      {evaluado && <span>Evaluado {when(evaluado)}</span>}{vela && <span>Última vela {when(vela)}</span>}{calidad && <span>Datos: {calidad}</span>}
+    </div>}
+    {valores.length > 0 && <table className="agents-values"><tbody>
+      {valores.map(([k, v]) => <tr key={k}><th scope="row">{label(k)}</th><td>{text(v)}</td></tr>)}
+    </tbody></table>}
+    {condiciones.length > 0 && <ul className="agents-conditions">
+      {condiciones.map(c => <li key={c.nombre} className={`agents-cond-${c.estado}`}><i aria-hidden="true" /><span>{c.nombre}</span><b>{COND_LABELS[c.estado]}</b></li>)}
+    </ul>}
+    {cambios.length > 0 && <ul className="agents-changes">{cambios.map((c, i) => <li key={i}>{c}</li>)}</ul>}
+  </>;
+}
+
+/** Último resultado de un agente con skill (WS-0099 C): el cálculo de la última corrida, o «Sin evaluar» con la última buena. */
+function CloudResult({ runs }: { runs: AgentRun[] }) {
+  const done = runs.filter(r => r.status !== 'requested');   // recientes primero
+  const last = done[0];
+  if (!last) return null;
+  const failed = last.status === 'error' || last.result?.ok === false;
+  const shown = failed ? done.find(r => goodResult(r)) : last;
+  const out = shown ? goodResult(shown) : null;
+  if (!failed && !out) return null;
+  const reason = last.result?.error || (last.summary ?? '').replace(/^Sin evaluar:\s*/i, '').split('\n')[0] || 'La corrida falló.';
+  return <section className="agents-last-result"><h2>Último resultado</h2>
+    {failed && <p className="agents-failed"><strong>Sin evaluar</strong> · {reason}</p>}
+    {failed && shown && <h3>Última corrida buena: {when(shown.finished_at ?? shown.created_at)}</h3>}
+    {out && <SkillOutput out={out} />}
+  </section>;
+}
+
 function CloudRuns({ runs, error }: { runs: AgentRun[] | null; error: string | null }) {
   return <section className="agents-history"><h2>Corridas</h2>
     {error && <p className="agents-error" role="alert">{error}</p>}
@@ -419,7 +473,7 @@ function CloudDetail({ a, item, title, skills, onChange, onDelete, busy, onBack 
     {a.request?.delete ? <p className="agents-notice" role="status">Borrando… (se aplica con el Lab abierto)</p> : a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
     {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
     {notice && <p className={notice.error ? 'agents-error' : 'agents-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
-    <div className="agents-detail-grid"><CloudRuns runs={runs} error={runsError} /><aside className="agents-settings">
+    <div className="agents-detail-grid"><div>{a.skill && runs && <CloudResult runs={runs} />}<CloudRuns runs={runs} error={runsError} /></div><aside className="agents-settings">
       <CloudSettings a={a} skills={skills} busy={busy} onSave={settings => onChange({ settings })} />
       <RoutineLink a={a} />
     </aside></div>

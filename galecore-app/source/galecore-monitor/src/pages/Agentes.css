@@ -181,3 +181,21 @@
 .agents-copy { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-shrink: 0; vertical-align: middle; margin: 0 4px; }
 .agents-copy-fail { font-size: 13px; color: var(--red-gc); }
 @media (max-width: 480px) { .agents-help { padding: 18px 16px; } .agents-help-steps > li { padding-left: 0; padding-top: 36px; } }
+/* Último resultado de un agente con skill (WS-0099 C). */
+.agents-last-result { margin-bottom: 36px; }
+.agents-last-result h2 { margin: 0 0 16px 8px; }
+.agents-last-result h3 { margin: 20px 0 0 8px; font-weight: 500; }
+.agents-last-result > p, .agents-last-result .agents-run-meta { margin-left: 8px; }
+.agents-values { border-collapse: collapse; margin: 16px 0 0 8px; min-width: 260px; }
+.agents-values th, .agents-values td { text-align: left; padding: 7px 24px 7px 0; border-bottom: 1px solid var(--border-dark); font-size: 14px; font-weight: 400; }
+.agents-values td { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.agents-values th { color: var(--text-secondary); text-transform: capitalize; }
+.agents-conditions, .agents-changes { list-style: none; margin: 16px 0 0 8px; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+.agents-conditions li { display: flex; align-items: center; gap: 10px; }
+.agents-conditions i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-muted); }
+.agents-conditions b { font-weight: 500; margin-left: auto; color: var(--text-muted); }
+.agents-cond-cumplida i { background: var(--green); }
+.agents-cond-cumplida b { color: var(--green); }
+.agents-cond-fallida i { background: var(--red-gc); }
+.agents-cond-fallida b { color: var(--red-gc); }
+.agents-changes li::before { content: "• "; color: var(--text-muted); }

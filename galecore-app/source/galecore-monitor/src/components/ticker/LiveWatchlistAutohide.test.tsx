@@ -11,6 +11,7 @@ let mockStrikeNotify: (() => void) | undefined;
 jest.mock('../layout/SupervisorAlerts', () => ({
   SupervisorAlerts: () => <div>Avisos de la cuenta</div>,
   useStrikeAlerts: (_enabled: boolean, notify: () => void) => { mockStrikeNotify = notify; return { alerts: [], notice: null }; },
+  useAgentAlerts: () => [],
 }));
 
 function Dock({ autoHide = true }: { autoHide?: boolean }) {
