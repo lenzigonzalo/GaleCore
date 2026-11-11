@@ -19,7 +19,7 @@ test('evidencia real SPX muestra VIX sin dato y rechazos de riesgo con fecha ET,
   render(<EntryEvaluations instance={instance} />);
   expect(await screen.findByText('VIX < 24: sin dato')).toBeInTheDocument();
   expect(screen.getAllByText('30/10/2026 13:49:24 ET')).toHaveLength(2);
-  expect(screen.getAllByText(/130.00 USD supera el tope de 9.00 USD/)).toHaveLength(3);
+  expect(screen.getAllByText(/130 USD supera el tope de 9 USD/)).toHaveLength(3);
   expect(screen.getAllByText('Tope por apuesta')).toHaveLength(3);
   expect(screen.getByText(/Motivos registrados del 30\/10\/2026/)).toHaveTextContent('últimos 20');
   expect(screen.queryByText(/hoy/i)).not.toBeInTheDocument();
@@ -54,7 +54,7 @@ test('descartes históricos de otro día no explican la última evaluación', as
   evaluations.mockResolvedValue([{ ...fixture.evaluations[3], evaluatedAt: '2026-11-02T18:49:24Z' }]);
   render(<EntryEvaluations instance={instance} />);
   await screen.findByText(/Motivos registrados del 2\/11\/2026/);
-  expect(screen.queryByText(/130.00 USD supera/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/130 USD supera/)).not.toBeInTheDocument();
   expect(screen.getByText('2/11/2026 13:49:24 ET')).toBeInTheDocument();
 });
 

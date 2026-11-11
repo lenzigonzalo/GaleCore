@@ -52,7 +52,8 @@ def test_versions_sorted_numerically_with_approval_and_diff(kb, research_ref):  
     assert second["change"] == {"reason": "cambio de prueba", "from_version": "1.9.0"}
     d = second["diff_from_previous"]
     assert d["from"] == f"strategy:{NAME}/1.9.0" and d["spec"] and "markdown" not in d
-    assert set(first["factibilidad"]) == {"veredicto", "texto"}
+    assert set(first["factibilidad"]) == {"veredicto", "texto", "limites_usd"}
+    assert set(first["factibilidad"]["limites_usd"]) == {"capital", "por_operacion", "riesgo_abierto", "por_apuesta"}
     assert not first["approved"] and first["approved_at"] is None and first["critique"] is None
     assert "problem" not in first and "problem" not in second
 
@@ -62,6 +63,7 @@ def test_versions_flag_approved_and_critique(kb, research_ref):  # noqa: F811
     approve(kb=kb, key=KEY, owner_words="Apruebo", host=HOST, now=NOW)
     [v] = list_versions(kb, NAME)["versions"]
     assert v["approved"] is True and v["approved_at"] and v["critique"] == "seguir"
+    assert isinstance(v["critique_why_not"], list) and v["critique_why_not"]
     assert v["check"] == "VALID_WITH_DECLARED_GAPS"
 
 
@@ -158,3 +160,154 @@ def test_cli_versions_and_duplicate_refusal(kb, research_ref):  # noqa: F811
     assert code == 0 and out == {"strategy": "no_existe_nada", "versions": []}
     code, out = _cli("strategy", "duplicate", "--ref", f"strategy:{KEY}", "--as", NAME, "--host-model", "t", env=env)
     assert code == 3 and out["status"] == "REJECTED"
+
+
+# ── activar desde la ficha sin crítica (WS-0098): require_critique=False ──
+
+def test_approve_and_deploy_without_critique_only_with_the_flag(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy import deploy_check, deploy_strategy, galecore_deployer
+    from tests.unit.fake_galecore import galecore_deploy_server
+    from tests.unit.test_strategy import SESSION
+    doc, _ = stored(kb, research_ref, criticised=False)
+    with pytest.raises(KnowledgeError, match="no critique"):
+        approve(kb=kb, key=KEY, owner_words="Apruebo", host=HOST, now=NOW)
+    approval, _ = approve(kb=kb, key=KEY, owner_words="Apruebo", host=HOST, now=NOW, require_critique=False)
+    assert approval.spec_hash == doc.spec_hash
+    with pytest.raises(KnowledgeError) as exc:
+        deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)
+    assert any(p.startswith("no critique of this version") for p in exc.value.problems)
+    assert deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash, require_critique=False)["status"] == "DEPLOY_ALLOWED"
+    with galecore_deploy_server() as (base, calls):
+        with pytest.raises(KnowledgeError):
+            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
+        assert calls == []
+        out = deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION), require_critique=False)
+    assert out["status"] == "DEPLOYED"
+
+
+def test_without_critique_does_not_skip_the_other_approval_rules(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref, criticised=False)
+    with pytest.raises(KnowledgeError, match="not this version's"):
+        approve(kb=kb, key=KEY, spec_hash="sha256:" + "0" * 64, owner_words="Apruebo", host=HOST, now=NOW,
+                require_critique=False)
+    with pytest.raises(KnowledgeError, match="the owner's words name version"):
+        approve(kb=kb, key=KEY, owner_words="Apruebo la 9.9.9", host=HOST, now=NOW, require_critique=False)
+    assert kb.strategies.load_approval(KEY) is None and doc
+
+
+# ── «Editar»: strategy revise / editable (WS-0098) ──
+
+def test_editable_lists_only_the_present_fields_with_label_unit_and_value(kb, research_ref):  # noqa: F811
+    save_version(kb, research_ref, "1.2.0")
+    from galecore_ai.application.strategy_versions import editable
+    fields = {f["path"]: f for f in editable(kb, f"{NAME}/1.2.0")["fields"]}
+    assert fields["risk_limits/max_loss_per_trade_usd"] == {
+        "path": "risk_limits/max_loss_per_trade_usd", "label": "Tope por operación", "unit": "USD", "kind": "number", "value": "500.0"}
+    assert fields["risk_limits/max_risk_per_trade_pct"]["value"] is None
+    assert fields["candidate_construction/sizing/fixed_contracts"]["kind"] == "integer"
+    assert fields["entry_filters/gate_layer/gates/0/threshold/value"]["label"] == "Umbral de VIX < 30"
+    assert "risk_limits/max_bet_pct" not in fields and "operational/entry_window/start" not in fields
+
+
+def test_revise_stores_the_next_patch_with_only_the_asked_changes(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    save_version(kb, research_ref, "1.2.0")
+    save_version(kb, research_ref, "1.2.1", "1.2.0")
+    base_key = f"{NAME}/1.2.0"
+    before = _snapshot(kb.base / "strategies" / NAME)
+    ref, path = revise(kb, base_key, {"risk_limits/max_loss_per_trade_usd": 240,
+                                      "entry_filters/gate_layer/gates/0/threshold/value": "28"},
+                       "bajar el riesgo", HOST, now=NOW, checker=fake_checker())
+    assert ref == f"strategy:{NAME}/1.2.2" and Path(path).is_file()
+    after = _snapshot(kb.base / "strategies" / NAME)
+    assert {k: v for k, v in after.items() if k in before} == before   # nothing stored before changes
+    src, new = kb.strategies.load(base_key), kb.strategies.load(f"{NAME}/1.2.2")
+    assert kb.strategies.load_approval(f"{NAME}/1.2.2") is None and kb.strategies.load_critique(f"{NAME}/1.2.2") is None
+    a, b = src.spec_json.splitlines(), new.spec_json.splitlines()
+    changed = {x.strip().split(":")[0] for x, y in zip(a, b, strict=True) if x != y}
+    assert changed == {'"version"', '"created_at"', '"parent_version_hash"', '"value"', '"max_loss_per_trade_usd"'}
+    assert '"max_loss_per_trade_usd": 240.0' in new.spec_json and '"value": 28' in new.spec_json   # literal style kept
+    spec = json.loads(new.spec_json)
+    assert spec["identity"]["version"] == "1.2.2" and spec["identity"]["parent_version_hash"] == src.spec_hash
+    assert spec["content_hash"] is None and new.spec_hash == galecore_spec_hash(new.spec_json)
+    assert new.content.change.from_version == "1.2.0" and new.content.change.refs == [f"strategy:{base_key}"]
+    assert new.content.change.reason == "Tope por operación: 500.0 → 240.0 USD; Umbral de VIX < 30: 30 → 28. bajar el riesgo"
+    assert new.prompt == "strategy revise"
+
+
+def test_revise_refuses_paths_values_and_types_outside_the_list(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    save_version(kb, research_ref, "1.2.0")
+    before = kb.strategies.versions()
+
+    def attempt(changes):
+        return revise(kb, f"{NAME}/1.2.0", changes, "", HOST, now=NOW, checker=fake_checker())
+    with pytest.raises(KnowledgeError, match="no se edita desde la ficha"):
+        attempt({"identity/name": "otra"})
+    with pytest.raises(KnowledgeError, match="no se edita desde la ficha"):
+        attempt({"candidate_construction/legs/0/strike_selection/width": 5})
+    with pytest.raises(KnowledgeError, match="no tiene ese parámetro"):
+        attempt({"risk_limits/max_bet_pct": 10})   # in the list, not in this spec
+    with pytest.raises(KnowledgeError, match="número, 0 o más"):
+        attempt({"risk_limits/max_loss_per_trade_usd": -5})
+    with pytest.raises(KnowledgeError, match="número, 0 o más"):
+        attempt({"risk_limits/max_loss_per_trade_usd": "mucho"})
+    with pytest.raises(KnowledgeError, match="entero"):
+        attempt({"risk_limits/max_concurrent_positions": 1.5})
+    with pytest.raises(KnowledgeError, match="no hay cambios"):
+        attempt({})
+    assert kb.strategies.versions() == before
+
+
+def test_revise_validates_times_and_cli_roundtrip(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import _new_value
+    entry = {"label": "Ventana de entrada desde", "kind": "time"}
+    assert _new_value(entry, "13:45", "09:30") == "13:45"
+    for bad in ("25:00", "9:30", 1345, "13:60"):
+        with pytest.raises(KnowledgeError, match="HH:MM"):
+            _new_value(entry, bad, "09:30")
+    save_version(kb, research_ref, "1.2.0")
+    env = {KNOWLEDGE_DIR_ENV: str(kb.base)}
+    code, out = _cli("strategy", "editable", "--ref", f"strategy:{NAME}/1.2.0", env=env)
+    assert code == 0 and any(f["path"] == "risk_limits/max_loss_per_trade_usd" for f in out["fields"])
+    code, out = _cli("strategy", "revise", "--ref", f"strategy:{NAME}/1.2.0", "--set", "identity/name=x",
+                     "--host-model", "t", env=env)
+    assert code == 3 and out["status"] == "REJECTED"
+
+
+def test_revise_renames_the_edited_versions_own_mentions_in_the_text(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    stored(kb, research_ref)   # its approval question names strategy:<name>/1.0.3
+    ref, _ = revise(kb, KEY, {"risk_limits/max_loss_per_trade_usd": 240}, "", HOST, now=NOW, checker=fake_checker())
+    new = kb.strategies.load(ref.removeprefix("strategy:"))
+    text = json.dumps(new.content.model_dump(mode="json")["owner_decisions"], ensure_ascii=False)
+    assert ref.endswith("/1.0.4") and f"strategy:{NAME}/1.0.4" in text and "1.0.3" not in text
+    assert "se reescribieron como 1.0.4" in new.content.pending[-1]
+    assert new.content.change.from_version == "1.0.3"
+
+
+def test_revise_keeps_the_change_reason_when_the_text_is_renamed(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    stored(kb, research_ref)   # owner_decisions name 1.0.3, so the rewrite runs
+    ref, _ = revise(kb, KEY, {"risk_limits/max_loss_per_trade_usd": 240}, "", HOST, now=NOW, checker=fake_checker())
+    change = kb.strategies.load(ref.removeprefix("strategy:")).content.change
+    assert change.reason == "Tope por operación: 500.0 → 240.0 USD" and not change.reason.startswith("[")
+
+
+def test_revise_capital_also_sets_the_proposals_simulated_amount(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    spec = json.loads(spec_text())
+    spec["identity"]["version"] = "1.2.0"
+    spec["risk_limits"]["simulated_capital_usd"] = 10000
+
+    def bump(d):
+        d["version"] = "1.2.0"
+        d["owner_decisions"] = []
+    save_proposal(checker=fake_checker(), kb=kb, prompt="x", host=HOST, content=proposal(bump, research_ref=research_ref),
+                  spec_json=json.dumps(spec, indent=2), spec_file=f"{NAME}.json", now=NOW)
+    src = kb.strategies.load(f"{NAME}/1.2.0")
+    ref, _ = revise(kb, f"{NAME}/1.2.0", {"risk_limits/simulated_capital_usd": 25000}, "", HOST, now=NOW, checker=fake_checker())
+    new = kb.strategies.load(ref.removeprefix("strategy:"))
+    assert new.content.simulated_amount_usd == 25000.0 and new.content.limits == src.content.limits
+    other, _ = revise(kb, f"{NAME}/1.2.0", {"risk_limits/max_loss_per_trade_usd": 240}, "", HOST, now=NOW, checker=fake_checker())
+    assert kb.strategies.load(other.removeprefix("strategy:")).content.simulated_amount_usd == src.content.simulated_amount_usd

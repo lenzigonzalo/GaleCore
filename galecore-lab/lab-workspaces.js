@@ -424,12 +424,14 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const label=String(body.label||'').trim(), type=body.type||'analysis';   // owner 19/10: se crea sólo con nombre; la estrategia llega por intención (mark_strategy.py)
     if(!label || label.length>100 || !TYPES.includes(type))throw fail('Indicá el nombre del proyecto.');
     const slug=label.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,60);
-    if(!ID.test(slug) || listProjects().some(p=>p.id===slug))throw fail('Ya existe ese proyecto o el nombre no es válido.',409);
+    // adopt: la carpeta de la estrategia ya la creó el CLI (duplicar) y cuenta como proyecto legado; sólo se le da el proyecto, sin tocar lo que tiene.
+    const adopt=body.adopt===true&&type==='strategy';
+    if(!ID.test(slug) || (adopt?registry.some(p=>p.id===slug):listProjects().some(p=>p.id===slug)))throw fail('Ya existe ese proyecto o el nombre no es válido.',409);
     const relative=(type==='strategy'?'strategies/':'workspaces/')+slug, dir=path.join(kb,relative);
-    if(fs.existsSync(dir))throw fail('La carpeta ya existe. No se modificó su contenido.',409);
+    if(fs.existsSync(dir)&&!(adopt&&!fs.existsSync(path.join(dir,'workspace.json'))))throw fail('La carpeta ya existe. No se modificó su contenido.',409);
     fs.mkdirSync(path.dirname(dir),{recursive:true});
     if(!fs.realpathSync(path.dirname(dir)).startsWith(fs.realpathSync(kb)+path.sep))throw fail('Carpeta fuera del conocimiento local.',403);
-    fs.mkdirSync(dir);
+    fs.mkdirSync(dir,{recursive:adopt});
     fs.writeFileSync(path.join(dir,'README.md'),'# '+label+'\n\nWorkspace de '+(type==='strategy'?'estrategia':type==='personal'?'trabajo personal':'análisis')+'.\n\nLos resultados y memorias se guardan acá. Las conversaciones permanecen en el historial local del Lab.\n',{flag:'wx'});
     fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y memory/README.md (el criterio vigente, por tema) y recuperá antecedentes antes de preguntar.\nUsá galecore-ai/ para memoria canónica y GaleCore (galecore-app/) para datos/cálculos financieros.\n'+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
     fs.mkdirSync(path.join(dir,'memory'),{recursive:true});if(type!=='personal')fs.writeFileSync(path.join(dir,'memory','README.md'),'# Memoria de '+label+'\n\nCriterio vigente del proyecto, una página por tema. Índice:\n\n',{flag:'wx'});fs.mkdirSync(path.join(dir,'files'),{recursive:true});
@@ -560,13 +562,16 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   const connectorOpts=()=>({local,binary:binaries.claude,codexBinary:binaries.codex,env:environment(),spawnProcess});
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
-    // WS-0098 inc. 4: versiones, aprobación y duplicado de estrategias desde la ficha (CLI del harness, sin shell).
+    // WS-0098: versiones, editar (versión nueva), activar y duplicar estrategias desde la ficha (CLI del harness, sin shell).
     if(parts[0]==='strategies'&&parts.length>=3&&parts.length<=5){
       const NAME=/^[a-z0-9_]{1,80}$/,VER=/^\d+\.\d+\.\d+$/,USER=/^[A-Za-z0-9._@-]{1,60}$/,NEW=/^[a-z][a-z0-9_]{2,59}$/;
+      // Los mensajes del harness que la ficha puede ver, en castellano; lo que no se conoce se dice genérico y deja el original en `detail`.
+      const KNOWN=[[/INVALID/,'La versión no pasó la verificación (INVALID) y no se puede usar.'],[/no such strategy version/i,'Esa versión de la estrategia no existe.'],[/already has versions|already exists/i,'Ese nombre ya está tomado: elegí otro.'],[/name the versions|names? version|version\(s\)/i,'El texto de la estrategia nombra otra versión; hay que corregirlo antes.'],[/sesión|session|GaleCore (rechaz|no )|no se desplegó|frenala|vigente/i,null],[/not a valid strategy name/i,'El nombre no es válido.'],[/no se edita desde la ficha|no tiene ese parámetro|tiene que ser|no hay cambios/,null]];
+      const translate=raw=>{const text=String(raw||'');for(const [re,es] of KNOWN)if(re.test(text))return es===null?{error:text}:{error:es,detail:text};return {error:'El harness rechazó la operación.',detail:text};};
       const cli=args=>new Promise(resolve=>execute('python',['-B','-m','galecore_ai.adapters.cli','strategy',...args],{cwd:root,env:environment(),windowsHide:true,timeout:60000,maxBuffer:2*1024*1024},(e,out)=>{
         let data;try{data=JSON.parse(out);}catch{data=null;}
         if(!e&&data)return resolve({ok:true,data});
-        if(data&&typeof data==='object'&&!Array.isArray(data))return resolve({ok:false,status:e?.code===2?400:409,data:{...data,error:String(data.error||'El harness rechazó la operación.')}});
+        if(data&&typeof data==='object'&&!Array.isArray(data)){const {error,...rest}=data;return resolve({ok:false,status:e?.code===2?400:409,data:{...rest,...translate([error,...(Array.isArray(data.problems)?data.problems:[]).filter(x=>!String(error||'').includes(x))].filter(Boolean).join(': '))}});}
         resolve({ok:false,status:500,data:{error:'No se pudo leer la respuesta del harness.'}});
       }));
       const name=parts[1];
@@ -576,12 +581,44 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
         return reply(await cli(['versions','--name',name]));
       }
-      if(req.method==='POST'&&parts.length===5&&parts[2]==='versions'&&parts[4]==='approve'){
-        const version=parts[3],b=await readBody(req),user=b&&b.user;
+      if(req.method==='GET'&&parts.length===5&&parts[2]==='versions'&&parts[4]==='editable'){
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        if(!VER.test(parts[3]))return bad('Versión no válida.');
+        return reply(await cli(['editable','--ref','strategy:'+name+'/'+parts[3]]));
+      }
+      // «Editar» = versión nueva con parámetros numéricos cambiados; nunca pisa una existente.
+      if(req.method==='POST'&&parts.length===5&&parts[2]==='versions'&&parts[4]==='revise'){
+        const version=parts[3],b=await readBody(req)||{},{user,changes,reason}=b;
         if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
         if(!VER.test(version))return bad('Versión no válida.');
         if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
-        return reply(await cli(['approve','--ref','strategy:'+name+'/'+version,'--owner-words','Aprobada desde la ficha por '+user+', con confirmación en pantalla: '+name+' '+version+' en SHADOW','--host-provider','monitor','--host-model','ficha']));
+        if(!changes||typeof changes!=='object'||Array.isArray(changes)||!Object.keys(changes).length)return bad('No hay cambios para guardar.');
+        const sets=[];
+        for(const [k,v] of Object.entries(changes)){
+          if(!/^[a-z0-9_/]+$/.test(k))return bad('Parámetro no válido.');
+          if(!((typeof v==='number'&&Number.isFinite(v))||(typeof v==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(v))))return bad('Valor no válido para '+k+': tiene que ser un número o una hora HH:MM.');
+          sets.push('--set',k+'='+v);
+        }
+        if(reason!==undefined&&(typeof reason!=='string'||reason.length>500))return bad('El motivo tiene hasta 500 caracteres.');
+        return reply(await cli(['revise','--ref','strategy:'+name+'/'+version,...sets,...(reason?['--reason',reason]:[]),'--host-provider','monitor','--host-model','ficha']));
+      }
+      // «Activar esta versión»: el clic confirmado es la aprobación del owner (sin crítica; sólo este camino) y deja la versión corriendo en SHADOW.
+      if(req.method==='POST'&&parts.length===5&&parts[2]==='versions'&&parts[4]==='activate'){
+        const version=parts[3],b=await readBody(req),user=b&&b.user,ref='strategy:'+name+'/'+version;
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        if(!VER.test(version))return bad('Versión no válida.');
+        if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
+        const listed=await cli(['versions','--name',name]);
+        if(!listed.ok)return reply(listed);
+        const found=(listed.data.versions||[]).find(v=>v.version===version);
+        if(!found){json(res,404,{error:'Esa versión de la estrategia no existe.'});return true;}
+        if(!found.approved){
+          const ap=await cli(['approve','--without-critique','--ref',ref,'--owner-words','Activada desde la ficha por '+user+', con confirmación en pantalla: '+name+' '+version+' en SHADOW','--host-provider','monitor','--host-model','ficha']);
+          if(!ap.ok)return reply(ap);
+        }
+        const dep=await cli(['deploy','--without-critique','--ref',ref]);
+        if(!dep.ok)return reply({...dep,data:{...dep.data,error:(found.approved?'':'La versión quedó aprobada pero no activa. ')+dep.data.error,approved:true}});
+        return reply(dep);
       }
       if(req.method==='POST'&&parts.length===3&&parts[2]==='duplicate'){
         const b=await readBody(req)||{},{version,newName,user}=b;
@@ -591,7 +628,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
         const r=await cli(['duplicate','--ref','strategy:'+name+'/'+version,'--as',newName,'--host-provider','monitor','--host-model','ficha']);
         if(!r.ok)return reply(r);
-        const created=createProject({label:newName,type:'strategy'});
+        const created=createProject({label:newName,type:'strategy',adopt:true});
         if(created.id!==newName){json(res,500,{error:'El proyecto creado no coincide con la estrategia duplicada.'});return true;}
         json(res,200,{ref:r.data.ref,duplicatedFrom:r.data.duplicatedFrom||r.data.duplicated_from||'strategy:'+name+'/'+version,projectId:created.id});return true;
       }
