@@ -106,8 +106,8 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged }: {
   const load = useCallback(async () => {
     try { setVersions(await fetchStrategyVersions(spec)); } catch { setVersions([]); }
   }, [spec]);
-  useEffect(() => { setOpen(false); setSelected(''); setMode(''); setMenu(false); setError(''); setDone(''); setNewName(`${spec}_copia`); void load(); }, [spec, load]);
-  // La instancia cambió (otra versión activa, pausa): se recarga la lista para que estados y aprobaciones sean los de ahora.
+  useEffect(() => { setOpen(false); setSelected(''); setMode(''); setMenu(false); setError(''); setDone(''); setNewName(`${spec}_copia`); }, [spec]);
+  // Una sola lectura al abrir (cada una arranca el CLI del harness); se repite si la instancia cambió (otra versión activa, pausa).
   useEffect(() => { void load(); }, [instance?.versionHash, instance?.lifecycleState, load]);
 
   if (!versions.length) return null;

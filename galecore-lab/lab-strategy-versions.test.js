@@ -117,3 +117,8 @@ test('duplicate: el CLI real deja la carpeta de la estrategia (y el Lab la lista
   assert.equal(fs.readFileSync(path.join(dir,'1.0.0.proposal.json'),'utf8'),'{}');
   assert.ok(fs.existsSync(path.join(dir,'workspace.json')));
 });
+test('el motivo que el harness repite en problems no se duplica en el mensaje',async t=>{
+  const {call}=setup(t,fail(1,{error:'Para desplegar hace falta tu sesión de GaleCore: no credentials',problems:['no credentials']}));
+  const r=await call('POST','/strategies/spy_ic/versions/1.0.0/revise',{user:'g',changes:{'a/b':1}});
+  assert.equal(r.v.error,'Para desplegar hace falta tu sesión de GaleCore: no credentials');
+});

@@ -570,7 +570,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const cli=args=>new Promise(resolve=>execute('python',['-B','-m','galecore_ai.adapters.cli','strategy',...args],{cwd:root,env:environment(),windowsHide:true,timeout:60000,maxBuffer:2*1024*1024},(e,out)=>{
         let data;try{data=JSON.parse(out);}catch{data=null;}
         if(!e&&data)return resolve({ok:true,data});
-        if(data&&typeof data==='object'&&!Array.isArray(data)){const {error,...rest}=data;return resolve({ok:false,status:e?.code===2?400:409,data:{...rest,...translate([error,...(Array.isArray(data.problems)?data.problems:[])].filter(Boolean).join(': '))}});}
+        if(data&&typeof data==='object'&&!Array.isArray(data)){const {error,...rest}=data;return resolve({ok:false,status:e?.code===2?400:409,data:{...rest,...translate([error,...(Array.isArray(data.problems)?data.problems:[]).filter(x=>!String(error||'').includes(x))].filter(Boolean).join(': '))}});}
         resolve({ok:false,status:500,data:{error:'No se pudo leer la respuesta del harness.'}});
       }));
       const name=parts[1];
