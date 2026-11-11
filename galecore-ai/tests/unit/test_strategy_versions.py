@@ -52,7 +52,8 @@ def test_versions_sorted_numerically_with_approval_and_diff(kb, research_ref):  
     assert second["change"] == {"reason": "cambio de prueba", "from_version": "1.9.0"}
     d = second["diff_from_previous"]
     assert d["from"] == f"strategy:{NAME}/1.9.0" and d["spec"] and "markdown" not in d
-    assert set(first["factibilidad"]) == {"veredicto", "texto"}
+    assert set(first["factibilidad"]) == {"veredicto", "texto", "limites_usd"}
+    assert set(first["factibilidad"]["limites_usd"]) == {"capital", "por_operacion", "riesgo_abierto", "por_apuesta"}
     assert not first["approved"] and first["approved_at"] is None and first["critique"] is None
     assert "problem" not in first and "problem" not in second
 
@@ -62,6 +63,7 @@ def test_versions_flag_approved_and_critique(kb, research_ref):  # noqa: F811
     approve(kb=kb, key=KEY, owner_words="Apruebo", host=HOST, now=NOW)
     [v] = list_versions(kb, NAME)["versions"]
     assert v["approved"] is True and v["approved_at"] and v["critique"] == "seguir"
+    assert isinstance(v["critique_why_not"], list) and v["critique_why_not"]
     assert v["check"] == "VALID_WITH_DECLARED_GAPS"
 
 

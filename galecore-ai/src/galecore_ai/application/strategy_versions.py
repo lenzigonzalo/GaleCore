@@ -50,7 +50,8 @@ def list_versions(kb: KnowledgeBase, name: str) -> dict:
             out.append({**entry, "problem": str(exc)})
             continue
         entry.update({"recorded_at": doc.recorded_at.isoformat(), "spec_hash": doc.spec_hash,
-                      "check": doc.check.verdict, "approved": False, "approved_at": None, "critique": None})
+                      "check": doc.check.verdict, "approved": False, "approved_at": None, "critique": None,
+                      "critique_why_not": []})
         problems: list[str] = []
         try:
             approval = kb.strategies.load_approval(key)
@@ -61,10 +62,12 @@ def list_versions(kb: KnowledgeBase, name: str) -> dict:
         try:
             review = kb.strategies.load_critique(key)
             entry["critique"] = review.content.verdict.value if review else None
+            entry["critique_why_not"] = list(review.content.why_not) if review else []
         except (StrategyStoreError, StrategyIntegrityError) as exc:
             problems.append(f"critique not usable ({exc})")
         full = feasibility.assess(json.loads(doc.spec_json), doc.content.simulated_amount_usd)
-        entry["factibilidad"] = {"veredicto": full.get("veredicto"), "texto": full.get("texto")}
+        entry["factibilidad"] = {"veredicto": full.get("veredicto"), "texto": full.get("texto"),
+                                 "limites_usd": full.get("limites_usd")}
         change = doc.content.change
         entry["change"] = {"reason": change.reason if change else None,
                            "from_version": change.from_version if change else None}
