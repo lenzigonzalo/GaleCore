@@ -204,7 +204,9 @@ namespace DataFeed.Application.App.Agents
             var fresh = alerts.Where(a => !seen.Contains(a.AlertId)).DistinctBy(a => a.AlertId).ToList();
             foreach (var a in fresh)
                 db.AgentAlerts.Add(new AgentAlert { Id = Guid.NewGuid(), OwnerId = ownerId, AgentKey = agentKey, AlertId = a.AlertId, Title = a.Title, RunId = runId, CreatedAt = now });
-            if (fresh.Count > 0) await db.SaveChangesAsync(ct);
+            if (fresh.Count == 0) return 0;
+            try { await db.SaveChangesAsync(ct); }
+            catch (DbUpdateException) { return 0; } // otro reporte insertó el mismo aviso a la vez (índice único): ya existía
             return fresh.Count;
         }
 

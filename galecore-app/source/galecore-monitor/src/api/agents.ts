@@ -7,7 +7,7 @@ export interface AgentRun {
   summary?: string | null; reason_code?: string | null; session_url?: string | null;
   requested_at?: string | null; fired_at?: string | null; finished_at?: string | null; created_at: string;
   /** Los cálculos de las skills (WS-0099 C): una corrida por script; `salida` sigue la convención de skills-con-codigo. */
-  result?: { corridas?: { skill?: string | null; script?: string | null; version?: number | null; ok?: boolean; error?: string | null; salida?: unknown }[]; error?: string | null } | null;
+  result?: { corridas?: { skill?: string | null; script?: string | null; version?: string | null; ok?: boolean; error?: string | null; salida?: unknown }[]; error?: string | null } | null;
 }
 
 /** Aviso que dejó un agente (WS-0099 C): `id` es el del aviso y no se repite por agente. */

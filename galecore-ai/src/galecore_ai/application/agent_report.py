@@ -78,13 +78,25 @@ def read_results(folder: str) -> tuple[dict | None, list[dict], list[str]]:
         error = data.get("error") or (None if ok else ((data.get("stderr") or "").strip().splitlines() or ["falló sin detalle"])[-1][:300])
         corridas.append({"skill": data.get("skill"), "script": data.get("script"), "version": data.get("version"), "ok": ok,
                          "error": error, "salida": data.get("result")})
+    # Only the last corrida of each (skill, script) counts (files are ordered by their NN prefix): a retry that went
+    # ok supersedes the failed one, and the API forces "error" if any corrida sent has ok:false.
+    last: dict[tuple, dict] = {}
+    for c in corridas:
+        last[(c["skill"], c["script"])] = c
+    corridas = list(last.values())
     unevaluated = [f"{c['skill']}/{c['script']}: {c['error']}" for c in corridas if not c["ok"]]
+    try:
+        pulled = json.loads((base / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pulled = None
+    if not isinstance(pulled, list):
+        pulled = None
+    ran = {c["skill"] for c in corridas}
+    for r in pulled or []:
+        if isinstance(r, dict) and r.get("scripts") and r.get("key") not in ran:
+            unevaluated.append(f"{r.get('key')}: sin resultado del cálculo")
     if not corridas:
-        try:
-            pulled = json.loads((base / MANIFEST).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            pulled = None
-        if pulled and not any(r.get("scripts") for r in pulled):
+        if pulled and not any(r.get("scripts") for r in pulled if isinstance(r, dict)):
             return None, [], []                       # only markdown skills: nothing to calculate
         return {"corridas": [], "error": "sin resultado del cálculo"}, [], ["sin resultado del cálculo"]
     result = {"corridas": corridas}

@@ -259,6 +259,24 @@ def test_no_corrida_is_an_error_unless_every_pulled_skill_is_only_markdown(resul
     assert body["status"] == "ok" and "result" not in body and "alerts" not in body       # markdown only: nothing to calculate
 
 
+def test_a_pulled_skill_with_scripts_that_never_ran_is_unevaluated_even_if_another_ran(results, monkeypatch, capsys):
+    _leave(results, "_skills.json", [{"key": "cierre", "scripts": True}, {"key": "gex", "scripts": True}])
+    _leave(results, "01-cierre-cierre.py.json", _out())
+    fake = FakeGaleCore()
+    _, body = _report(monkeypatch, capsys, fake)
+    assert body["status"] == "error" and body["summary"].startswith("Sin evaluar: gex: sin resultado del cálculo")
+
+
+def test_a_failed_corrida_superseded_by_a_later_ok_one_of_the_same_script_does_not_count(results, monkeypatch, capsys):
+    _leave(results, "_skills.json", [{"key": "cierre", "scripts": True}])
+    _leave(results, "01-cierre-cierre.py.json", _out(ok=False, error="boom"))
+    _leave(results, "02-cierre-cierre.py.json", _out(valores={"spy": 1}))
+    fake = FakeGaleCore()
+    _, body = _report(monkeypatch, capsys, fake)
+    assert body["status"] == "ok" and "Sin evaluar" not in body["summary"]
+    assert [(c["script"], c["ok"]) for c in body["result"]["corridas"]] == [("cierre.py", True)]   # only the last of each pair
+
+
 def test_an_unreadable_output_is_an_unevaluated_corrida(results, monkeypatch, capsys):
     _leave(results, "01-cierre-cierre.py.json", "no es json")
     fake = FakeGaleCore()
