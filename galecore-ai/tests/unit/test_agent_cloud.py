@@ -344,7 +344,8 @@ def test_an_agent_with_a_skill_runs_it_and_reports_without_evaluating_on_failure
     p = piece_of(fake, "cierre-spy")
     assert p["skill"] == {"key": "cierre", "script": "cierre.py", "args": "SPY --tf '1 h'"} == p["request"]["create"]["skill"]
     text = routine_text(ac.body(client, "cierre-spy", NOV))
-    assert "2. Corré `source ~/.galecore.env && python3 -m galecore_ai.adapters.cli skill run cierre cierre.py SPY --tf '1 h'`" in text
+    assert "2. Corré `source ~/.galecore.env && python3 -m galecore_ai.adapters.cli skill run cierre cierre.py SPY --tf '1 h' > /tmp/resultado.json`" in text
+    assert "--summary-file /tmp/resumen.md --result-file /tmp/resultado.json`" in text
     assert 'empieza con "Sin evaluar:"' in text and "no repitas ni deduzcas conclusiones de corridas anteriores" in text
     assert "--status error" in text and "galecore get <capacidad>" not in text
     assert text.index("skill run") < text.index("Tarea: Decí si cerró arriba") < text.index("agent report")
@@ -353,13 +354,13 @@ def test_an_agent_with_a_skill_runs_it_and_reports_without_evaluating_on_failure
 def test_without_a_skill_the_instruction_is_the_same_as_before():
     text = ac.instruction({"id": "Resumen", "objective": "Resumí SPY"})
     assert "2. Hacé esta tarea del usuario, con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` " in text
-    assert "skill run" not in text and "Sin evaluar" not in text
+    assert "skill run" not in text and "Sin evaluar" not in text and "--result-file" not in text
     assert ac.instruction({"id": "Resumen", "objective": "Resumí SPY", "skill": None}) == text
 
 
 def test_the_args_of_the_script_are_quoted_for_the_shell():
     text = ac.instruction({"id": "A", "objective": "x", "skill": {"key": "k", "script": "s.py", "args": "SPY; rm -rf /"}})
-    assert "skill run k s.py 'SPY;' rm -rf /`" in text      # one token each: `;` can never end the command
+    assert "skill run k s.py 'SPY;' rm -rf / > /tmp/resultado.json`" in text      # one token each: `;` can never end the command
 
 
 def test_new_checks_that_the_skill_and_script_exist(galecore, tmp_path):  # noqa: F811

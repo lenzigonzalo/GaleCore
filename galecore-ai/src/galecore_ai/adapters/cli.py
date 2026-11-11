@@ -39,7 +39,7 @@ Usage:
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
     python -m galecore_ai.adapters.cli agent pending|body KEY|applied KEY|new|env   (cloud agents, WS-0079)
-    python -m galecore_ai.adapters.cli agent report AGENT_KEY --status ok|error|skipped (--summary-file PATH|- | --summary "...")         [--reason-code X] [--trigger-id ID] [--fired-at ISO] [--finished-at ISO]
+    python -m galecore_ai.adapters.cli agent report AGENT_KEY --status ok|error|skipped (--summary-file PATH|- | --summary "...")         [--result-file PATH] [--reason-code X] [--trigger-id ID] [--fired-at ISO] [--finished-at ISO]
     python -m galecore_ai.adapters.cli clock [--at ISO]
     python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list [--bugfix]
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
@@ -1072,8 +1072,22 @@ def _cmd_agent(args: argparse.Namespace) -> None:
 
     base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
     _check_base_url(base_url)
-    body = ar.build_body(status=args.status, summary=summary, reason_code=args.reason_code,
+    status = args.status
+    extra: dict = {}
+    if args.result_file:
+        try:
+            result, alerts, skill_ok = ar.read_result(args.result_file)
+        except ValueError as exc:
+            _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+            return
+        extra["result"] = result
+        if alerts:
+            extra["alerts"] = alerts
+        if status == "ok" and not skill_ok:
+            status = "error"   # the conclusion cannot stand without the calculation
+    body = ar.build_body(status=status, summary=summary, reason_code=args.reason_code,
                          trigger_id=trigger_id, fired_at=fired_at, finished_at=args.finished_at)
+    body.update(extra)
     try:
         run = ar.post_run(base_url=base_url, api_key=os.environ.get("GALECORE_API_KEY"), agent_secret=secret,
                           agent_key=args.agent_key, body=body,
@@ -1800,6 +1814,7 @@ def build_parser() -> _JsonArgumentParser:
     ag_sum = p_ag_rep.add_mutually_exclusive_group(required=True)
     ag_sum.add_argument("--summary-file", help="File with the summary in markdown; - reads stdin")
     ag_sum.add_argument("--summary", help="The summary in markdown (cut to 4000 characters)")
+    p_ag_rep.add_argument("--result-file", help="Output of `skill run` (JSON): goes with the run, its avisos become alerts")
     p_ag_rep.add_argument("--reason-code", help="Short reason code (max 64)")
     p_ag_rep.add_argument("--trigger-id", help="Default: GALECORE_TRIGGER_ID")
     p_ag_rep.add_argument("--fired-at", help="ISO-8601; default: GALECORE_FIRED_AT")

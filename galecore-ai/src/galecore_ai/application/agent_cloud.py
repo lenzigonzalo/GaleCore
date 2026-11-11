@@ -167,7 +167,7 @@ def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
     if skill:
         run = " ".join(["python3 -m galecore_ai.adapters.cli skill run", shlex.quote(skill["key"]),
                         shlex.quote(skill["script"]), *map(shlex.quote, shlex.split(skill.get("args") or ""))])
-        step2 = (f"2. Corré `{src}{run}` y leé el JSON que imprime. Con eso hacé la tarea. Si `ok` es false, no hay "
+        step2 = (f"2. Corré `{src}{run} > /tmp/resultado.json` y leé el JSON que guarda. Con eso hacé la tarea. Si `ok` es false, no hay "
                  "JSON o el comando falla: reportá `--status error`; el resumen empieza con \"Sin evaluar:\" y dice el "
                  "error en una línea; no repitas ni deduzcas conclusiones de corridas anteriores.")
     else:
@@ -181,7 +181,8 @@ def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
         f"Tarea: {str(piece.get('objective', '')).strip()}",
         "",
         f"3. {write}",
-        f"`{src}python3 -m galecore_ai.adapters.cli agent report {key} --status ok|error|skipped --summary-file /tmp/resumen.md`",
+        (f"`{src}python3 -m galecore_ai.adapters.cli agent report {key} --status ok|error|skipped "
+         f"--summary-file /tmp/resumen.md{' --result-file /tmp/resultado.json' if skill else ''}`"),
         status,
     ])
 

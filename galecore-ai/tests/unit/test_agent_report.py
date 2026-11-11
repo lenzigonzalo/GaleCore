@@ -194,3 +194,65 @@ def test_get_skill_escapes_the_key_in_the_url(env, monkeypatch):
     monkeypatch.setattr(agent_report, "_transport", httpx.MockTransport(handler))
     agent_report.get_skill(base_url="http://localhost:7001", api_key=API_KEY, agent_secret=AGENT_SECRET, skill_key="a/b?c#d")
     assert seen == ["/App/GaleCore/Agents/Skills/a%2Fb%3Fc%23d"]
+
+
+def _result_file(tmp_path, data) -> str:
+    f = tmp_path / "r.json"
+    f.write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
+    return str(f)
+
+
+def _skill_out(**salida):
+    return {"ok": True, "skill": "cierre", "version": 2, "source": "space", "result": salida, "error": None}
+
+
+def test_result_file_sends_result_and_valid_alerts(env, monkeypatch, capsys, tmp_path):
+    fake = FakeGaleCore()
+    avisos = [{"id": "ruptura-1", "titulo": "Rompió"}, {"id": "x" * 101, "titulo": "largo"}, {"id": "a"}, "mal"]
+    path = _result_file(tmp_path, _skill_out(valores={"spy": 600}, avisos=avisos))
+    code, _, _ = run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "ok", "--result-file", path], fake)
+    body = json.loads(fake.requests[0].content)
+    assert code == 0 and body["status"] == "ok"
+    assert body["result"]["skill"] == "cierre" and body["result"]["version"] == 2 and body["result"]["ok"] is True
+    assert body["result"]["salida"]["valores"] == {"spy": 600}
+    assert body["alerts"] == [{"id": "ruptura-1", "titulo": "Rompió"}]
+
+
+def test_result_file_failed_skill_turns_ok_into_error_without_alerts(env, monkeypatch, capsys, tmp_path):
+    fake = FakeGaleCore()
+    path = _result_file(tmp_path, {"ok": False, "skill": "cierre", "version": 2, "result": {"avisos": [{"id": "a", "titulo": "b"}]},
+                                   "error": "boom"})
+    run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "ok", "--result-file", path], fake)
+    body = json.loads(fake.requests[0].content)
+    assert body["status"] == "error" and body["result"]["ok"] is False and body["result"]["error"] == "boom"
+    assert "alerts" not in body
+
+
+@pytest.mark.parametrize("content", [None, "no es json", "[1]"])
+def test_result_file_missing_or_not_json_still_reports(env, monkeypatch, capsys, tmp_path, content):
+    fake = FakeGaleCore()
+    path = str(tmp_path / "nada.json") if content is None else _result_file(tmp_path, content)
+    run(monkeypatch, capsys, ["a1", "--status", "skipped", "--summary", "s", "--result-file", path], fake)
+    body = json.loads(fake.requests[0].content)
+    assert body["status"] == "skipped" and body["result"] == {"ok": False, "error": "sin resultado del cálculo"}
+
+
+def test_result_file_too_big_is_not_sent(env, monkeypatch, capsys, tmp_path):
+    fake = FakeGaleCore()
+    path = _result_file(tmp_path, _skill_out(texto="x" * 60_000))
+    code, _, _ = run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "s", "--result-file", path], fake)
+    assert code != 0 and fake.requests == []
+
+
+def test_alerts_capped_at_ten(env, monkeypatch, capsys, tmp_path):
+    fake = FakeGaleCore()
+    path = _result_file(tmp_path, _skill_out(avisos=[{"id": f"i{n}", "titulo": "t"} for n in range(15)]))
+    run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "s", "--result-file", path], fake)
+    assert len(json.loads(fake.requests[0].content)["alerts"]) == 10
+
+
+def test_without_result_file_body_is_unchanged(env, monkeypatch, capsys):
+    fake = FakeGaleCore()
+    run(monkeypatch, capsys, ["a1", "--status", "ok", "--summary", "s"], fake)
+    body = json.loads(fake.requests[0].content)
+    assert "result" not in body and "alerts" not in body
