@@ -529,17 +529,21 @@ test('modos de permisos por motor (WS-0083): cada modo se traduce a su bandera; 
  assert.equal((await route(service,'POST','/chats/'+live.id+'/mode',{mode:'plan'})).value.mode,'plan');
 });
 
-test('conectores del chat (WS-0083): GaleCore fijo, interruptor de brókers escribe broker-queries.json y rechaza lo que no es booleano',async t=>{
+test('conectores del chat (WS-0091): GaleCore fijo, lista por motor y interruptor por conector en connectors.json',async t=>{
  const {local,service}=setup(t);
- let r=await route(service,'GET','/connectors');assert.deepEqual([r.value.galecore,r.value.brokers],[{enabled:true},{enabled:false,engines:['codex','claude']}]);
- r=await route(service,'POST','/connectors/brokers',{enabled:true});assert.equal(r.value.brokers.enabled,true);
- assert.deepEqual(JSON.parse(fs.readFileSync(path.join(local,'broker-queries.json'),'utf8')),{enabled:true});
- assert.ok(require('./lab-brokers').brokerQueries(local));   // lo que lee el turno de Codex
- assert.equal((await route(service,'GET','/connectors')).value.brokers.enabled,true);
- for(const bad of ['true',1,undefined,null])await assert.rejects(route(service,'POST','/connectors/brokers',{enabled:bad}),/prender o apagar/);
- assert.equal((await route(service,'POST','/connectors/brokers',{enabled:false})).value.brokers.enabled,false);
- assert.equal(require('./lab-brokers').brokerQueries(local),null);
- fs.writeFileSync(path.join(local,'broker-queries.json'),'{');assert.equal((await route(service,'GET','/connectors')).value.brokers.enabled,false);   // ilegible = apagado
+ const {recordClaudeInit}=require('./lab-brokers');
+ recordClaudeInit(local,{mcp_servers:[{name:'claude.ai IoL',status:'connected'},{name:'claude.ai Gmail',status:'needs-auth'}],tools:['mcp__claude_ai_IoL__get_portfolio']});
+ let r=await route(service,'GET','/connectors');
+ assert.deepEqual(r.value.galecore,{enabled:true});
+ assert.deepEqual(r.value.claude,[{id:'claude.ai IoL',name:'IoL',status:'connected',enabled:false},{id:'claude.ai Gmail',name:'Gmail',status:'needs-auth',enabled:false}]);
+ assert.equal(r.value.codex.length,2);   // sin Codex instalado: IOL e IBKR
+ r=await route(service,'POST','/connectors',{engine:'claude',id:'claude.ai IoL',enabled:true});assert.equal(r.value.enabled,true);
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(local,'connectors.json'),'utf8')),{claude:{'claude.ai IoL':true}});
+ assert.equal((await route(service,'GET','/connectors')).value.claude[0].enabled,true);
+ await route(service,'POST','/connectors',{engine:'codex',id:'asdk_app_6a207f00eed0819181227b2ea257ff0b',enabled:true});
+ assert.ok(require('./lab-brokers').codexConnectors(local));   // lo que lee el turno de Codex
+ for(const bad of [{engine:'claude',id:'claude.ai IoL',enabled:'true'},{engine:'otro',id:'x',enabled:true},{engine:'claude',enabled:true},{engine:'claude',id:'claude.ai IoL'}])await assert.rejects(route(service,'POST','/connectors',bad),/Indicá el motor/);
+ await assert.rejects(route(service,'POST','/connectors',{engine:'claude',id:'claude.ai Inventado',enabled:true}),e=>e.status===404);
 });
 
 test('permisos de Claude Code (WS-0083): reglas del producto fijas, las del usuario se validan y llegan al --settings del turno',async t=>{
