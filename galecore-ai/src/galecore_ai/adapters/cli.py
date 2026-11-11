@@ -571,15 +571,70 @@ async def _cmd_inventory(args: argparse.Namespace) -> None:
     print(inventory.render(inv))
 
 
+def _agent_key_skill_finder():
+    """`finder(key)` for skill_space: the skill piece as the cloud routine's agents key reads it (no login)."""
+    from galecore_ai.application import agent_report as ar
+    base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
+    _check_base_url(base_url)
+    return lambda key: ar.get_skill(base_url=base_url, api_key=os.environ.get("GALECORE_API_KEY"),
+                                    agent_secret=os.environ["GALECORE_AGENT_KEY"].strip(), skill_key=key)
+
+
 def _cmd_skill(args: argparse.Namespace) -> None:
-    from galecore_ai.application.skill_run import SkillRunError, record_run, run_script, skill_dir
+    from galecore_ai.application import skill_space
+    from galecore_ai.application.agent_report import AgentReportError
+    from galecore_ai.application.skill_run import (
+        SkillNotInCatalog,
+        SkillRunError,
+        note_pulled,
+        record_run,
+        run_script,
+        save_output,
+        skill_dir,
+    )
+    if getattr(args, "skill_command", "run") in ("save", "pull"):
+        from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+        try:
+            if args.skill_command == "save":
+                _json_out(skill_space.save(SpaceClient(), Path(args.folder), key=args.key, shared=args.shared, test=args.test))
+            else:
+                if os.environ.get("GALECORE_AGENT_KEY", "").strip():   # a cloud routine: no login, the agents key reads it
+                    pulled = skill_space.pull(None, args.key, Path(args.folder), finder=_agent_key_skill_finder())
+                else:
+                    pulled = skill_space.pull(SpaceClient(), args.key, Path(args.folder))
+                note_pulled(args.key, pulled["scripts"])
+                _json_out(pulled)
+        except (SkillRunError, SpaceError, AgentReportError) as exc:
+            _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    source, version = "catalog", None
     try:
-        result = run_script(skill_dir(args.skill), args.script, args.script_args, args.timeout)
+        try:
+            folder = skill_dir(args.skill)
+        except SkillNotInCatalog:   # not in the catalog: the trader's space (own first, then shared)
+            from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+            from galecore_ai.application import agent_report as ar
+            try:
+                if os.environ.get("GALECORE_AGENT_KEY", "").strip():   # a cloud routine: the agents key reads the skill
+                    folder, version = skill_space.materialize(None, args.skill, _agent_key_skill_finder())
+                else:
+                    folder, version = skill_space.materialize(SpaceClient(), args.skill)
+            except ar.AgentReportError as exc:
+                raise SkillRunError(str(exc)) from exc
+            except SpaceError as exc:
+                raise SkillRunError(f"No skill {args.skill!r} in the catalog; the space is not reachable: {exc}") from exc
+            source = "space"
+        result = run_script(folder, args.script, args.script_args, args.timeout)
+        result.update({"source": source, "version": version})
+        if source == "space":   # the cache folder is named by version; the skill is its key
+            result["skill"] = args.skill
     except (SkillRunError, CatalogError) as exc:
-        result = {"ok": False, "skill": args.skill, "script": args.script, "error": str(exc)}
+        result = {"ok": False, "skill": args.skill, "script": args.script, "error": str(exc), "source": source,
+                  "version": version}
         exit_code = _EXIT_VALIDATION_ERROR
     else:
         exit_code = _EXIT_SUCCESS if result["ok"] else _EXIT_INTERNAL_ERROR
+    save_output(result)
     try:   # the record never changes the run's outcome
         record_run(knowledge_dir(), result, args.script_args)
     except (OSError, KnowledgeBaseError):
@@ -977,10 +1032,10 @@ def _cmd_agent_cloud(args: argparse.Namespace) -> None:
             try:
                 when = json.loads(args.when)
             except ValueError:
-                _error_out("Argument error: --when es un JSON con frequency (daily|weekdays|days), time, timezone "
+                _error_out("Argument error: --when es un JSON con frequency (daily|weekdays|days|market_hours), time, timezone "
                            "y days si hace falta", exit_code=_EXIT_VALIDATION_ERROR)
                 return
-            _json_out({"status": "REQUESTED", **ac.new(client, args.name, args.what, when)})
+            _json_out({"status": "REQUESTED", **ac.new(client, args.name, args.what, when, skills=args.skill)})
     except ac.AgentCloudError as exc:
         _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
     except SpaceError as exc:
@@ -1024,8 +1079,26 @@ def _cmd_agent(args: argparse.Namespace) -> None:
 
     base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
     _check_base_url(base_url)
-    body = ar.build_body(status=args.status, summary=summary, reason_code=args.reason_code,
+    status = args.status
+    extra: dict = {}
+    results_dir = os.environ.get("GALECORE_RESULTS_DIR", "").strip()
+    if results_dir:   # the agent runs skills: what they calculated travels with the report, whatever the model wrote
+        try:
+            result, alerts, unevaluated = ar.read_results(results_dir)
+        except ValueError as exc:
+            _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+            return
+        if result is not None:
+            extra["result"] = result
+        if alerts:
+            extra["alerts"] = alerts
+        if unevaluated and status == "ok":
+            status = "error"   # the conclusion cannot stand without the calculation
+        if unevaluated and not summary.lstrip().lower().startswith("sin evaluar"):
+            summary = "Sin evaluar: " + "; ".join(unevaluated) + "\n\n" + summary
+    body = ar.build_body(status=status, summary=summary, reason_code=args.reason_code,
                          trigger_id=trigger_id, fired_at=fired_at, finished_at=args.finished_at)
+    body.update(extra)
     try:
         run = ar.post_run(base_url=base_url, api_key=os.environ.get("GALECORE_API_KEY"), agent_secret=secret,
                           agent_key=args.agent_key, body=body,
@@ -1638,11 +1711,21 @@ def build_parser() -> _JsonArgumentParser:
 
     p_skill = sub.add_parser("skill", help="Scripts of a skill folder (WS-0073)")
     sk_sub = p_skill.add_subparsers(dest="skill_command", required=True)
-    p_sk_run = sk_sub.add_parser("run", help="Run one script of the skill's scripts/ folder; JSON on stdout")
-    p_sk_run.add_argument("skill", help="skill id or name, e.g. revisar-swing-etfs")
+    p_sk_run = sk_sub.add_parser("run", help="Run one script of the skill's scripts/ folder (catalog, else your "
+                                             "space); JSON on stdout")
+    p_sk_run.add_argument("skill", help="skill id or name, e.g. revisar-swing-etfs; or the key of one saved in the space")
     p_sk_run.add_argument("script", help="file name inside scripts/, e.g. revision_swing.py")
     p_sk_run.add_argument("--timeout", type=float, default=180, help="seconds before it is stopped (default 180); goes before the skill name")
     p_sk_run.add_argument("script_args", nargs=argparse.REMAINDER, help="arguments passed to the script")
+
+    p_sk_save = sk_sub.add_parser("save", help="Save a skill folder with code in your space (WS-0099)")
+    p_sk_save.add_argument("folder", help="folder with SKILL.md (name, description), scripts/*.py, references/, assets/")
+    p_sk_save.add_argument("--key", help="piece key (default: slug of the skill name)")
+    p_sk_save.add_argument("--shared", action="store_true", help="visible to every user (default: private)")
+    p_sk_save.add_argument("--test", metavar='"SCRIPT [ARGS]"', help="run this script first; it must exit 0 with JSON")
+    p_sk_pull = sk_sub.add_parser("pull", help="Bring a skill of the space (own or shared) to a folder to edit it")
+    p_sk_pull.add_argument("key")
+    p_sk_pull.add_argument("folder")
 
     p_an = sub.add_parser("analyze", help="On-demand analysis: macro, technical, fundamental or flow (P1-05)")
     an_sub = p_an.add_subparsers(dest="analyze_command", required=True)
@@ -1769,6 +1852,8 @@ def build_parser() -> _JsonArgumentParser:
     p_ag_new.add_argument("--what", required=True, help="What the agent does")
     p_ag_new.add_argument("--when", required=True, metavar="JSON",
                           help='e.g. {"frequency":"daily","time":"08:00","timezone":"America/New_York"}')
+    p_ag_new.add_argument("--skill", action="append", metavar="KEY",
+                          help="Key of a skill of your space (own or shared) the agent follows; repeat for up to 5")
     p_ag_env = ag_sub.add_parser("env", help="The claude.ai environment the cloud agents run in (Lab config)")
     p_ag_env.add_argument("--set", metavar="LINK_OR_ID", help="Save it (the env_… id or the claude.ai link)")
 

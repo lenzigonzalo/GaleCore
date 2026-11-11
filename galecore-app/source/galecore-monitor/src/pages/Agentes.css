@@ -181,3 +181,33 @@
 .agents-copy { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-shrink: 0; vertical-align: middle; margin: 0 4px; }
 .agents-copy-fail { font-size: 13px; color: var(--red-gc); }
 @media (max-width: 480px) { .agents-help { padding: 18px 16px; } .agents-help-steps > li { padding-left: 0; padding-top: 36px; } }
+/* Último resultado de un agente con skill (WS-0099 C). */
+.agents-last-result { margin-bottom: 36px; }
+.agents-last-result h2 { margin: 0 0 16px 8px; }
+.agents-last-result h3 { margin: 20px 0 0 8px; font-weight: 500; }
+.agents-last-result > p, .agents-last-result .agents-run-meta { margin-left: 8px; }
+.agents-values { border-collapse: collapse; margin: 16px 0 0 8px; min-width: 260px; }
+.agents-values th, .agents-values td { text-align: left; padding: 7px 24px 7px 0; border-bottom: 1px solid var(--border-dark); font-size: 14px; font-weight: 400; }
+.agents-values td { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.agents-values th { color: var(--text-secondary); text-transform: capitalize; }
+.agents-conditions, .agents-changes { list-style: none; margin: 16px 0 0 8px; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+.agents-conditions li { display: flex; align-items: center; gap: 10px; }
+.agents-conditions i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-muted); }
+.agents-conditions b { font-weight: 500; margin-left: auto; color: var(--text-muted); }
+.agents-cond-cumplida i { background: var(--green); }
+.agents-cond-cumplida b { color: var(--green); }
+.agents-cond-fallida i { background: var(--red-gc); }
+.agents-cond-fallida b { color: var(--red-gc); }
+.agents-changes li::before { content: "• "; color: var(--text-muted); }
+.agents-skill-chosen, .agents-skill-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.agents-skill-chosen li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.agents-skill-chosen li button { background: transparent; border: 0; color: var(--text-muted); padding: 4px; }
+.agents-skill-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.agents-skill-text strong { font-size: 14px; font-weight: 600; }
+.agents-skill-text span { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agents-modal .agents-skill-search { width: 100%; margin: 16px 0 12px; padding: 10px 12px; font: inherit; font-size: 14px; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; }
+.agents-modal .agents-skill-list { max-height: 50vh; overflow-y: auto; margin-bottom: 16px; }
+.agents-modal label.agents-skill-row { display: flex; align-items: center; gap: 10px; margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.agents-skill-row.on { border-color: var(--text-primary); }
+.agents-skill-row.off { opacity: .45; cursor: not-allowed; }
+.agents-skill-tag { font-style: normal; font-size: 11px; padding: 2px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); white-space: nowrap; }

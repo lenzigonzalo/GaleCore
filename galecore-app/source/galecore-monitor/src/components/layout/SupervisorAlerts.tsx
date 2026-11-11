@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchSpace, SpaceItem } from '../../api/space';
 import { fetchStrikeAlerts, StrikeAlert } from '../../api/account';
+import { AgentAlert, fetchAgentAlerts } from '../../api/agents';
 import { allWatches, removeWatch, watchText, Watch } from '../../api/watches';
 
 /**
@@ -11,7 +12,7 @@ import { allWatches, removeWatch, watchText, Watch } from '../../api/watches';
  * explicación aparte, botones ni desplegable: las acciones se agregan cuando el uso las pida.
  */
 
-type Category = 'eeuu' | 'empresa' | 'estrategia' | 'cuenta' | 'mercado' | 'strike';
+type Category = 'eeuu' | 'empresa' | 'estrategia' | 'cuenta' | 'mercado' | 'strike' | 'agente';
 interface Alert { id: string; kind: string; detected_at: string; motivo: string; decision: unknown; category?: Category; title?: string }
 interface Piece { watches?: Watch[]; alerts?: Alert[]; last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null }
 
@@ -27,6 +28,7 @@ const CATEGORY: Record<Category, { label: string; color: string }> = {
   cuenta: { label: 'Cuenta', color: '#fb923c' },
   mercado: { label: 'Mercado', color: '#22d3ee' },
   strike: { label: 'Strike', color: '#f87171' },
+  agente: { label: 'Agente', color: '#facc15' },
 };
 
 function readSeen(key = SEEN): Set<string> {
@@ -79,6 +81,39 @@ export function useStrikeAlerts(active: boolean, onNew?: () => void): { alerts: 
     return () => { alive = false; clearInterval(id); };
   }, [active]);
   return { alerts, notice };
+}
+
+const AGENT_SEEN = 'galecore.agents.seen';
+
+/**
+ * Avisos de los agentes (WS-0099 C): los deja la corrida de un agente con skill, una vez por cambio. La API los guarda
+ * 30 días y entrega los de los últimos 7; acá se consultan cada minuto y suenan una vez por aviso.
+ */
+export function useAgentAlerts(active: boolean, onNew?: () => void): AgentAlert[] {
+  const [alerts, setAlerts] = useState<AgentAlert[]>([]);
+  const onNewRef = useRef(onNew);
+  onNewRef.current = onNew;
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    const seen = new Set<string>(readSeen(AGENT_SEEN));
+    const load = async () => {
+      try {
+        const list = await fetchAgentAlerts();
+        if (!alive) return;
+        setAlerts(list);
+        const fresh = list.filter(a => !seen.has(`${a.agent_key}:${a.id}`));
+        if (fresh.length) {
+          fresh.forEach(a => seen.add(`${a.agent_key}:${a.id}`)); writeSeen(seen, AGENT_SEEN);
+          chime(); onNewRef.current?.();
+        }
+      } catch { /* sin avisos de agentes: la campana sigue con lo demás */ }
+    };
+    load();
+    const id = setInterval(load, REFRESH_MS);
+    return () => { alive = false; clearInterval(id); };
+  }, [active]);
+  return alerts;
 }
 
 /** Dos tonos cortos. Sin archivo de audio: Web Audio. Si el navegador lo bloquea, queda el aviso visual. */
@@ -157,7 +192,7 @@ function ArmedWatches({ watches }: { watches: Watch[] }) {
   </section>;
 }
 
-export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice = null }: { embedded?: boolean; strike?: StrikeAlert[]; strikeNotice?: string | null }) {
+export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice = null, agents = [] }: { embedded?: boolean; strike?: StrikeAlert[]; strikeNotice?: string | null; agents?: AgentAlert[] }) {
   const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<SpaceItem | null>(null);
   const [piece, setPiece] = useState<Piece>({});
@@ -194,7 +229,9 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
     decision: null, category: 'strike', title: a.title }));
   const noticeCard: Alert[] = strikeNotice ? [{ id: 'strike-notice', kind: 'watch', detected_at: new Date().toISOString(), motivo: strikeNotice,
     decision: null, category: 'strike', title: strikeNotice }] : [];
-  const alerts = [...noticeCard, ...strikeCards, ...(piece.alerts ?? []).filter(a => a.kind === 'watch')];
+  const agentCards: Alert[] = agents.map(a => ({ id: `agent:${a.agent_key}:${a.id}`, kind: 'watch', detected_at: a.created_at, motivo: a.title,
+    decision: null, category: 'agente', title: `${a.agent_key}: ${a.title}` }));
+  const alerts = [...noticeCard, ...strikeCards, ...agentCards, ...(piece.alerts ?? []).filter(a => a.kind === 'watch')];
   // WS-0057 A (owner 21/10): una falla del sistema (p. ej. FRED caído) no es un aviso para el trader; se ve en
   // Configuración → Plataforma. Acá sólo la hora de la última revisión, discreta.
   const armed = allWatches(piece);

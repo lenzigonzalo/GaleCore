@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, RotateCcw, Bookmark, Plus, RefreshCw, CalendarDays, Bell, FolderPlus } from 'lucide-react';
-import { SupervisorAlerts, useStrikeAlerts } from '../layout/SupervisorAlerts';
+import { SupervisorAlerts, useAgentAlerts, useStrikeAlerts } from '../layout/SupervisorAlerts';
 import { CalendarDock } from '../macro/CalendarDock';
 import { TickerGrid } from './TickerGrid';
 import { ColumnsMenu } from './TickerWatchlist';
@@ -51,7 +51,9 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   const openRef = useRef(open);
   openRef.current = open;
   // El aviso del strike pide decidir ya: suena y abre la campana, esté donde esté el usuario.
-  const { alerts: strike, notice: strikeNotice } = useStrikeAlerts(enabled, () => { setPanelMode('alerts'); if (!openRef.current) (onToggle ?? onClose)(); });
+  const openAlerts = () => { setPanelMode('alerts'); if (!openRef.current) (onToggle ?? onClose)(); };
+  const { alerts: strike, notice: strikeNotice } = useStrikeAlerts(enabled, openAlerts);
+  const agentAlerts = useAgentAlerts(enabled, openAlerts);
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{x:number; width:number} | null>(null);
   const resize = (next:number) => onWidthChange?.(Math.max(360, Math.min(720, next)));
@@ -150,7 +152,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
         : <button className="lw-close" data-close aria-label={alertsMode ? 'Cerrar avisos' : 'Cerrar calendario'} onClick={() => { if (autoHide) { revealEdge.current?.focus(); setRevealed(false); } onClose(); }}><X size={21}/></button>}</div></header>
       <div className="lw-content">
         {enabled && open && calendarMode && <CalendarDock symbols={symbols} />}
-        {enabled && alertsMode && <SupervisorAlerts embedded strike={strike} strikeNotice={strikeNotice} />}
+        {enabled && alertsMode && <SupervisorAlerts embedded strike={strike} strikeNotice={strikeNotice} agents={agentAlerts} />}
         {enabled && panelMode === 'watchlist' && <>
           {searchOpen && <WatchlistSearch groups={list.groups.map(g => g.name)} onPick={pick} onClose={() => setSearchOpen(false)}
             minQueryLength={adHocSearch?.min_query_length} maxResults={adHocSearch?.max_results} instrumentTypes={adHocSearch?.allowed_instrument_types} />}

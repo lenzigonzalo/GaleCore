@@ -361,3 +361,137 @@ test('con el borrado pedido se avisa y no se ofrece Borrar', async () => {
   expect(screen.getByRole('status')).toHaveTextContent('Borrando… (se aplica con el Lab abierto)');
   expect(screen.queryByRole('button', { name: 'Borrar' })).toBeNull();
 });
+
+// ── WS-0099: agente que corre una skill y «cada 1 h en rueda» ──────────────────
+
+const skillFiles = { 'SKILL.md': '---\nname: Cierre\ndescription: Cómo cerró SPY\n---\n', 'scripts/cierre.py': 'print(1)', 'scripts/otro.py': 'print(2)' };
+const skillItem = (key: string, title: string, own: boolean, format: 'json' | 'markdown' = 'json', content = JSON.stringify({ format: 'skill-folder/1', files: skillFiles })): SpaceItem =>
+  ({ ...item, key, title, kind: 'skill', format, content, isOwn: own });
+
+const openPicker = () => fireEvent.click(screen.getByRole('button', { name: 'Añadir skill' }));
+
+test('Nuevo agente: «Añadir skill» abre el selector con buscador, marcas, elegir dos y confirmar; ✕ quita una', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({
+    items: [skillItem('cierre', 'Cierre de SPY', true), skillItem('texto', 'Sólo texto', true, 'markdown', '# hola\nExplica el texto')],
+    shared: [skillItem('ajena', 'Compartida', false)],
+  });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Nuevo agente' }));
+  const group = screen.getByRole('group', { name: 'Skills' });
+  expect(within(group).queryByRole('list')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Cierre SPY' } });
+  fireEvent.change(screen.getByLabelText('Qué hace'), { target: { value: 'Decí cómo cerró' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Frecuencia' }), { target: { value: 'market_hours' } });
+  openPicker();
+  const picker = screen.getByRole('dialog', { name: 'Añadir skill' });
+  expect(within(picker).getAllByRole('checkbox')).toHaveLength(3);
+  expect(within(picker).getAllByText('Cómo cerró SPY')).toHaveLength(2);
+  expect(within(picker).getByText('Explica el texto')).toBeInTheDocument();
+  expect(within(picker).getAllByText('Con cálculo')).toHaveLength(2);
+  expect(within(picker).getAllByText('Compartida', { selector: 'em' })).toHaveLength(1);
+  fireEvent.change(within(picker).getByLabelText('Buscar skill'), { target: { value: 'texto' } });
+  expect(within(picker).getAllByRole('checkbox').map(c => c.getAttribute('aria-label'))).toEqual(['Sólo texto']);
+  fireEvent.change(within(picker).getByLabelText('Buscar skill'), { target: { value: '' } });
+  fireEvent.click(within(picker).getByRole('checkbox', { name: 'Cierre de SPY' }));
+  fireEvent.click(within(picker).getByRole('checkbox', { name: 'Compartida' }));
+  fireEvent.click(within(picker).getByRole('button', { name: 'Añadir (2)' }));
+  expect(screen.queryByRole('dialog', { name: 'Añadir skill' })).not.toBeInTheDocument();
+  expect(within(group).getAllByRole('listitem')).toHaveLength(2);
+  fireEvent.click(within(group).getByRole('button', { name: 'Quitar Compartida' }));
+  expect(within(group).getAllByRole('listitem')).toHaveLength(1);
+  openPicker();
+  expect(within(screen.getByRole('dialog', { name: 'Añadir skill' })).queryByRole('checkbox', { name: 'Cierre de SPY' })).not.toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('dialog', { name: 'Añadir skill' }), { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Añadir skill' })).not.toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Nuevo agente' })).toBeInTheDocument();
+  openPicker();
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Añadir skill' })).getByRole('checkbox', { name: 'Compartida' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Añadir (1)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
+  const piece = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
+  expect(piece.schedule_spec).toEqual({ frequency: 'market_hours', minutes: 60, timezone: 'America/New_York' });
+  expect(piece.skills).toEqual(['cierre', 'ajena']);
+  expect(piece.request.create).toMatchObject({ skills: ['cierre', 'ajena'], schedule_spec: piece.schedule_spec });
+  expect(piece.schedule).toBe('Cada 1 h en rueda, L–V 9:30–16:00 NY');
+});
+
+test('no se pueden elegir más de 5 skills', async () => {
+  const many = Array.from({ length: 7 }, (_, n) => skillItem(`s${n}`, `Skill ${n}`, true));
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: many, shared: [] });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Nuevo agente' }));
+  openPicker();
+  const picker = screen.getByRole('dialog', { name: 'Añadir skill' });
+  for (let n = 0; n < 5; n++) fireEvent.click(within(picker).getByRole('checkbox', { name: `Skill ${n}` }));
+  expect(within(picker).getByRole('checkbox', { name: 'Skill 5' })).toBeDisabled();
+  expect(within(picker).getByRole('button', { name: 'Añadir (5, máximo 5)' })).toBeInTheDocument();
+  fireEvent.click(within(picker).getByRole('button', { name: /^Añadir/ }));
+  expect(within(screen.getByRole('group', { name: 'Skills' })).getAllByRole('listitem')).toHaveLength(5);
+  expect(screen.getByRole('button', { name: 'Añadir skill' })).toBeDisabled();
+});
+
+test('la tarjeta lista las skills y editar las cambia o las quita con request.settings', async () => {
+  const content = { ...cloud, skills: ['cierre', 'texto'], schedule_spec: { frequency: 'market_hours', minutes: 60, timezone: 'America/New_York' }, schedule: 'cada 60 minutos en horario de mercado (L–V 09:30–16:00 Nueva York)' };
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...cloudItem, content: JSON.stringify(content) }, skillItem('cierre', 'Cierre de SPY', true), skillItem('texto', 'Sólo texto', true, 'markdown', '# hola')], shared: [] });
+  api.fetchRuns.mockResolvedValue([]);
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Resumen diario' }));
+  expect(screen.getByText('Skills: Cierre de SPY, Sólo texto')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+  expect(screen.getByRole('combobox', { name: 'Frecuencia' })).toHaveValue('market_hours');
+  fireEvent.click(screen.getByRole('button', { name: 'Quitar Sólo texto' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
+  const saved = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
+  expect(saved.request.settings).toEqual({ skills: ['cierre'] });
+});
+
+const salida = { evaluado_en: '2026-11-10T15:00:00Z', calidad: 'completa', valores: { spy: 600.5, cruce_oculto: { x: 1 } },
+  condiciones: [{ nombre: 'Ruptura', estado: 'cumplida' }, { nombre: 'Piso', estado: 'pendiente' }, { nombre: 'Soporte', estado: 'fallida' }], cambios: ['Subió la ruptura'], secreto: 'no se muestra' };
+const goodRun = { id: 'r1', agent_key: 'resumen-diario', origin: 'schedule', status: 'ok', summary: 'listo', created_at: '2026-11-10T15:05:00Z', finished_at: '2026-11-10T15:05:00Z',
+  result: { corridas: [{ skill: 'cierre', script: 'cierre.py', version: 2, ok: true, error: null, salida }, { skill: 'texto', script: 'otro.py', version: 1, ok: true, error: null, salida: { valores: { vix: 15 } } }] } } as any;
+
+async function openWithSkills(runs: any[]) {
+  const content = { ...cloud, skills: ['cierre', 'texto'] };
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...cloudItem, content: JSON.stringify(content) }, skillItem('cierre', 'Cierre de SPY', true), skillItem('texto', 'Otra', true)], shared: [] });
+  api.fetchRuns.mockResolvedValue(runs);
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Resumen diario' }));
+}
+
+test('Último resultado muestra un bloque por corrida, con tablas y condiciones, sin claves desconocidas', async () => {
+  await openWithSkills([goodRun]);
+  const section = (await screen.findByRole('heading', { name: 'Último resultado' })).closest('section') as HTMLElement;
+  expect(within(section).getByRole('heading', { name: 'Cierre de SPY · cierre.py' })).toBeInTheDocument();
+  expect(within(section).getByRole('heading', { name: 'Otra · otro.py' })).toBeInTheDocument();
+  expect(within(section).getByText('Datos: completa')).toBeInTheDocument();
+  expect(within(section).getByRole('rowheader', { name: 'spy' })).toBeInTheDocument();
+  expect(within(section).getByText('Cumplida')).toBeInTheDocument();
+  expect(within(section).getByText('Pendiente')).toBeInTheDocument();
+  expect(within(section).getByText('Fallida')).toBeInTheDocument();
+  expect(within(section).getByText('Subió la ruptura')).toBeInTheDocument();
+  expect(section.textContent).not.toContain('secreto');
+  expect(section.textContent).not.toContain('cruce');
+});
+
+test('con la última corrida fallida dice Sin evaluar y deja la última buena debajo', async () => {
+  const bad = { id: 'r2', agent_key: 'resumen-diario', origin: 'schedule', status: 'error', summary: 'Sin evaluar: cierre/cierre.py: boom', created_at: '2026-11-10T16:05:00Z',
+    result: { corridas: [{ skill: 'cierre', script: 'cierre.py', version: 2, ok: false, error: 'boom', salida: null }] } } as any;
+  await openWithSkills([bad, goodRun]);
+  const section = (await screen.findByRole('heading', { name: 'Último resultado' })).closest('section') as HTMLElement;
+  expect(within(section).getByText('Sin evaluar').parentElement).toHaveTextContent('Sin evaluar · boom');
+  expect(within(section).getByRole('heading', { name: /Última corrida buena/ })).toBeInTheDocument();
+  expect(within(section).getByRole('heading', { name: 'Cierre de SPY · cierre.py' })).toBeInTheDocument();
+});
+
+test('las tareas de la PC no ofrecen «Cada 1 h en rueda»; los agentes en la nube sí', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...item, content: JSON.stringify({ ...task, schedule_spec: { frequency: 'daily', time: '10:00', timezone: 'America/New_York' } }) }], shared: [] });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+  expect(within(screen.getByRole('combobox', { name: 'Frecuencia' })).queryByRole('option', { name: 'Cada 1 h en rueda' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo agente' }));
+  expect(within(screen.getByRole('combobox', { name: 'Frecuencia' })).getByRole('option', { name: 'Cada 1 h en rueda' })).toBeInTheDocument();
+});

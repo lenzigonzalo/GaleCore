@@ -9,6 +9,11 @@ namespace DataFeed.Application.App.Agents
     public sealed record AgentFireTokenRow(
         Guid OwnerId, string AgentKey, string TriggerId, string TokenCipher, string TokenHint, DateTime UpdatedAt, DateTime? LastFiredAt);
 
+    /// <summary>Pieza <c>skill</c> del espacio tal como la lee la clave de agentes (mismos campos que un ítem de GET GaleCore/Space).</summary>
+    public sealed record AgentSkillRow(
+        string Kind, string Key, string Title, string Content, string Format, string Visibility, int Version, DateTime UpdatedAt,
+        string Owner, Guid OwnerId);
+
     /// <summary>Acceso a las tablas de agentes (WS-0079); existe para probar el servicio sin base.</summary>
     public interface IAgentStore
     {
@@ -20,6 +25,9 @@ namespace DataFeed.Application.App.Agents
 
         /// <summary>¿El usuario tiene un ítem <c>agent</c> con esa clave en su espacio?</summary>
         Task<bool> AgentExistsAsync(Guid ownerId, string agentKey, CancellationToken ct);
+
+        /// <summary>Piezas <c>skill</c> con esa clave que el usuario puede leer: las suyas y las compartidas por otros.</summary>
+        Task<IReadOnlyList<AgentSkillRow>> GetSkillsAsync(Guid ownerId, string skillKey, CancellationToken ct);
 
         Task<AgentFireTokenRow?> GetFireTokenAsync(Guid ownerId, string agentKey, CancellationToken ct);
         /// <summary>Guarda trigger y token cifrado; limpia el último disparo.</summary>
@@ -34,6 +42,12 @@ namespace DataFeed.Application.App.Agents
         /// <summary>Corridas de un agente, más recientes primero.</summary>
         Task<IReadOnlyList<AgentRun>> ListRunsAsync(Guid ownerId, string agentKey, CancellationToken ct);
         Task DeleteRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+        /// <summary>Guarda los avisos cuyo (dueño, agente, AlertId) todavía no existe; devuelve cuántos eran nuevos.</summary>
+        Task<int> AddNewAlertsAsync(Guid ownerId, string agentKey, Guid runId, IReadOnlyList<(string AlertId, string Title)> alerts, DateTime now, CancellationToken ct);
+        /// <summary>Avisos del dueño creados desde <paramref name="since"/>, más recientes primero.</summary>
+        Task<IReadOnlyList<AgentAlert>> ListAlertsAsync(Guid ownerId, DateTime since, CancellationToken ct);
+        Task DeleteAlertsBeforeAsync(Guid ownerId, DateTime before, CancellationToken ct);
     }
 
     public sealed class EfAgentStore : IAgentStore
@@ -84,6 +98,16 @@ namespace DataFeed.Application.App.Agents
             await using var db = _newContext();
             return await db.TraderSpaceItems.AsNoTracking()
                 .AnyAsync(i => i.OwnerId == ownerId && i.Kind == "agent" && i.Key == agentKey, ct);
+        }
+
+        public async Task<IReadOnlyList<AgentSkillRow>> GetSkillsAsync(Guid ownerId, string skillKey, CancellationToken ct)
+        {
+            await using var db = _newContext();
+            return await db.TraderSpaceItems.AsNoTracking()
+                .Where(i => i.Kind == "skill" && i.Key == skillKey && (i.OwnerId == ownerId || i.Visibility == "shared"))
+                .Select(i => new AgentSkillRow(i.Kind, i.Key, i.Title, i.Content, i.Format, i.Visibility, i.Version, i.UpdatedAt,
+                    i.Owner.Username, i.OwnerId))
+                .ToListAsync(ct);
         }
 
         private static AgentFireTokenRow ToRow(AgentFireToken t) =>
@@ -167,6 +191,38 @@ namespace DataFeed.Application.App.Agents
             if (ids.Count == 0) return;
             await using var db = _newContext();
             await db.AgentRuns.Where(r => ids.Contains(r.Id)).ExecuteDeleteAsync(ct);
+        }
+
+        public async Task<int> AddNewAlertsAsync(Guid ownerId, string agentKey, Guid runId, IReadOnlyList<(string AlertId, string Title)> alerts, DateTime now, CancellationToken ct)
+        {
+            if (alerts.Count == 0) return 0;
+            await using var db = _newContext();
+            var ids = alerts.Select(a => a.AlertId).ToList();
+            var seen = await db.AgentAlerts.AsNoTracking()
+                .Where(a => a.OwnerId == ownerId && a.AgentKey == agentKey && ids.Contains(a.AlertId))
+                .Select(a => a.AlertId).ToListAsync(ct);
+            var fresh = alerts.Where(a => !seen.Contains(a.AlertId)).DistinctBy(a => a.AlertId).ToList();
+            foreach (var a in fresh)
+                db.AgentAlerts.Add(new AgentAlert { Id = Guid.NewGuid(), OwnerId = ownerId, AgentKey = agentKey, AlertId = a.AlertId, Title = a.Title, RunId = runId, CreatedAt = now });
+            if (fresh.Count == 0) return 0;
+            try { await db.SaveChangesAsync(ct); }
+            catch (DbUpdateException) { return 0; } // otro reporte insertó el mismo aviso a la vez (índice único): ya existía
+            return fresh.Count;
+        }
+
+        public async Task<IReadOnlyList<AgentAlert>> ListAlertsAsync(Guid ownerId, DateTime since, CancellationToken ct)
+        {
+            await using var db = _newContext();
+            return await db.AgentAlerts.AsNoTracking()
+                .Where(a => a.OwnerId == ownerId && a.CreatedAt >= since)
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync(ct);
+        }
+
+        public async Task DeleteAlertsBeforeAsync(Guid ownerId, DateTime before, CancellationToken ct)
+        {
+            await using var db = _newContext();
+            await db.AgentAlerts.Where(a => a.OwnerId == ownerId && a.CreatedAt < before).ExecuteDeleteAsync(ct);
         }
     }
 }

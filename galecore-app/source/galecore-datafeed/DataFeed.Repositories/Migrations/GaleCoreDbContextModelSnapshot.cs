@@ -88,6 +88,59 @@ namespace DataFeed.Repositories.Migrations
                     b.ToTable("accounts", (string)null);
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.AgentAlert", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AgentKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("agent_key");
+
+                    b.Property<string>("AlertId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("alert_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agent_alerts");
+
+                    b.HasIndex("OwnerId", "CreatedAt")
+                        .HasDatabaseName("ix_agent_alerts_owner_id_created_at");
+
+                    b.HasIndex("OwnerId", "AgentKey", "AlertId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agent_alerts_owner_id_agent_key_alert_id");
+
+                    b.ToTable("agent_alerts", (string)null);
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.AgentFireToken", b =>
                 {
                     b.Property<Guid>("OwnerId")
@@ -212,6 +265,11 @@ namespace DataFeed.Repositories.Migrations
                     b.Property<DateTime?>("RequestedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("requested_at");
+
+                    b.Property<string>("ResultJson")
+                        .HasMaxLength(50000)
+                        .HasColumnType("character varying(50000)")
+                        .HasColumnName("result_json");
 
                     b.Property<string>("SessionId")
                         .HasMaxLength(200)
@@ -1074,6 +1132,18 @@ namespace DataFeed.Repositories.Migrations
                         .HasConstraintName("fk_accounts_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.AgentAlert", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_alerts_users_owner_id");
+
+                    b.Navigation("Owner");
                 });
 
             modelBuilder.Entity("DataFeed.Repositories.Entities.AgentFireToken", b =>

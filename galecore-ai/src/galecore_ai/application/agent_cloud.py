@@ -24,7 +24,11 @@ from galecore_ai.contracts.task import WEEKDAYS, Schedule
 REPO_URL = "https://github.com/lenzigonzalo/GaleCore"
 DEFAULT_MODEL = "claude-sonnet-5"
 ALLOWED_TOOLS = ["Bash", "Read", "Glob", "Grep"]
-CLOUD_FREQUENCIES = ("daily", "weekdays", "days")      # the form offers once a day at most
+CLOUD_FREQUENCIES = ("daily", "weekdays", "days", "market_hours")   # once a day, or every whole hour in session
+FREQUENCY_ERROR = ("Un agente en la nube corre una vez por día (diario, de lunes a viernes o días elegidos) "
+                   "o cada 1 h en rueda.")
+SKILLS_MAX = 5
+RESULTS_VAR, RESULTS_DIR = "GALECORE_RESULTS_DIR", "/tmp/resultados"     # where `skill run` leaves each output for `agent report`
 NO_ENVIRONMENT = "Falta configurar el entorno de los agentes en la nube (pasale al Lab el link del entorno de claude.ai)."
 ENV_ID = re.compile(r"env_[A-Za-z0-9]+")
 REQUEST_KEYS = ("create", "settings", "status", "run", "delete")
@@ -111,10 +115,17 @@ def _ask_update(client: SpaceClient, except_key: str | None = None, only_key: st
 
 
 def cron_utc(schedule: Schedule, today: date | None = None) -> str:
-    """5-field cron in UTC for a daily / weekdays / days schedule. The routine API takes no time zone, so the local
-    time is converted with the offset of `today`: across a daylight-saving change the run moves one hour (accepted)."""
-    if schedule.frequency not in CLOUD_FREQUENCIES:
-        raise AgentCloudError("Un agente en la nube corre una vez por día como máximo: diario, de lunes a viernes o días elegidos.")
+    """5-field cron in UTC for a daily / weekdays / days / market_hours schedule. The routine API takes no time zone, so
+    the local time is converted with the offset of `today`: across a daylight-saving change the run moves one hour
+    (accepted)."""
+    if schedule.frequency not in CLOUD_FREQUENCIES or (schedule.frequency == "market_hours" and schedule.minutes % 60):
+        raise AgentCloudError(FREQUENCY_ERROR)
+    if schedule.frequency == "market_hours":     # 9:30, 10:30 ... 15:30 New York, Monday to Friday
+        zone = ZoneInfo(schedule.timezone)
+        first = datetime.combine(today or datetime.now(zone).date(), datetime.min.time(), zone).replace(hour=9, minute=30)
+        start = first.astimezone(UTC)
+        every = f"/{schedule.minutes // 60}" if schedule.minutes > 60 else ""
+        return f"{start.minute} {start.hour}-{start.hour + 6}{every} * * 1-5"
     hour, minute = (int(x) for x in str(schedule.time).split(":"))
     zone = ZoneInfo(schedule.timezone)
     local = datetime.combine(today or datetime.now(zone).date(), datetime.min.time(), zone).replace(hour=hour, minute=minute)
@@ -136,6 +147,7 @@ def _asked(req: dict, name: str) -> bool:
 def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
     key = piece.get("key") or space._slug(str(piece["id"]))     # the piece's key is what the API validates
     src = "source ~/.galecore.env && " if variables else ""      # the shell does not persist between Bash calls
+    skills = [k for k in piece.get("skills") or [] if isinstance(k, str)]
     data = (f"con GaleCore como fuente de datos (`{src}python3 -m galecore_ai.adapters.cli galecore list` dice qué hay y "
             f"`{src}python3 -m galecore_ai.adapters.cli galecore get <capacidad>` lo trae). No inventes ni redondees "
             "números: si un dato no está en GaleCore, decilo.")
@@ -147,17 +159,27 @@ def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
               "No crees ni modifiques archivos en el repo.")
     install = "cd galecore-ai && python3 -m pip install -q -e . && cd .."
     if variables:
-        lines = "\n".join(f"export {n}={shlex.quote(v)}" for n, v in variables.items())
+        lines = "\n".join(f"export {n}={shlex.quote(v)}" for n, v in {**variables, **({RESULTS_VAR: RESULTS_DIR} if skills else {})}.items())
         step1 = ("1. Guardá las variables en un archivo (cada comando que use GaleCore lo carga con `source`) e instalá el "
                  f"harness, desde la raíz del repo:\n```\ncat > ~/.galecore.env <<'EOF'\n{lines}\nEOF\n"
                  f"chmod 600 ~/.galecore.env\n{install}\n```")
     else:
         step1 = f"1. Instalá el harness: `{install}` (desde la raíz del repo)."
+    if skills:
+        pulls = "\n".join(f"   - `{src}python3 -m galecore_ai.adapters.cli skill pull {shlex.quote(k)} /tmp/skills/{shlex.quote(k)}`"
+                          for k in skills)
+        step2 = ("2. Traé cada skill, leé su `SKILL.md` y seguilo: los cálculos se corren con `skill run <clave> <script> …` "
+                 "como diga la skill (el comando imprime un JSON con `ok`); no escribas ni muevas archivos fuera de /tmp.\n"
+                 f"{pulls}\n   Con eso hacé la tarea. Si un comando falla, `ok` es false o no hay JSON: reportá `--status error`; "
+                 "el resumen empieza con \"Sin evaluar:\" y dice el error en una línea; no repitas ni deduzcas conclusiones "
+                 "de corridas anteriores.")
+    else:
+        step2 = f"2. Hacé esta tarea del usuario, {data}"
     return "\n".join([
         "Sos un agente de GaleCore que corre solo en la nube. Seguí estos pasos en orden.",
         "",
         step1,
-        f"2. Hacé esta tarea del usuario, {data}",
+        step2,
         "",
         f"Tarea: {str(piece.get('objective', '')).strip()}",
         "",
@@ -193,9 +215,9 @@ def effective(content: dict) -> dict:
     out = {k: v for k, v in content.items() if k not in ("request", "request_error")}
     if isinstance(req.get("create"), dict):
         c = req["create"]
-        out.update({k: c[k] for k in ("id", "objective", "schedule_spec", "model") if k in c})
+        out.update({k: c[k] for k in ("id", "objective", "schedule_spec", "model", "skills") if k in c})
     if isinstance(req.get("settings"), dict):
-        out.update({k: v for k, v in req["settings"].items() if k in ("objective", "schedule_spec", "model")})
+        out.update({k: v for k, v in req["settings"].items() if k in ("objective", "schedule_spec", "model", "skills")})
     if req.get("status") in ("active", "paused"):
         out["status"] = req["status"]
     if out.get("schedule_spec"):
@@ -279,7 +301,23 @@ def applied(client: SpaceClient, key: str, trigger_id: str | None = None, url: s
             "routine_url": piece.get("routine_url"), "error": error}
 
 
-def new(client: SpaceClient, name: str, what: str, when: dict, now: datetime | None = None) -> dict:
+def skills_spec(client: SpaceClient, keys: list[str]) -> list[str]:
+    """The `skills` field of a piece, checked: 1 to SKILLS_MAX different skills of the space (own or shared)."""
+    from galecore_ai.application import skill_space
+    from galecore_ai.application.skill_run import SkillRunError
+    keys = [k.strip() for k in keys]
+    if not keys or len(keys) > SKILLS_MAX or len(set(keys)) != len(keys):
+        raise AgentCloudError(f"Elegí de 1 a {SKILLS_MAX} skills distintas.")
+    for key in keys:
+        try:
+            skill_space.find_piece(client, key)
+        except SkillRunError as exc:
+            raise AgentCloudError(f"No encuentro la skill «{key}» en tu espacio ni compartida: {exc}") from exc
+    return keys
+
+
+def new(client: SpaceClient, name: str, what: str, when: dict, now: datetime | None = None,
+        skills: list[str] | None = None) -> dict:
     """An agent asked for in the chat: the same piece the monitor writes, with its `request.create`."""
     key = space._slug(name)
     if any(i["key"] == key for i in client.items("agent")["items"]):
@@ -288,13 +326,16 @@ def new(client: SpaceClient, name: str, what: str, when: dict, now: datetime | N
         schedule = Schedule.model_validate(when)
     except ValueError as exc:
         raise AgentCloudError(f"El «cuándo» no es válido: {str(exc)[:200]}") from exc
-    if schedule.frequency not in CLOUD_FREQUENCIES:
-        raise AgentCloudError("Un agente en la nube corre una vez por día como máximo: diario, de lunes a viernes o días elegidos.")
+    cron_utc(schedule)       # the same check the routine will pass
+    if skills:
+        skills = skills_spec(client, skills)
     at = (now or datetime.now(UTC)).isoformat()
     spec = schedule.model_dump(exclude_none=True)
     piece = {"id": name.strip(), "runs_on": "cloud", "capability": "routine", "status": "pending",
              "objective": what.strip(), "schedule_spec": spec, "schedule": schedule.describe(), "model": DEFAULT_MODEL,
              "trigger_id": None, "routine_url": None, "created_at": at,
-             "request": {"create": {"id": name.strip(), "objective": what.strip(), "schedule_spec": spec}, "at": at}}
+             "request": {"create": {"id": name.strip(), "objective": what.strip(), "schedule_spec": spec,
+                                   **({"skills": skills} if skills else {})}, "at": at},
+             **({"skills": skills} if skills else {})}
     client.put("agent", key, title=name.strip(), content=json.dumps(piece, ensure_ascii=False), fmt="json")
     return {"agent": key, "status": "pending"}

@@ -21,7 +21,7 @@ interface LastRun {
 }
 interface Agent {
   id: string; capability: string; status: 'active' | 'paused' | 'cancelled' | 'pending'; schedule: string;
-  runs_on?: string; trigger_id?: string | null; routine_url?: string | null;   // WS-0079: agente en la nube (rutina de claude.ai)
+  skills?: string[]; runs_on?: string; trigger_id?: string | null; routine_url?: string | null;   // WS-0079: agente en la nube (rutina de claude.ai)
   strategy?: string | null; objective: string; state: string; state_detail?: string;
   next_expected_at?: string | null; last_run?: LastRun | null; runs: number; findings?: string | null;
   result_ref?: string | null; request?: AgentRequest; request_error?: string;
@@ -31,10 +31,10 @@ interface Agent {
 }
 
 interface ScheduleSpec { frequency: string; time?: string; days?: string[]; minutes?: number; timezone: string }
-interface NewCloudAgentData { name: string; objective: string; schedule_spec: ScheduleSpec }
+interface NewCloudAgentData { name: string; objective: string; schedule_spec: ScheduleSpec; skills?: string[] }
 
-interface AgentSettingsChange { objective?: string; model?: string | null; schedule?: ScheduleSpec; schedule_spec?: ScheduleSpec; tools?: string[] | null; delivery?: string[] }
-interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec }; run?: boolean; delete?: boolean; at?: string }
+interface AgentSettingsChange { skills?: string[]; objective?: string; model?: string | null; schedule?: ScheduleSpec; schedule_spec?: ScheduleSpec; tools?: string[] | null; delivery?: string[] }
+interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec; skills?: string[] }; run?: boolean; delete?: boolean; at?: string }
 
 const REFRESH_MS = 60_000;
 
@@ -120,19 +120,93 @@ function slug(text: string): string {
   return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').split('-').slice(0, 8).join('-').slice(0, 48).replace(/-+$/, '');
 }
 
-const FREQ_OPTIONS: [string, string][] = [['daily', 'Todos los días'], ['weekdays', 'De lunes a viernes'], ['days', 'Días elegidos']];
+const FREQ_OPTIONS: [string, string][] = [['daily', 'Todos los días'], ['weekdays', 'De lunes a viernes'], ['days', 'Días elegidos'], ['market_hours', 'Cada 1 h en rueda']];
+const MARKET_SCHEDULE: ScheduleSpec = { frequency: 'market_hours', minutes: 60, timezone: 'America/New_York' };
 const isEditableSchedule = (sp?: ScheduleSpec) => !sp || ['daily', 'weekdays', 'days'].includes(sp.frequency);
 
-/** Cuándo corre: todos los días, de lunes a viernes o días elegidos, a una hora y zona. */
-function ScheduleFields({ value, onChange }: { value: ScheduleSpec; onChange: (v: ScheduleSpec) => void }) {
+/** Cuándo corre: todos los días, de lunes a viernes, días elegidos (a una hora y zona) o cada 1 h en rueda. */
+function ScheduleFields({ value, onChange, market }: { value: ScheduleSpec; onChange: (v: ScheduleSpec) => void; market?: boolean }) {
   const days = value.days ?? [];
   const toggle = (d: string) => onChange({ ...value, days: days.includes(d) ? days.filter(x => x !== d) : [...days, d] });
   return <fieldset className="agents-fieldset"><legend>Cuándo corre</legend>
-    <select aria-label="Frecuencia" value={value.frequency} onChange={e => onChange({ ...value, frequency: e.target.value, days: e.target.value === 'days' ? (days.length ? days : ['mon']) : undefined })}>
-      {FREQ_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+    <select aria-label="Frecuencia" value={value.frequency} onChange={e => onChange(e.target.value === 'market_hours' ? MARKET_SCHEDULE
+      : { ...value, frequency: e.target.value, time: value.time ?? '09:00', minutes: undefined, days: e.target.value === 'days' ? (days.length ? days : ['mon']) : undefined })}>
+      {FREQ_OPTIONS.filter(([v]) => market || v !== 'market_hours').map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
     {value.frequency === 'days' && <div className="agents-days" role="group" aria-label="Días">{DAY_LABELS.map(([d, l]) => <label key={d} className={days.includes(d) ? 'on' : ''}><input type="checkbox" checked={days.includes(d)} onChange={() => toggle(d)} />{l}</label>)}</div>}
-    <div className="agents-when"><label>Hora<input type="time" value={value.time ?? '09:00'} onChange={e => onChange({ ...value, time: e.target.value })} required /></label>
-      <label>Zona<select value={value.timezone} onChange={e => onChange({ ...value, timezone: e.target.value })}>{ZONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label></div>
+    {value.frequency !== 'market_hours' && <div className="agents-when"><label>Hora<input type="time" value={value.time ?? '09:00'} onChange={e => onChange({ ...value, time: e.target.value })} required /></label>
+      <label>Zona<select value={value.timezone} onChange={e => onChange({ ...value, timezone: e.target.value })}>{ZONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label></div>}
+  </fieldset>;
+}
+
+/** Skills del espacio (propias y compartidas), con código o sólo markdown; el agente baja la carpeta completa. */
+interface SkillOption { key: string; title: string; description: string; code: boolean; shared: boolean }
+const SKILLS_MAX = 5;
+
+/** Descripción de una skill: `description` del frontmatter de su SKILL.md (skill-folder/1) o primera línea de texto de la pieza. */
+function skillInfo(i: SpaceItem): { description: string; code: boolean } {
+  let md = i.content ?? '';
+  let code = false;
+  if (i.format === 'json') {
+    try {
+      const files = (JSON.parse(i.content) as { files?: Record<string, string> }).files ?? {};
+      md = typeof files['SKILL.md'] === 'string' ? files['SKILL.md'] : '';
+      code = Object.keys(files).some(f => /^scripts\/[^/]+\.py$/.test(f));
+    } catch { md = ''; }
+  }
+  const front = /^---\s*\r?\n([\s\S]*?)\r?\n---/.exec(md);
+  if (front) {
+    const d = /^description:\s*(.+)$/m.exec(front[1]);
+    return { description: d ? d[1].trim().replace(/^["']|["']$/g, '') : '', code };
+  }
+  const line = md.split(/\r?\n/).map(l => l.trim()).find(l => l && !l.startsWith('#') && l !== '---');
+  return { description: line ?? '', code };
+}
+
+function skillOptions(items: SpaceItem[]): SkillOption[] {
+  const out: SkillOption[] = [];
+  for (const i of items) if (i.kind === 'skill' && !out.some(o => o.key === i.key)) out.push({ key: i.key, title: i.title, ...skillInfo(i), shared: !i.isOwn });
+  return out;
+}
+
+/** Selector con buscador: varias a la vez, sólo las que todavía no están elegidas, hasta el tope. */
+function SkillPicker({ options, taken, onAdd, onClose }: { options: SkillOption[]; taken: string[]; onAdd: (keys: string[]) => void; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState<string[]>([]);
+  const room = SKILLS_MAX - taken.length;
+  const needle = q.trim().toLowerCase();
+  const rows = options.filter(o => !taken.includes(o.key) && (!needle || `${o.title} ${o.description}`.toLowerCase().includes(needle)));
+  const toggle = (k: string) => setSel(sel.includes(k) ? sel.filter(x => x !== k) : [...sel, k]);
+  return <div className="agents-modal-backdrop" onClick={e => { e.stopPropagation(); onClose(); }}>
+    <div className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="skill-picker-title" onClick={e => e.stopPropagation()}
+      onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+      <div className="agents-modal-title"><h2 id="skill-picker-title">Añadir skill</h2><button type="button" aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
+      <input className="agents-skill-search" type="search" aria-label="Buscar skill" placeholder="Buscar" autoFocus value={q} onChange={e => setQ(e.target.value)} />
+      <ul className="agents-skill-list">{rows.map(o => {
+        const on = sel.includes(o.key);
+        const off = !on && sel.length >= room;
+        return <li key={o.key}><label className={`agents-skill-row${on ? ' on' : ''}${off ? ' off' : ''}`}>
+          <input type="checkbox" checked={on} disabled={off} onChange={() => toggle(o.key)} aria-label={o.title} />
+          <span className="agents-skill-text"><strong>{o.title}</strong>{o.description && <span>{o.description}</span>}</span>
+          {o.code && <em className="agents-skill-tag">Con cálculo</em>}{o.shared && <em className="agents-skill-tag">Compartida</em>}
+        </label></li>;
+      })}</ul>
+      <div className="agents-edit-actions"><button className="agents-primary" type="button" disabled={!sel.length} onClick={() => onAdd(sel)}>
+        {room <= 0 ? `Máximo ${SKILLS_MAX}` : sel.length >= room ? `Añadir (${sel.length}, máximo ${SKILLS_MAX})` : `Añadir (${sel.length})`}</button>
+        <button className="agents-text-button" type="button" onClick={onClose}>Cancelar</button></div>
+    </div></div>;
+}
+
+function SkillFields({ value, options, onChange }: { value: string[]; options: SkillOption[]; onChange: (v: string[]) => void }) {
+  const [adding, setAdding] = useState(false);
+  const full = value.length >= SKILLS_MAX;
+  return <fieldset className="agents-fieldset"><legend>Skills</legend>
+    {!!value.length && <ul className="agents-skill-chosen">{value.map(k => {
+      const o = options.find(x => x.key === k) ?? { key: k, title: k, description: '', code: false, shared: false };
+      return <li key={k}><span className="agents-skill-text"><strong>{o.title}</strong>{o.description && <span>{o.description}</span>}</span>
+        <button type="button" aria-label={`Quitar ${o.title}`} onClick={() => onChange(value.filter(x => x !== k))}><X size={16} /></button></li>;
+    })}</ul>}
+    <button className="agents-text-button" type="button" disabled={full} onClick={() => setAdding(true)}><Plus size={14} />Añadir skill</button>
+    {adding && <SkillPicker options={options} taken={value} onAdd={keys => { onChange([...value, ...keys].slice(0, SKILLS_MAX)); setAdding(false); }} onClose={() => setAdding(false)} />}
   </fieldset>;
 }
 
@@ -258,12 +332,14 @@ const isCloud = (a: Agent) => a.runs_on === 'cloud';
 /** La frecuencia de una especificación, para mostrarla mientras la rutina todavía no se creó. */
 function specText(sp: ScheduleSpec): string {
   const days = (sp.days ?? []).map(d => DAY_LABELS.find(x => x[0] === d)?.[1] ?? d).join(', ');
+  if (sp.frequency === 'market_hours') return `Cada ${(sp.minutes ?? 60) / 60} h en rueda, L–V 9:30–16:00 NY`;
   const cadence = sp.frequency === 'weekdays' ? 'De lunes a viernes' : sp.frequency === 'days' ? days : 'Todos los días';
   return `${cadence}, ${sp.time ?? '09:00'} ${ZONES.find(z => z[0] === sp.timezone)?.[1] ?? sp.timezone}`;
 }
 
-function NewCloudAgent({ existing, onCreate, onClose }: { existing: string[]; onCreate: (c: NewCloudAgentData) => Promise<boolean>; onClose: () => void }) {
+function NewCloudAgent({ existing, skills, onCreate, onClose }: { existing: string[]; skills: SkillOption[]; onCreate: (c: NewCloudAgentData) => Promise<boolean>; onClose: () => void }) {
   const [name, setName] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
   const [what, setWhat] = useState('');
   const [schedule, setSchedule] = useState<ScheduleSpec>({ frequency: 'daily', time: '09:00', timezone: 'America/New_York' });
   const [saving, setSaving] = useState(false);
@@ -275,7 +351,7 @@ function NewCloudAgent({ existing, onCreate, onClose }: { existing: string[]; on
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    void onCreate({ name: name.trim(), objective: what.trim(), schedule_spec: schedule }).then(ok => { setSaving(false); if (ok) onClose(); });
+    void onCreate({ name: name.trim(), objective: what.trim(), schedule_spec: schedule, ...(picked.length ? { skills: picked } : {}) }).then(ok => { setSaving(false); if (ok) onClose(); });
   };
   return <div className="agents-modal-backdrop" onClick={onClose}><div className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="agent-new-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
     <div className="agents-modal-title"><h2 id="agent-new-title">Nuevo agente</h2><button ref={closeRef} aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
@@ -283,13 +359,77 @@ function NewCloudAgent({ existing, onCreate, onClose }: { existing: string[]; on
       <label htmlFor="agent-name">Nombre</label><input id="agent-name" value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
       {taken && <small className="agents-failed">Ya existe un agente con ese nombre.</small>}
       <label htmlFor="agent-new-objective">Qué hace</label><textarea id="agent-new-objective" value={what} onChange={e => setWhat(e.target.value)} rows={6} maxLength={12000} required />
-      <ScheduleFields value={schedule} onChange={setSchedule} />
+      <ScheduleFields value={schedule} onChange={setSchedule} market />
+      <SkillFields value={picked} options={skills} onChange={setPicked} />
       <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!valid || saving}><Save size={14} />Crear</button><button className="agents-text-button" type="button" onClick={onClose}>Cancelar</button></div>
     </form>
   </div></div>;
 }
 
 const RUN_LABELS: Record<string, string> = { ok: 'Completada', error: 'No se completó', skipped: 'Omitida', requested: 'Pedida', no_report: 'No reportó' };
+
+type Cond = { nombre: string; estado: 'cumplida' | 'pendiente' | 'fallida' };
+const COND_LABELS: Record<Cond['estado'], string> = { cumplida: 'Cumplida', pendiente: 'Pendiente', fallida: 'Fallida' };
+
+type Corrida = NonNullable<NonNullable<AgentRun['result']>['corridas']>[number];
+
+/** Los cálculos bien hechos de una corrida (ok y con salida); vacío si la corrida no terminó ok. */
+function goodCorridas(run: AgentRun): { c: Corrida; out: Record<string, unknown> }[] {
+  if (run.status === 'error') return [];
+  const out: { c: Corrida; out: Record<string, unknown> }[] = [];
+  for (const c of run.result?.corridas ?? []) {
+    if (c.ok === true && c.salida && typeof c.salida === 'object' && !Array.isArray(c.salida)) out.push({ c, out: c.salida as Record<string, unknown> });
+  }
+  return out;
+}
+
+const text = (v: unknown): string => (typeof v === 'string' ? v : typeof v === 'number' ? v.toLocaleString('es-AR', { maximumFractionDigits: 4 }) : '');
+const label = (name: string): string => name.replace(/_/g, ' ');
+
+/** La convención de las skills con código (valores, condiciones, cambios...); lo que no está en ella no se muestra. */
+function SkillOutput({ out }: { out: Record<string, unknown> }) {
+  const valores = out.valores && typeof out.valores === 'object' && !Array.isArray(out.valores)
+    ? Object.entries(out.valores as Record<string, unknown>).filter(([, v]) => text(v) !== '') : [];
+  const condiciones = (Array.isArray(out.condiciones) ? out.condiciones : [])
+    .filter((c): c is Cond => !!c && typeof (c as Cond).nombre === 'string' && (c as Cond).estado in COND_LABELS);
+  const cambios = (Array.isArray(out.cambios) ? out.cambios : []).filter((c): c is string => typeof c === 'string' && c !== '');
+  const evaluado = typeof out.evaluado_en === 'string' ? out.evaluado_en : null;
+  const vela = typeof out.ultima_vela === 'string' ? out.ultima_vela : null;
+  const calidad = typeof out.calidad === 'string' ? out.calidad : null;
+  return <>
+    {(evaluado || vela || calidad) && <div className="agents-run-meta">
+      {evaluado && <span>Evaluado {when(evaluado)}</span>}{vela && <span>Última vela {when(vela)}</span>}{calidad && <span>Datos: {calidad}</span>}
+    </div>}
+    {valores.length > 0 && <table className="agents-values"><tbody>
+      {valores.map(([k, v]) => <tr key={k}><th scope="row">{label(k)}</th><td>{text(v)}</td></tr>)}
+    </tbody></table>}
+    {condiciones.length > 0 && <ul className="agents-conditions">
+      {condiciones.map(c => <li key={c.nombre} className={`agents-cond-${c.estado}`}><i aria-hidden="true" /><span>{c.nombre}</span><b>{COND_LABELS[c.estado]}</b></li>)}
+    </ul>}
+    {cambios.length > 0 && <ul className="agents-changes">{cambios.map((c, i) => <li key={i}>{c}</li>)}</ul>}
+  </>;
+}
+
+/** Último resultado de un agente con skills (WS-0099 C): un bloque por cálculo de la última corrida, o «Sin evaluar» con la última buena. */
+function CloudResult({ runs, titles }: { runs: AgentRun[]; titles: Record<string, string> }) {
+  const done = runs.filter(r => r.status !== 'requested');   // recientes primero
+  const last = done[0];
+  if (!last) return null;
+  const failed = last.status === 'error' || !!last.result?.corridas?.some(c => c.ok === false) || !!last.result?.error;
+  const shown = failed ? done.find(r => goodCorridas(r).length) : last;
+  const blocks = shown ? goodCorridas(shown) : [];
+  if (!failed && !blocks.length) return null;
+  const bad = last.result?.corridas?.find(c => c.ok === false);
+  const reason = bad?.error || last.result?.error || (last.summary ?? '').replace(/^Sin evaluar:\s*/i, '').split('\n')[0] || 'La corrida falló.';
+  return <section className="agents-last-result"><h2>Último resultado</h2>
+    {failed && <p className="agents-failed"><strong>Sin evaluar</strong> · {reason}</p>}
+    {failed && shown && <h3>Última corrida buena: {when(shown.finished_at ?? shown.created_at)}</h3>}
+    {blocks.map(({ c, out }, i) => <div key={i} className="agents-skill-run">
+      <h3>{titles[c.skill ?? ''] ?? c.skill ?? 'Skill'}{c.script ? ` · ${c.script}` : ''}</h3>
+      <SkillOutput out={out} />
+    </div>)}
+  </section>;
+}
 
 function CloudRuns({ runs, error }: { runs: AgentRun[] | null; error: string | null }) {
   return <section className="agents-history"><h2>Corridas</h2>
@@ -310,24 +450,27 @@ function CloudRuns({ runs, error }: { runs: AgentRun[] | null; error: string | n
   </section>;
 }
 
-function CloudSettings({ a, busy, onSave }: { a: Agent; busy: boolean; onSave: (settings: AgentSettingsChange) => Promise<boolean> }) {
+function CloudSettings({ a, skills, busy, onSave }: { a: Agent; skills: SkillOption[]; busy: boolean; onSave: (settings: AgentSettingsChange) => Promise<boolean> }) {
   const [editing, setEditing] = useState(false);
+  const [picked, setPicked] = useState<string[]>(a.skills ?? []);
   const [objective, setObjective] = useState(a.objective);
   const [schedule, setSchedule] = useState<ScheduleSpec>(a.schedule_spec ?? { frequency: 'daily', time: '09:00', timezone: 'America/New_York' });
   const pending = !!a.request;
-  const edit = () => { setObjective(a.objective); if (a.schedule_spec) setSchedule(a.schedule_spec); setEditing(true); };
+  const edit = () => { setObjective(a.objective); setPicked(a.skills ?? []); if (a.schedule_spec) setSchedule(a.schedule_spec); setEditing(true); };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const change: AgentSettingsChange = {};
     if (objective.trim() !== a.objective.trim()) change.objective = objective.trim();
     if (JSON.stringify(schedule) !== JSON.stringify(a.schedule_spec)) change.schedule_spec = schedule;
+    if (JSON.stringify(picked) !== JSON.stringify(a.skills ?? [])) change.skills = picked;
     if (!Object.keys(change).length) { setEditing(false); return; }
     void onSave(change).then(saved => { if (saved) setEditing(false); });
   };
   return <section><div className="agents-section-heading"><h2>Instrucciones y horario</h2>{!editing && <button className="agents-text-button" onClick={edit} disabled={busy || pending}><Pencil size={14} />Editar</button>}</div>
     {editing ? <form className="agents-edit-form" onSubmit={submit}>
       <label htmlFor="agent-objective">Qué hace</label><textarea id="agent-objective" value={objective} onChange={e => setObjective(e.target.value)} rows={7} maxLength={12000} required />
-      <ScheduleFields value={schedule} onChange={setSchedule} />
+      <ScheduleFields value={schedule} onChange={setSchedule} market />
+      <SkillFields value={picked} options={skills} onChange={setPicked} />
       <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!objective.trim() || (schedule.frequency === 'days' && !(schedule.days?.length)) || busy || pending}><Save size={14} />Guardar cambios</button><button className="agents-text-button" type="button" onClick={() => setEditing(false)}>Cancelar</button></div>
     </form> : <p className="agents-objective">{a.objective || 'Sin instrucciones.'}</p>}
   </section>;
@@ -348,8 +491,8 @@ function ConfirmDelete({ title, onConfirm, onClose }: { title: string; onConfirm
   </div></div>;
 }
 
-function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
-  a: Agent; item: SpaceItem; title: string; onChange: (r: AgentRequest) => Promise<boolean>; onDelete: () => Promise<void>; busy: boolean; onBack: () => void;
+function CloudDetail({ a, item, title, skills, onChange, onDelete, busy, onBack }: {
+  a: Agent; item: SpaceItem; title: string; skills: SkillOption[]; onChange: (r: AgentRequest) => Promise<boolean>; onDelete: () => Promise<void>; busy: boolean; onBack: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [runs, setRuns] = useState<AgentRun[] | null>(null);
@@ -375,13 +518,13 @@ function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
   const ready = !!a.trigger_id && a.status !== 'pending';
   return <>
     <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Agentes</button><span>/</span><span>{title}</span></div>
-    <header className="agents-detail-heading"><div><h1>{title}</h1><p>{scheduleText(a.schedule)}</p></div>
+    <header className="agents-detail-heading"><div><h1>{title}</h1><p>{scheduleText(a.schedule)}</p>{!!a.skills?.length && <p>Skills: {a.skills.map(k => skills.find(o => o.key === k)?.title ?? k).join(', ')}</p>}</div>
       <div className="agents-actions"><button className="agents-primary" onClick={run} disabled={!ready || starting || busy}><Play size={14} />Ejecutar</button><Toggle a={a} busy={busy} onRequest={status => { void onChange({ status }); }} />{!a.request?.delete && <button className="agents-text-button" disabled={busy} onClick={() => setConfirming(true)}><Trash2 size={14} />Borrar</button>}</div></header>
     {a.request?.delete ? <p className="agents-notice" role="status">Borrando… (se aplica con el Lab abierto)</p> : a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
     {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
     {notice && <p className={notice.error ? 'agents-error' : 'agents-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
-    <div className="agents-detail-grid"><CloudRuns runs={runs} error={runsError} /><aside className="agents-settings">
-      <CloudSettings a={a} busy={busy} onSave={settings => onChange({ settings })} />
+    <div className="agents-detail-grid"><div>{!!a.skills?.length && runs && <CloudResult runs={runs} titles={Object.fromEntries(skills.map(o => [o.key, o.title]))} />}<CloudRuns runs={runs} error={runsError} /></div><aside className="agents-settings">
+      <CloudSettings a={a} skills={skills} busy={busy} onSave={settings => onChange({ settings })} />
       <RoutineLink a={a} />
     </aside></div>
     {confirming && <ConfirmDelete title={title} onConfirm={onDelete} onClose={() => setConfirming(false)} />}
@@ -430,6 +573,7 @@ function Help() {
 
 export function Agentes() {
   const [items, setItems] = useState<SpaceItem[] | null>(null);
+  const [skills, setSkills] = useState<SkillOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -438,8 +582,9 @@ export function Agentes() {
 
   const load = useCallback(async () => {
     try {
-      const { items: own } = await fetchSpace();
+      const { items: own, shared } = await fetchSpace();
       setItems(own.filter((i) => i.kind === 'agent'));
+      setSkills(skillOptions([...own, ...(shared ?? [])]));
       setError(null);
     } catch (e: any) {
       setError(e?.response?.status === 401 ? 'Tu sesión venció: volvé a entrar.' : 'No se pudo leer tus agentes de GaleCore.');
@@ -465,7 +610,8 @@ export function Agentes() {
       const content = {
         id: c.name, runs_on: 'cloud', capability: 'routine', status: 'pending', objective: c.objective, schedule_spec: c.schedule_spec,
         schedule: specText(c.schedule_spec), model: 'claude-sonnet-5', trigger_id: null, routine_url: null, created_at: at,
-        request: { create: { id: c.name, objective: c.objective, schedule_spec: c.schedule_spec }, at },
+        ...(c.skills ? { skills: c.skills } : {}),
+        request: { create: { id: c.name, objective: c.objective, schedule_spec: c.schedule_spec, ...(c.skills ? { skills: c.skills } : {}) }, at },
       };
       await saveSpaceItem('agent', slug(c.name), { title: c.name, format: 'json', visibility: 'private', content: JSON.stringify(content) });
       await load();
@@ -508,7 +654,7 @@ export function Agentes() {
 
   return <div className="agents-page">
     {error && <div className="agents-error" role="alert">{error}<button className="agents-text-button" onClick={load}>Reintentar</button></div>}
-    {current && isCloud(current.a) ? <CloudDetail key={current.item.key} a={current.a} item={current.item} title={taskTitle(current.a, current.item.title)}
+    {current && isCloud(current.a) ? <CloudDetail key={current.item.key} a={current.a} item={current.item} skills={skills} title={taskTitle(current.a, current.item.title)}
       busy={busy === current.item.key} onChange={change => request(current.item, current.a, change)} onDelete={() => remove(current.item, current.a)} onBack={() => setSelected(null)} />
       : current ? <AgentDetail key={current.item.key} a={current.a} title={taskTitle(current.a, current.item.title)}
       publishedAt={current.item.updatedAt} busy={busy === current.item.key} onRequest={status => request(current.item, current.a, { status })} onSave={settings => request(current.item, current.a, { settings })} onBack={() => setSelected(null)} /> : <>
@@ -532,6 +678,6 @@ export function Agentes() {
         </table></div>}
       </>
     </>}
-    {creating && <NewCloudAgent existing={(items ?? []).map(i => i.key)} onCreate={create} onClose={() => setCreating(false)} />}
+    {creating && <NewCloudAgent existing={(items ?? []).map(i => i.key)} skills={skills} onCreate={create} onClose={() => setCreating(false)} />}
   </div>;
 }

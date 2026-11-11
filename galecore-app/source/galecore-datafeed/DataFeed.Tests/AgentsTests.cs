@@ -48,6 +48,11 @@ public class AgentsTests
         public HashSet<(Guid, string)> Agents { get; } = new();
         public Dictionary<(Guid, string), AgentFireTokenRow> Tokens { get; } = new();
         public List<AgentRun> Runs { get; } = new();
+        public List<AgentSkillRow> Space { get; } = new();
+
+        // Devuelve a propósito más de lo que corresponde: el servicio es quien filtra kind y visibilidad.
+        public Task<IReadOnlyList<AgentSkillRow>> GetSkillsAsync(Guid o, string key, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<AgentSkillRow>>(Space.Where(s => s.Key == key).ToList());
 
         public Task<AgentKeyRow?> GetKeyByOwnerAsync(Guid o, CancellationToken ct) => Task.FromResult(Keys.GetValueOrDefault(o));
         public Task<AgentKeyRow?> GetKeyByHashAsync(string h, CancellationToken ct) => Task.FromResult(Keys.Values.FirstOrDefault(k => k.KeyHash == h));
@@ -68,6 +73,16 @@ public class AgentsTests
         public Task<IReadOnlyList<AgentRun>> ListRunsAsync(Guid o, string a, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<AgentRun>>(Runs.Where(r => r.OwnerId == o && r.AgentKey == a).OrderByDescending(r => r.CreatedAt).ToList());
         public Task DeleteRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) { Runs.RemoveAll(r => ids.Contains(r.Id)); return Task.CompletedTask; }
+        public List<AgentAlert> Alerts { get; } = new();
+        public Task<int> AddNewAlertsAsync(Guid o, string a, Guid runId, IReadOnlyList<(string AlertId, string Title)> alerts, DateTime now, CancellationToken ct)
+        {
+            var fresh = alerts.Where(x => !Alerts.Any(e => e.OwnerId == o && e.AgentKey == a && e.AlertId == x.AlertId)).DistinctBy(x => x.AlertId).ToList();
+            Alerts.AddRange(fresh.Select(x => new AgentAlert { Id = Guid.NewGuid(), OwnerId = o, AgentKey = a, AlertId = x.AlertId, Title = x.Title, RunId = runId, CreatedAt = now }));
+            return Task.FromResult(fresh.Count);
+        }
+        public Task<IReadOnlyList<AgentAlert>> ListAlertsAsync(Guid o, DateTime since, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<AgentAlert>>(Alerts.Where(x => x.OwnerId == o && x.CreatedAt >= since).OrderByDescending(x => x.CreatedAt).ToList());
+        public Task DeleteAlertsBeforeAsync(Guid o, DateTime before, CancellationToken ct) { Alerts.RemoveAll(x => x.OwnerId == o && x.CreatedAt < before); return Task.CompletedTask; }
     }
 
     private sealed record Rig(AgentsService Svc, FakeStore Store, FakeFire Fire, FakeTime Time);
@@ -83,6 +98,60 @@ public class AgentsTests
 
     private static ReportInput Report(string status = "ok", string? summary = "todo bien", string? trigger = null) =>
         new(status, summary, null, trigger, null, null);
+
+    // ── lectura de skills con la clave de agentes (WS-0099) ───────────────────────────────────────────────────
+
+    private static AgentSkillRow Skill(Guid owner, string name, string kind = "skill", string visibility = "private", string content = "{}", int hour = 0) =>
+        new(kind, "cierre", "Cierre", content, "json", visibility, 1, new DateTime(2026, 11, 9, hour, 0, 0, DateTimeKind.Utc), name, owner);
+
+    [Fact]
+    public async Task LaClaveLeeUnaSkillPropiaYPrefiereLaPropiaSobreUnaCompartida()
+    {
+        var r = NewRig();
+        r.Store.Space.Add(Skill(Beto, "beto", visibility: "shared", content: "{de-beto}", hour: 9));
+        r.Store.Space.Add(Skill(Ana, "ana", content: "{de-ana}"));
+
+        var own = await r.Svc.GetSkillAsync(Ana, "cierre", default);
+
+        Assert.Equal(AgentOutcome.Ok, own.Outcome);
+        Assert.Equal("{de-ana}", own.Value!.Content);
+        Assert.Equal("ana", own.Value.Owner);
+    }
+
+    [Fact]
+    public async Task LaClaveLeeUnaSkillCompartidaPorOtro()
+    {
+        var r = NewRig();
+        r.Store.Space.Add(Skill(Beto, "beto", visibility: "shared", content: "{de-beto}"));
+
+        var shared = await r.Svc.GetSkillAsync(Ana, "cierre", default);
+
+        Assert.Equal(AgentOutcome.Ok, shared.Outcome);
+        Assert.Equal("beto", shared.Value!.Owner);
+        Assert.Equal("{de-beto}", shared.Value.Content);
+    }
+
+    [Fact]
+    public async Task UnaSkillPrivadaDeOtroUnKindDistintoOUnaInexistenteSonNotFound()
+    {
+        var r = NewRig();
+        r.Store.Space.Add(Skill(Beto, "beto", visibility: "private"));
+        r.Store.Space.Add(Skill(Beto, "beto", kind: "memory", visibility: "shared"));
+        r.Store.Space.Add(Skill(Ana, "ana", kind: "agent"));
+
+        Assert.Equal(AgentOutcome.NotFound, (await r.Svc.GetSkillAsync(Ana, "cierre", default)).Outcome);
+        Assert.Equal(AgentOutcome.NotFound, (await r.Svc.GetSkillAsync(Ana, "otra", default)).Outcome);
+    }
+
+    [Fact]
+    public async Task UnaClaveInvalidaNoResuelveDuenoYPorEndeNoLeeSkills()
+    {
+        var r = NewRig();
+        r.Store.Space.Add(Skill(Ana, "ana"));
+
+        Assert.Null(await r.Svc.ResolveKeyAsync("gca_inventada", default));
+        Assert.Null(await r.Svc.ResolveKeyAsync("", default));
+    }
 
     // ── clave de agentes ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -406,6 +475,93 @@ public class AgentsTests
         var list = (await r.Svc.ListRunsAsync(Ana, Agent, default)).Value!;
         Assert.Equal(new[] { "n2", "n1", "n0" }, list.Select(x => x.Summary));
         Assert.Equal(AgentOutcome.NotFound, (await r.Svc.ListRunsAsync(Beto, Agent, default)).Outcome);
+    }
+
+    // ── resultado de la skill y avisos (WS-0099 C) ─────────────────────────────────────────────────────────────
+
+    private static ReportInput WithResult(string status, string? result, params (string Id, string Title)[] alerts) =>
+        new(status, "resumen", null, null, null, null, result, alerts.Select(a => new AlertInput(a.Id, a.Title)).ToList());
+
+    private const string GoodResult = "{\"corridas\":[{\"skill\":\"cierre\",\"script\":\"cierre.py\",\"version\":2,\"ok\":true,\"error\":null,\"salida\":{\"valores\":{\"spy\":600}}}]}";
+
+    [Fact]
+    public async Task ElReporteGuardaElResultadoYLoDevuelveEnLaVista()
+    {
+        var r = NewRig();
+        var res = await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult), default);
+        Assert.Equal(GoodResult, res.Value!.ResultJson);
+        Assert.Equal(GoodResult, (await r.Svc.ListRunsAsync(Ana, Agent, default)).Value![0].ResultJson);
+    }
+
+    [Fact]
+    public async Task UnOkConElResultadoFallidoQuedaError()
+    {
+        var r = NewRig();
+        var res = await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", "{\"corridas\":[{\"skill\":\"a\",\"ok\":true},{\"skill\":\"b\",\"ok\":false,\"error\":\"boom\"}]}", ("a1", "Rompió")), default);
+        Assert.Equal("error", res.Value!.Status); // una corrida fallida deja el estado en error
+        Assert.Single(r.Store.Alerts); // el aviso de la corrida buena se conserva
+    }
+
+    [Fact]
+    public async Task UnAvisoSaleUnaSolaVezPorIdYOtroIdAvisaDeNuevo()
+    {
+        var r = NewRig();
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("ruptura-1", "SPY rompió")), default);
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("ruptura-1", "SPY rompió")), default);
+        Assert.Single(r.Store.Alerts);
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("ruptura-2", "SPY rompió otra vez")), default);
+        Assert.Equal(2, r.Store.Alerts.Count);
+        Assert.Equal(3, r.Store.Runs.Count(x => x.ResultJson == GoodResult)); // cada corrida con su resultado
+    }
+
+    [Fact]
+    public async Task UnOkConTodasLasCorridasBienSigueOk()
+    {
+        var r = NewRig();
+        var res = await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult), default);
+        Assert.Equal("ok", res.Value!.Status);
+        Assert.Empty(r.Store.Alerts);
+    }
+
+    [Fact]
+    public async Task LosLimitesDeResultadoYAvisosSon400()
+    {
+        var r = NewRig();
+        var big = "{\"x\":\"" + new string('a', AgentRun.MaxResultLength) + "\"}";
+        Assert.Equal(AgentOutcome.Invalid, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", big), default)).Outcome);
+        var many = Enumerable.Range(0, 11).Select(i => ($"i{i}", "t")).ToArray();
+        Assert.Equal(AgentOutcome.Invalid, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, many), default)).Outcome);
+        Assert.Equal(AgentOutcome.Invalid, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, (new string('i', 101), "t")), default)).Outcome);
+        Assert.Equal(AgentOutcome.Invalid, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("i", new string('t', 201))), default)).Outcome);
+        Assert.Empty(r.Store.Runs);
+        var ten = Enumerable.Range(0, 10).Select(i => ($"i{i}", "t")).ToArray();
+        Assert.Equal(AgentOutcome.Ok, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ten), default)).Outcome);
+        Assert.Equal(10, r.Store.Alerts.Count);
+    }
+
+    [Fact]
+    public async Task ElListadoDeAvisosSonLosDeLosUltimos7DiasSoloDelDueno()
+    {
+        var r = NewRig();
+        r.Store.Agents.Add((Beto, Agent));
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("viejo", "Viejo")), default);
+        r.Time.Advance(TimeSpan.FromDays(8));
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("nuevo", "Nuevo")), default);
+        await r.Svc.ReportAsync(Beto, Agent, WithResult("ok", GoodResult, ("de-beto", "Beto")), default);
+
+        var list = await r.Svc.ListAlertsAsync(Ana, default);
+        var one = Assert.Single(list);
+        Assert.Equal(("nuevo", Agent, "Nuevo"), (one.AlertId, one.AgentKey, one.Title));
+    }
+
+    [Fact]
+    public async Task LosAvisosSeConservan30DiasYLasCorridasQuedanRecortadasSoloEnSuResultado()
+    {
+        var r = NewRig();
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("viejo", "Viejo")), default);
+        r.Time.Advance(TimeSpan.FromDays(31));
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult), default); // el recorte barre los avisos de más de 30 días
+        Assert.Empty(r.Store.Alerts);
     }
 
     // ── aislamiento entre usuarios ─────────────────────────────────────────────────────────────────────────────

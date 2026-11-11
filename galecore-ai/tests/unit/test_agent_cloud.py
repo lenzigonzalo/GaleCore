@@ -300,3 +300,114 @@ def test_a_missing_variable_is_a_clear_error_and_the_key_is_never_printed(galeco
     # saving the environment again keeps the key
     ac.set_environment("env_ZZZ1")
     assert json.loads((lab / "agents.json").read_text(encoding="utf-8"))["agent_key"] == "gca_key1"
+
+
+SKILL_MD = "---\nname: Cierre\ndescription: Cierre de SPY\n---\n# Cierre\n"
+
+
+def with_skill(client, tmp_path, key="cierre"):
+    from galecore_ai.application import skill_space
+    folder = tmp_path / "sk"
+    (folder / "scripts").mkdir(parents=True)
+    (folder / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
+    (folder / "scripts" / "cierre.py").write_text("print('{}')\n", encoding="utf-8")
+    skill_space.save(client, folder, key=key)
+
+
+def test_market_hours_cron_is_every_whole_hour_in_session_in_est_and_edt():
+    hourly = Schedule.model_validate({"frequency": "market_hours", "minutes": 60, "timezone": "America/New_York"})
+    assert ac.cron_utc(hourly, NOV) == "30 14-20 * * 1-5"                    # 9:30 ... 15:30 NY, EST (UTC-5)
+    assert ac.cron_utc(hourly, date(2026, 7, 15)) == "30 13-19 * * 1-5"      # EDT (UTC-4)
+    two = Schedule.model_validate({"frequency": "market_hours", "minutes": 120, "timezone": "America/New_York"})
+    assert ac.cron_utc(two, NOV) == "30 14-20/2 * * 1-5"
+    half = Schedule.model_validate({"frequency": "market_hours", "minutes": 90, "timezone": "America/New_York"})
+    with pytest.raises(ac.AgentCloudError, match="cada 1 h en rueda"):
+        ac.cron_utc(half, NOV)
+
+
+def test_a_market_hours_agent_builds_its_routine(galecore, lab):  # noqa: F811
+    _, client = galecore
+    configured(lab)
+    when = {"frequency": "market_hours", "minutes": 60, "timezone": "America/New_York"}
+    ac.new(client, "Cada hora", "Mirá SPY", when)
+    assert ac.body(client, "cada-hora", NOV)["body"]["cron_expression"] == "30 14-20 * * 1-5"
+    with pytest.raises(ac.AgentCloudError, match="cada 1 h en rueda"):
+        ac.new(client, "Cada 30", "x", {**when, "minutes": 30})
+
+
+def test_an_agent_with_skills_exports_the_results_dir_and_one_without_does_not(galecore, lab, tmp_path):  # noqa: F811
+    _, client = galecore
+    configured(lab)
+    with_skill(client, tmp_path)
+    ac.new(client, "Con skill", "x", DAILY, skills=["cierre"])
+    ac.new(client, "Sin skill", "x", DAILY)
+    assert "export GALECORE_RESULTS_DIR=/tmp/resultados\n" in routine_text(ac.body(client, "con-skill", NOV))
+    assert "GALECORE_RESULTS_DIR" not in routine_text(ac.body(client, "sin-skill", NOV))
+
+
+def test_an_agent_with_skills_pulls_them_follows_their_skill_md_and_reports_without_evaluating_on_failure(galecore, lab, tmp_path):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    with_skill(client, tmp_path)
+    ac.new(client, "Cierre SPY", "Decí si cerró arriba", DAILY, skills=["cierre"])
+    p = piece_of(fake, "cierre-spy")
+    assert p["skills"] == ["cierre"] == p["request"]["create"]["skills"] and "skill" not in p
+    text = routine_text(ac.body(client, "cierre-spy", NOV))
+    assert "   - `source ~/.galecore.env && python3 -m galecore_ai.adapters.cli skill pull cierre /tmp/skills/cierre`" in text
+    assert "leé su `SKILL.md` y seguilo" in text and "skill run <clave> <script>" in text
+    assert 'empieza con "Sin evaluar:"' in text and "no repitas ni deduzcas conclusiones de corridas anteriores" in text
+    assert "--status error" in text and "galecore get <capacidad>" not in text
+    assert text.index("skill pull") < text.index("Tarea: Decí si cerró arriba") < text.index("agent report")
+
+
+def test_without_skills_the_instruction_is_the_same_as_before():
+    text = ac.instruction({"id": "Resumen", "objective": "Resumí SPY"})
+    assert "2. Hacé esta tarea del usuario, con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` " in text
+    assert "skill pull" not in text and "Sin evaluar" not in text
+    assert ac.instruction({"id": "Resumen", "objective": "Resumí SPY", "skills": None}) == text
+
+
+def test_several_skills_are_pulled_one_by_one_and_their_keys_are_quoted():
+    text = ac.instruction({"id": "A", "objective": "x", "skills": ["uno", "dos"]})
+    assert text.index("skill pull uno /tmp/skills/uno") < text.index("skill pull dos /tmp/skills/dos")
+    assert "skill pull 'a b' /tmp/skills/'a b'" in ac.instruction({"id": "A", "objective": "x", "skills": ["a b"]})
+
+
+def test_new_checks_that_every_skill_exists_and_how_many(galecore, tmp_path):  # noqa: F811
+    _, client = galecore
+    with_skill(client, tmp_path)
+    client.put("skill", "notas", title="Notas", content="# Notas\n", fmt="markdown")
+    with pytest.raises(ac.AgentCloudError, match="No encuentro la skill «nada»"):
+        ac.new(client, "A", "x", DAILY, skills=["nada"])
+    with pytest.raises(ac.AgentCloudError, match="de 1 a 5"):
+        ac.new(client, "A", "x", DAILY, skills=["cierre", "cierre"])
+    with pytest.raises(ac.AgentCloudError, match="de 1 a 5"):
+        ac.new(client, "A", "x", DAILY, skills=[f"s{i}" for i in range(6)])
+    made = ac.new(client, "B", "x", DAILY, skills=["cierre", "notas"])      # code and markdown skills both count
+    assert made == {"agent": "b", "status": "pending"}
+
+
+def test_settings_can_set_and_remove_the_skills():
+    base = {"id": "A", "objective": "x", "schedule_spec": DAILY}
+    on = ac.effective({**base, "request": {"settings": {"skills": ["cierre"]}}})
+    assert on["skills"] == ["cierre"]
+    off = ac.effective({**base, "skills": ["cierre"], "request": {"settings": {"skills": None}}})
+    assert off["skills"] is None and "skill pull" not in ac.instruction({**off, "key": "a"})
+
+
+def test_cli_agent_new_takes_skill_repeated(galecore, monkeypatch, capsys, tmp_path):  # noqa: F811
+    from galecore_ai.adapters import galecore_space
+    fake, client = galecore
+    with_skill(client, tmp_path)
+    client.put("skill", "notas", title="Notas", content="# Notas\n", fmt="markdown")
+    monkeypatch.setattr(galecore_space, "SpaceClient", lambda: client)
+
+    def run(*extra):
+        monkeypatch.setattr(sys, "argv", ["cli", "agent", "new", "--name", "Cierre SPY", "--what", "x", "--when", json.dumps(DAILY), *extra])
+        with pytest.raises(SystemExit) as stop:
+            cli.main()
+        return stop.value.code, json.loads(capsys.readouterr().out)
+
+    code, out = run("--skill", "cierre", "--skill", "notas")
+    assert code == 0 and out["agent"] == "cierre-spy"
+    assert piece_of(fake, "cierre-spy")["skills"] == ["cierre", "notas"]
