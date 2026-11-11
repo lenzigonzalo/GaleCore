@@ -1750,6 +1750,18 @@ namespace DataFeed.Controllers
             return Ok(spec);
         }
 
+        /// <summary>Ficha de la estrategia (WS-0098 inc.3): ventana de entrada, entradas por día y límites en USD derivados de la spec vigente. Sólo lectura.</summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Strategies/{name}/Card")]
+        public IActionResult RuntimeStrategyCard(string name)
+        {
+            var spec = _runtimeStore.GetSpec(name);
+            if (spec == null) return NotFound($"Spec '{name}' not found");
+            // «Por qué no opera»: un solo cálculo (StrategyStall) sobre los eventos de todas las instancias de esa spec.
+            var events = _runtimeStore.AllInstances().Where(i => i.SpecName == name).SelectMany(i => _runtimeStore.GetEvents(i.InstanceId)).ToList();
+            return Ok(DataFeed.Application.App.Runtime.StrategyCard.Build(spec, events));
+        }
+
         /// <summary>
         /// Chequeo de una spec sin guardarla ni desplegarla (WS-0062 inc.8a): los mismos errores que daría el deploy, el content_hash,
         /// qué rutas de ESA spec ejecuta el runtime (executed_paths) y cuáles sólo acepta (inert_paths), y el catálogo de lo que el runtime

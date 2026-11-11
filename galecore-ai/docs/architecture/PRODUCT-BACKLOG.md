@@ -2698,6 +2698,27 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-038 — Cadena de opciones en vivo en el front
+
+**Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
+**Origen:** owner, 06/11/2026 (idea del buzón `2026-10-30-evaluar-un-panel-junto-al-chat`); el 10/11 pidió dejarla como
+backlog y no como pieza.
+**Target:** GaleCore (monitor). Sólo front: el back ya existe.
+**Hoy:** `GET Tastytrade/OptionChains` (`DataController.cs`) da vencimientos y strikes con el símbolo de streaming de cada
+call y put; el socket `MarketDataHub.Subscribe(symbol, includeGreeks)` entrega Trade, Quote y Greeks en vivo por DxLink,
+también de opciones; el monitor ya lo consume en el watchlist (`useMarketSocket.ts`) y GEX arma los símbolos de la cadena.
+No puede ser un HTML generado por el motor: el HTML del Lab corre aislado, sin sesión, y no se conecta al socket.
+
+**Lo que hay que resolver:** dónde se ve (pestaña en Mercado, panel junto al chat o ambos) y cuántos strikes alrededor
+del precio (propuesta: ~20; medir cómo responde DxLink).
+**Entry gate:** cuando el owner priorice y decida dónde se ve.
+**Aceptación:** elegido un símbolo y un vencimiento, se ve la cadena (calls | strike | puts) con bid, ask, último y delta
+actualizándose en vivo, sin recargar; al cambiar de símbolo o vencimiento, o cerrar la vista, se desuscribe lo anterior
+(sin fugas en DxLink); con mercado cerrado o socket caído se ve el último dato con su hora y un aviso de una línea; sin
+órdenes ni ejecución.
+
+---
+
 ## BL-037 — Cartera consolidada de los tres brokers en GaleCore (Tastytrade, IBKR, IOL)
 
 **Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.

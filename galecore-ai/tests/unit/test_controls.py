@@ -98,6 +98,8 @@ def _reader(spec_hash, positions, exp):
                      "versionHash": spec_hash}]
         if path.startswith("/App/Runtime/Exposure"):
             return exp
+        if path.startswith("/App/Runtime/Strategies/"):   # WS-0098 inc. 5: the API sees no stall
+            return {}
         assert path == f"/App/Runtime/Instances/{IID}/Positions"
         return positions
     return read

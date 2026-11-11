@@ -71,3 +71,19 @@ test('el resumen ignora encabezados de ejemplos de código y las pestañas respo
   expect(screen.getByRole('tab', { name: 'Contenido' })).toHaveFocus();
   expect(screen.getByRole('button', { name: 'Vista previa' })).toBeInTheDocument();
 });
+
+test('una skill con código lista sus archivos, muestra el SKILL.md y cada script como texto de sólo lectura', () => {
+  const files = { 'SKILL.md': '---\nname: Cierre\ndescription: x\n---\nCalcula el cierre.\n\n## Pasos\n1. Correr cierre.py', 'scripts/cierre.py': 'print("hola")', 'references/notas.md': '# Notas' };
+  const code: SpaceItem = { ...mine, key: 'cierre', title: 'Cierre de SPY', format: 'json', content: JSON.stringify({ format: 'skill-folder/1', files }) };
+  render(<SkillsView items={[code]} onChanged={jest.fn()}/>);
+  expect(screen.getByText(/Calcula el cierre/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Cierre de SPY'));
+  expect(screen.queryByRole('button', { name: 'Editar skill' })).not.toBeInTheDocument();
+  expect(screen.getByText('Incluye código. Se edita desde el chat; acá se consulta.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Contenido' }));
+  const list = screen.getByRole('list', { name: 'Archivos de la skill' });
+  expect(Array.from(list.querySelectorAll('button')).map(b => b.textContent)).toEqual(['SKILL.md', 'references/notas.md', 'scripts/cierre.py']);
+  fireEvent.click(screen.getByRole('button', { name: 'scripts/cierre.py' }));
+  expect(screen.getByText((_, el) => el?.tagName === 'PRE' && el.textContent === 'print("hola")')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Vista previa' })).not.toBeInTheDocument();
+});

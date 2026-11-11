@@ -30,12 +30,30 @@ function description(content: string): string {
   return content.replace(/\r\n/g, '\n').split(/\n\s*\n/).find(p => p.trim() && !p.trim().startsWith('#'))?.trim() ?? 'Sin descripción.';
 }
 
+/** Una skill con código (WS-0099) guarda sus archivos en un JSON `skill-folder/1`; null si es una skill de sólo markdown. */
+function folderOf(i: SpaceItem): Record<string, string> | null {
+  if (i.format !== 'json') return null;
+  try {
+    const data = JSON.parse(i.content);
+    if (data?.format !== 'skill-folder/1' || !data.files || typeof data.files !== 'object') return null;
+    return Object.fromEntries(Object.entries(data.files).filter((e): e is [string, string] => typeof e[1] === 'string'));
+  } catch { return null; }
+}
+const withoutFrontmatter = (md: string) => md.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+/** El markdown que describe la skill: su contenido, o el SKILL.md de la carpeta. */
+function textOf(i: SpaceItem): string {
+  const f = folderOf(i);
+  return f ? withoutFrontmatter(f['SKILL.md'] ?? '') : i.content;
+}
+const fileOrder = (names: string[]) => [...names].sort((a, b) => (a === 'SKILL.md' ? -1 : b === 'SKILL.md' ? 1 : a.localeCompare(b)));
+
 export function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState('summary');
   const [source, setSource] = useState(false);
+  const [file, setFile] = useState('SKILL.md');
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState('');
@@ -53,11 +71,13 @@ export function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged
   }, [selected, creating, editing]);
   const skill = items.find(i => i.key === selected);
   const own = (i: SpaceItem) => i.isOwn && i.visibility === 'private';
-  const editable = !!skill && own(skill);
+  const folder = skill ? folderOf(skill) : null;
+  const body = skill ? textOf(skill) : '';
+  const editable = !!skill && own(skill) && !folder;   // las skills con código se editan desde el chat (skill save)
   const visible = items.filter(i => (filter === 'all' || (filter === 'mine' ? own(i) : !own(i))) &&
-    (i.title + ' ' + i.content).toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+    (i.title + ' ' + textOf(i)).toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const open = (i: SpaceItem) => {
-    setSelected(i.key); setTab('summary'); setSource(false); setError(''); setConfirmDelete(false);
+    setSelected(i.key); setTab('summary'); setSource(false); setFile('SKILL.md'); setError(''); setConfirmDelete(false);
   };
   const back = () => { setSelected(null); setCreating(false); setEditing(false); setError(''); setConfirmDelete(false); };
   const persist = async () => {
@@ -80,7 +100,7 @@ export function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged
   };
   let fence = '';
   const sections: string[] = [];
-  for (const line of skill?.content.split('\n') ?? []) {
+  for (const line of body.split('\n') ?? []) {
     const marker = line.trim().match(/^(`{3,}|~{3,})/);
     if (marker) {
       if (!fence) fence = marker[1];
@@ -89,6 +109,10 @@ export function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged
     }
     if (!fence && /^#{1,3}\s/.test(line)) sections.push(line.replace(/^#+\s+/, ''));
   }
+  const shownFile = folder && file in folder ? file : 'SKILL.md';
+  const isMarkdown = !folder || shownFile.endsWith('.md');
+  const isFolderMd = !!folder && shownFile === 'SKILL.md';
+  const shownText = folder ? (folder[shownFile] ?? '') : (skill?.content ?? '');
   const date = skill && new Date(skill.updatedAt);
   const updated = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString('es-AR') : null;
 
@@ -117,14 +141,16 @@ export function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged
         <button role="tab" id="skill-content-tab" tabIndex={tab === 'content' ? 0 : -1} aria-selected={tab === 'content'} aria-controls="skill-panel" onClick={() => setTab('content')}>Contenido</button>
       </div>
       <div role="tabpanel" id="skill-panel" aria-labelledby={tab === 'summary' ? 'skill-summary-tab' : 'skill-content-tab'}>
-        {tab === 'summary' ? <div className="skills-summary"><section><h3>Descripción</h3><Markdown text={description(skill.content)} fontSize={18}/>
+        {tab === 'summary' ? <div className="skills-summary"><section><h3>Descripción</h3><Markdown text={description(body)} fontSize={18}/>
           {sections.length > 0 && <><h3>Qué incluye</h3><ul>{sections.map((s, n) => <li key={n}>{s}</li>)}</ul></>}
           <button className="settings-action" onClick={() => setTab('content')}>Ver contenido completo <ChevronRight size={18}/></button></section>
-          <aside><h3>Origen</h3><p>{own(skill) ? 'Creada por vos' : `Publicada por ${skill.owner}`}</p><p className="skills-muted">{editable ? 'Podés editar sus instrucciones.' : 'Disponible para consultar. Sus instrucciones son de solo lectura.'}</p></aside>
-        </div> : <div className="skills-content"><div className="skills-filebar"><span>Instrucciones</span><div className="prefs-segmented">
+          <aside><h3>Origen</h3><p>{own(skill) ? 'Creada por vos' : `Publicada por ${skill.owner}`}</p><p className="skills-muted">{editable ? 'Podés editar sus instrucciones.' : folder ? 'Incluye código. Se edita desde el chat; acá se consulta.' : 'Disponible para consultar. Sus instrucciones son de solo lectura.'}</p></aside>
+        </div> : <div className="skills-content">
+          {folder && <ul className="skills-files" aria-label="Archivos de la skill">{fileOrder(Object.keys(folder)).map(n => <li key={n}><button aria-pressed={n === shownFile} onClick={() => { setFile(n); setSource(false); }}>{n}</button></li>)}</ul>}
+          <div className="skills-filebar"><span>{folder ? shownFile : 'Instrucciones'}</span>{isMarkdown && <div className="prefs-segmented">
           <button aria-label="Vista previa" aria-pressed={!source} onClick={() => setSource(false)}><Eye size={18}/><span>Vista previa</span></button>
-          <button aria-label="Código Markdown" aria-pressed={source} onClick={() => setSource(true)}><Code size={18}/><span>Markdown</span></button></div></div>
-          <article className="skills-document">{source ? <pre>{skill.content}</pre> : <Markdown text={skill.content} fontSize={18}/>}</article></div>}
+          <button aria-label="Código Markdown" aria-pressed={source} onClick={() => setSource(true)}><Code size={18}/><span>Markdown</span></button></div>}</div>
+          <article className="skills-document">{source || !isMarkdown ? <pre>{shownText}</pre> : <Markdown text={isFolderMd ? withoutFrontmatter(shownText) : shownText} fontSize={18}/>}</article></div>}
       </div>
       {editable && <footer className="skills-delete">{confirmDelete ? <><span>¿Borrar esta skill?</span><button className="settings-action" disabled={busy} onClick={() => setConfirmDelete(false)}>Cancelar</button><button className="settings-action is-danger" disabled={busy} onClick={remove}>{busy ? 'Borrando…' : 'Confirmar borrado'}</button></> : <button className="skills-back" onClick={() => setConfirmDelete(true)}>Borrar skill</button>}</footer>}
     </> : <>
@@ -132,7 +158,7 @@ export function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged
         <button className="settings-action is-primary" onClick={() => { setCreating(true); setTitle(''); setDraft(SKILL_TEMPLATE); setError(''); }}><Plus size={19}/> Nueva skill</button></div>
       <label className="skills-search"><Search size={20}/><input aria-label="Buscar skills" placeholder="Buscar por nombre o contenido" value={query} onChange={e => setQuery(e.target.value)}/></label>
       <p className="skills-muted" role="status">{visible.length} {visible.length === 1 ? 'skill' : 'skills'}</p>
-      <ul className="skills-list">{visible.map(i => <li key={i.key}><button onClick={() => open(i)}><span className="skills-icon"><BookOpen size={17}/></span><span className="skills-row-body"><strong>{i.title.replace(/_/g, ' ')}</strong><span>{own(i) ? 'Tu skill' : 'De la plataforma'} · {description(i.content).replace(/[*#`]/g, '')}</span></span><span className="skills-version">v{i.version}</span><ChevronRight size={17}/></button></li>)}</ul>
+      <ul className="skills-list">{visible.map(i => <li key={i.key}><button onClick={() => open(i)}><span className="skills-icon"><BookOpen size={17}/></span><span className="skills-row-body"><strong>{i.title.replace(/_/g, ' ')}</strong><span>{own(i) ? 'Tu skill' : 'De la plataforma'} · {description(textOf(i)).replace(/[*#`]/g, '')}</span></span><span className="skills-version">v{i.version}</span><ChevronRight size={17}/></button></li>)}</ul>
       {!visible.length && <div className="skills-empty"><BookOpen size={32}/><h3>{items.length ? 'No hay skills que coincidan' : 'Todavía no hay skills'}</h3><p>{items.length ? 'Probá otro nombre o cambiá el filtro.' : 'Creá la primera con «Nueva skill».'}</p></div>}
     </>}
   </div>;

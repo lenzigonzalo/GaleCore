@@ -40,6 +40,7 @@ namespace DataFeed.Repositories.Entities
     {
         public const int MaxPerAgent = 50;
         public const int MaxSummaryLength = 4000;
+        public const int MaxResultLength = 50000;
         public static readonly string[] Origins = { "schedule", "manual" };
         public static readonly string[] Statuses = { "requested", "ok", "error", "skipped" };
 
@@ -50,6 +51,8 @@ namespace DataFeed.Repositories.Entities
         public string Origin { get; set; } = "schedule";
         public string Status { get; set; } = "requested";
         public string? Summary { get; set; }
+        /// <summary>Cálculo de la skill de la corrida (JSON, WS-0099); se recorta junto con la corrida.</summary>
+        public string? ResultJson { get; set; }
         public string? ReasonCode { get; set; }
         public string? TriggerId { get; set; }
         public string? SessionUrl { get; set; }
@@ -57,6 +60,27 @@ namespace DataFeed.Repositories.Entities
         public DateTime? RequestedAt { get; set; }
         public DateTime? FiredAt { get; set; }
         public DateTime? FinishedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    /// <summary>
+    /// Aviso que una corrida dejó (WS-0099): sale una sola vez por (dueño, agente, <see cref="AlertId"/>). Sin FK a la
+    /// corrida: sobrevive al recorte de corridas y se conserva <see cref="KeepDays"/> días.
+    /// </summary>
+    public class AgentAlert
+    {
+        public const int KeepDays = 30;
+        public const int MaxPerReport = 10;
+        public const int MaxIdLength = 100;
+        public const int MaxTitleLength = 200;
+
+        public Guid Id { get; set; }
+        public Guid OwnerId { get; set; }
+        public User Owner { get; set; } = null!;
+        public string AgentKey { get; set; } = "";
+        public string AlertId { get; set; } = "";
+        public string Title { get; set; } = "";
+        public Guid RunId { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

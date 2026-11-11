@@ -395,6 +395,22 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
             _write(kb, alert)
             known.add(alert.key)
             new.append(alert)
+    from galecore_ai.application import (
+        stalled,  # WS-0098 inc. 5: the same cause stops it day after day
+    )
+    stalled_drafts, stalled_problems = stalled.drafts_for(instances, read)
+    problems.extend(stalled_problems)
+    for draft in stalled_drafts:
+        if draft["key"] in known:
+            continue
+        slug = re.sub(r"[^A-Za-z0-9-]+", "-", draft["position_id"]).strip("-")
+        alert = Alert(id=f"{now.date().isoformat()}-stalled-{slug}"[:80], detected_at=now,
+                      options=OPTIONS[AlertKind.STALLED], sources=[f"/App/Runtime/Instances/{draft['instance_id']}/Events"],
+                      **{**draft, "kind": AlertKind.STALLED})
+        alert = alert.model_copy(update={"content_hash": compute_document_hash(alert.hashable_content())})
+        _write(kb, alert)
+        known.add(alert.key)
+        new.append(alert)
     watched = 0
     if _in_session(now):                         # P1-01b: the owner's rules, only in the regular session
         from galecore_ai.application import watch
@@ -574,6 +590,8 @@ def _readable(a: Alert, today: date) -> tuple[str, str]:
         below = d.get("condition") == "below"
         return (f"{d.get('symbol')} {'bajó a' if below else 'subió a'} {d['value']:,.2f}",
                 f"Pediste aviso {'por debajo' if below else 'por encima'} de {d.get('threshold'):g}. {a.propuesta}")
+    if a.kind == AlertKind.STALLED:
+        return f"{a.strategy}: {d.get('dias')} días hábiles sin entrar", f"{d.get('motivo_del_motor')}. {a.propuesta}"
     if a.kind == AlertKind.BET_LIMIT and isinstance(d.get("usado_usd"), int | float):
         sym, direction, week = (str(d.get("apuesta") or "").split(" ") + ["", "", ""])[:3]
         side = {"bullish": "alcista", "bearish": "bajista"}.get(direction, direction)

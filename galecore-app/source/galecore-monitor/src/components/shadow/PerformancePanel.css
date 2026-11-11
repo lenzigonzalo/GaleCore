@@ -253,3 +253,25 @@
 .archived-toggle { margin-top: 12px; }
 
 .strategy-list .strategy-project { display: block; font-size: 13px; color: var(--text-secondary); }
+
+/* Ficha de la estrategia: estado, titular «por qué no opera» y registro */
+.strategy-status-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin: 0 0 14px; font-size: 15px; }
+.strategy-status-bar b { font-weight: 600; margin-right: 6px; }
+.strategy-status-bar .status-bar-error { flex-basis: 100%; margin: 0; color: var(--red-gc); }
+.why-not { margin: 0 0 16px; padding: 12px 16px; border-left: 4px solid var(--yellow-gc); background: var(--bg-secondary); border-radius: 6px; }
+.why-not strong { display: block; font-size: 20px; font-weight: 600; }
+.why-not p { margin: 6px 0 0; font-size: 15px; }
+.registry h3 { margin: 14px 0 6px; font-size: 15px; }
+.registry ul { list-style: none; margin: 0; padding: 0; }
+.registry li { padding: 4px 0; font-size: 15px; }
+.registry li time { font: 14px var(--font-mono); margin-right: 8px; }
+.registry li.ok { color: var(--green); }
+.registry li.bad { color: var(--red-gc); }
+.registry .registry-gates { margin: 2px 0 0 52px; }
+.registry .registry-gates li { padding: 1px 0; font-size: 14px; color: var(--text-secondary); }
+.strategy-versions { margin: 0 0 14px; font-size: 15px; }
+.strategy-versions select { margin-left: 6px; font: 15px var(--font-sans); }
+.strategy-versions .version-card { margin-top: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.strategy-versions .version-card p { margin: 0; }
+.strategy-versions .version-card ul { margin: 4px 0 0; padding-left: 20px; }
+.strategy-versions b { font-weight: 600; margin-right: 6px; }

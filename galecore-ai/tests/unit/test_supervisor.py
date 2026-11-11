@@ -46,6 +46,8 @@ def reader(spec_hash, positions, *, fail=False, releases=(), fomc=(), calendar_f
                      "versionHash": spec_hash}]
         if path.startswith("/App/Runtime/Exposure"):   # the cap per bet each design declares (WS-0058): nothing broken
             return {"checks": []}
+        if path.startswith("/App/Runtime/Strategies/"):   # WS-0098 inc. 5: the API sees no stall
+            return {}
         assert path == f"/App/Runtime/Instances/{IID}/Positions"
         return positions
     return read

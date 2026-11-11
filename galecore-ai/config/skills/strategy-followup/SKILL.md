@@ -17,7 +17,7 @@ algo en la hipótesis?». También la corre el agente programado de seguimiento 
 - Monto simulado y límites: los del diseño de la estrategia (`project show strategy:<nombre>`); si no los declara, se dice.
 - `kb search --kind strategy` y `kb show strategy:<ref>` (hash de la spec, aprobación); la última revisión de su
   investigación («la última revisión»).
-- `followup run --strategy <nombre> --prompt "<pedido>" --host-model <modelo>`: lee GaleCore Dev por su API, guarda la
+- `followup run --strategy <nombre> --prompt "<pedido>" --host-model <modelo>`: lee por su API el GaleCore de este Lab, guarda la
   salida textual como evidencia, evalúa la versión aprobada (o la última, marcada como no aprobada) y escribe un
   registro con hash: operación, resultados SHADOW, evidencia de la hipótesis, otras versiones (nunca mezcladas) y
   puntos de atención.

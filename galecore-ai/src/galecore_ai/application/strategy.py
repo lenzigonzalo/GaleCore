@@ -28,6 +28,7 @@ from galecore_ai.adapters.strategy_store import (
     StrategyStoreError,
     split_key,
 )
+from galecore_ai.application import feasibility
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, resolve_ref
 from galecore_ai.application.project import load_log
 from galecore_ai.contracts.project import EntryKind
@@ -456,7 +457,8 @@ def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_sp
         raise KnowledgeError(f"deploy of strategy:{key} refused", problems)
     return {"status": "DEPLOY_ALLOWED", "strategy": f"strategy:{key}", "spec_file": doc.spec_file,
             "spec_hash": doc.spec_hash, "approval_recorded_at": approval.recorded_at.isoformat(),
-            "scope": approval.scope}
+            "scope": approval.scope,
+            "factibilidad": feasibility.assess(json.loads(doc.spec_json), doc.content.simulated_amount_usd)}
 
 
 # ── deploy into SHADOW ───────────────────────────────────────
@@ -572,6 +574,19 @@ def deploy_strategy(*, kb: KnowledgeBase, key: str, deployer: Deployer | None = 
         result["recorded"] = False
         result["record_error"] = str(exc)
     return result
+
+
+def stop_instance(instance_id: str, client=None) -> dict:
+    """Stop a SHADOW instance in the GaleCore this process is connected to (same connection as the follow-up report),
+    in the name of the logged-in user. It stops entering; what is open keeps being valued. No retries."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+    try:
+        body = (client or SpaceClient(timeout=60.0)).post(f"/App/Runtime/Instances/{instance_id}/Stop")
+    except SpaceError as exc:
+        why = _HTTP_PROBLEMS.get(exc.status or 0, "GaleCore no pudo frenar la instancia")
+        raise KnowledgeError(f"{why} (instancia {instance_id}): no se sabe si quedó frenada, mirá Estrategias en la "
+                             "plataforma", [str(exc)]) from exc
+    return {"status": "STOPPED", "instance_id": instance_id, "galecore": body}
 
 
 def strategy_key(ref_or_key: str) -> str:

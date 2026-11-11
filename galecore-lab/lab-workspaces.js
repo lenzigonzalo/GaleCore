@@ -520,6 +520,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const skill=path.join(root,'galecore-lab','skills','lab-strategy-bootstrap','SKILL.md');
     const mapaSkill=path.join(root,'galecore-lab','skills','mapa','SKILL.md');
     const agentesSkill=path.join(root,'galecore-lab','skills','agentes-nube','SKILL.md');
+    const codigoSkill=path.join(root,'galecore-lab','skills','skills-con-codigo','SKILL.md');
     // El método de diseño es una sola copia, en galecore-ai/config/skills.
     const designSkill=path.join(root,'galecore-ai','config','skills','strategy-design','SKILL.md');
     // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
@@ -529,7 +530,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const product=fs.readFileSync(path.join(root,'galecore-ai','PRODUCT.md'),'utf8');
     const mine=p.strategies||[];
     const resume=mine.length&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.'+' Si el trader pide un agente que corra solo («creame un agente que…»), aplicá la skill '+agentesSkill+'.';
+    const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.'+' Si el trader pide un agente que corra solo («creame un agente que…»), aplicá la skill '+agentesSkill+'.'+' Si el trader pide una skill con código (un cálculo reutilizable), aplicá la skill '+codigoSkill+'.';
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
@@ -559,6 +560,42 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   const connectorOpts=()=>({local,binary:binaries.claude,codexBinary:binaries.codex,env:environment(),spawnProcess});
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
+    // WS-0098 inc. 4: versiones, aprobación y duplicado de estrategias desde la ficha (CLI del harness, sin shell).
+    if(parts[0]==='strategies'&&parts.length>=3&&parts.length<=5){
+      const NAME=/^[a-z0-9_]{1,80}$/,VER=/^\d+\.\d+\.\d+$/,USER=/^[A-Za-z0-9._@-]{1,60}$/,NEW=/^[a-z][a-z0-9_]{2,59}$/;
+      const cli=args=>new Promise(resolve=>execute('python',['-B','-m','galecore_ai.adapters.cli','strategy',...args],{cwd:root,env:environment(),windowsHide:true,timeout:60000,maxBuffer:2*1024*1024},(e,out)=>{
+        let data;try{data=JSON.parse(out);}catch{data=null;}
+        if(!e&&data)return resolve({ok:true,data});
+        if(data&&typeof data==='object'&&!Array.isArray(data))return resolve({ok:false,status:e?.code===2?400:409,data:{...data,error:String(data.error||'El harness rechazó la operación.')}});
+        resolve({ok:false,status:500,data:{error:'No se pudo leer la respuesta del harness.'}});
+      }));
+      const name=parts[1];
+      const bad=(m)=>{json(res,400,{error:m});return true;};
+      const reply=r=>{json(res,r.ok?200:r.status,r.data);return true;};
+      if(req.method==='GET'&&parts.length===3&&parts[2]==='versions'){
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        return reply(await cli(['versions','--name',name]));
+      }
+      if(req.method==='POST'&&parts.length===5&&parts[2]==='versions'&&parts[4]==='approve'){
+        const version=parts[3],b=await readBody(req),user=b&&b.user;
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        if(!VER.test(version))return bad('Versión no válida.');
+        if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
+        return reply(await cli(['approve','--ref','strategy:'+name+'/'+version,'--owner-words','Aprobada desde la ficha por '+user+', con confirmación en pantalla: '+name+' '+version+' en SHADOW','--host-provider','monitor','--host-model','ficha']));
+      }
+      if(req.method==='POST'&&parts.length===3&&parts[2]==='duplicate'){
+        const b=await readBody(req)||{},{version,newName,user}=b;
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        if(typeof version!=='string'||!VER.test(version))return bad('Versión no válida.');
+        if(typeof newName!=='string'||!NEW.test(newName)||newName.includes('__')||newName.endsWith('_'))return bad('Nombre nuevo no válido.');
+        if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
+        const r=await cli(['duplicate','--ref','strategy:'+name+'/'+version,'--as',newName,'--host-provider','monitor','--host-model','ficha']);
+        if(!r.ok)return reply(r);
+        const created=createProject({label:newName,type:'strategy'});
+        if(created.id!==newName){json(res,500,{error:'El proyecto creado no coincide con la estrategia duplicada.'});return true;}
+        json(res,200,{ref:r.data.ref,duplicatedFrom:r.data.duplicatedFrom||r.data.duplicated_from||'strategy:'+name+'/'+version,projectId:created.id});return true;
+      }
+    }
     // Conectores por motor (WS-0091): GaleCore va siempre; el resto se prende o apaga por motor y por conector (lab-brokers.js).
     if(url.pathname==='/connectors'&&req.method==='GET'){json(res,200,await listConnectors(connectorOpts()));return true;}
     if(url.pathname==='/connectors'&&req.method==='POST'){

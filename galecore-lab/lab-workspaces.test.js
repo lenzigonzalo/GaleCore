@@ -79,6 +79,8 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
  const args=calls.at(-1);assert.deepEqual(args.slice(args.indexOf('--permission-mode'),args.indexOf('--permission-mode')+2),['--permission-mode','auto']);assert.deepEqual(args.slice(args.indexOf('--permission-prompt-tool'),args.indexOf('--permission-prompt-tool')+2),['--permission-prompt-tool','stdio']);assert.ok(!args.includes('--permission-prompts'));
  // WS-0037: Personal también lleva el núcleo del producto, con Claude y con Codex.
  assert.match(contexts.at(-1),/núcleo de test/);
+ // WS-0099: el contexto del proyecto nombra la skill de skills con código.
+ assert.match(contexts.at(-1),/Si el trader pide una skill con código \(un cálculo reutilizable\), aplicá la skill [^\r\n]*skills-con-codigo[\\/]SKILL\.md\./);
  await new Promise(r=>setTimeout(r,50));
  const cx=(await route(service,'POST','/chats',{project:'personal',provider:'codex'})).value;
  await route(service,'POST','/chats/'+cx.id+'/messages',{text:'hola'});

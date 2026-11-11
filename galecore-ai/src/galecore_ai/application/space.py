@@ -19,6 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from galecore_ai.adapters.galecore_space import SpaceClient
 from galecore_ai.adapters.research_store import ResearchIntegrityError
+from galecore_ai.application import skill_space
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.task import Schedule
 from galecore_ai.harness.assets import asset_root, load_asset
@@ -570,6 +571,12 @@ def ideas(client: SpaceClient, source: str | None = None, status: str | None = N
     return {"count": len(out), "by_author": by_author, "ideas": out}
 
 
+def _skill_with_code_line(label: str, piece: dict, folder: dict) -> str:
+    scripts = " | ".join(skill_space.scripts_of(folder)) or "sin scripts"
+    return (f"  skill {label} «{folder.get('name') or piece['title']}» (con scripts: `skill run {piece['key']} "
+            f"<{scripts}>`): {str(folder.get('description', ''))[:140]}")
+
+
 def context(client: SpaceClient) -> str:
     """The session's opening summary: the trader's name, interests and memory (the whole profile, WS-0058), and what they have."""
     space = client.items()
@@ -590,9 +597,16 @@ def context(client: SpaceClient) -> str:
         lines.append("  además: " + " · ".join(counts))
     # The trader's own skills (created in the monitor, private) are not in the catalog: name them so a request can
     # use one (WS-0054); the product's skills are shared and reached through the catalog.
-    for s in (i for i in by_kind.get("skill", []) if i.get("visibility") == "private"):
-        first = next((ln.strip() for ln in str(s.get("content", "")).splitlines() if ln.strip()), "")
-        lines.append(f"  skill propia «{s['title']}» (`space show skill/{s['key']}`): {first[:140]}")
+    for s in by_kind.get("skill", []):
+        folder = skill_space.parse_piece(s)
+        if folder is not None:   # WS-0099: a skill with code, own (private or shared): its description, how to run it
+            lines.append(_skill_with_code_line("propia", s, folder))
+        elif s.get("visibility") == "private":
+            first = next((ln.strip() for ln in str(s.get("content", "")).splitlines() if ln.strip()), "")
+            lines.append(f"  skill propia «{s['title']}» (`space show skill/{s['key']}`): {first[:140]}")
+    for s in (i for i in shared if i["kind"] == "skill"):   # others' shared skills with scripts are named too
+        if (folder := skill_space.parse_piece(s)) is not None:
+            lines.append(_skill_with_code_line(f"compartida de {s.get('owner') or 'otro'}", s, folder))
     shared_kinds = sorted({i["kind"] for i in shared})
     if shared_kinds:
         lines.append("  compartido: " + ", ".join(f"{k} ({sum(1 for i in shared if i['kind'] == k)})" for k in shared_kinds))

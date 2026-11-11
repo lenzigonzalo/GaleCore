@@ -3,7 +3,7 @@
 «Mostrame mi estrategia, qué está ejecutando, qué pasó desde la última revisión y qué merece mi atención.»
 
 Deterministic: no model call. It reads the strategy and its exact version from the knowledge base, reads GaleCore
-through its API (``galecore-app/dev/galecore_dev.py runtime-report``, read-only, development environment), keeps that
+through its API (``runtime_report``, read-only, the GaleCore of the process's connection), keeps that
 output verbatim as evidence, and writes a follow-up record with three separate parts — operation, SHADOW results,
 evidence about the hypothesis — plus what deserves attention. It never writes a strategy version, an approval or
 a deployment: analysis cannot change the approved strategy.
@@ -12,6 +12,7 @@ a deployment: analysis cannot change the approved strategy.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Callable
@@ -135,14 +136,15 @@ def _research_state(kb: KnowledgeBase, doc: StrategyDocument) -> str | None:
 
 
 def default_report_command(root: Path, strategy: str) -> list[str]:
-    # <root>/app/dev/galecore_dev.py; if it is absent the run fails and the follow-up records an ERROR.
-    return [sys.executable, "-B", str(root / "galecore-app" / "dev" / "galecore_dev.py"), "runtime-report",
-            "--spec", strategy, "--limit", "500"]
+    # Reads the GaleCore this process is connected to (GALECORE_BASE_URL), not a fixed Dev (WS-0098).
+    return [sys.executable, "-B", "-m", "galecore_ai.application.runtime_report", "--spec", strategy, "--limit", "500"]
 
 
 def _run_report(cmd: list[str]) -> tuple[int, str, str]:
+    src = str(Path(__file__).resolve().parents[2])
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in (src, os.environ.get("PYTHONPATH")) if p)}
     try:
-        r = subprocess.run(cmd, capture_output=True, timeout=REPORT_TIMEOUT_SECONDS, check=False)
+        r = subprocess.run(cmd, capture_output=True, timeout=REPORT_TIMEOUT_SECONDS, check=False, env=env)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return 1, "", f"{type(exc).__name__}: {exc}"
     return r.returncode, r.stdout.decode("utf-8", "replace"), r.stderr.decode("utf-8", "replace")
@@ -285,7 +287,7 @@ def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime
 
 def _evidence_of(report_out: str, err: str, code: int, ok: bool, spec: str, now: datetime) -> EvidenceContent:
     return EvidenceContent(
-        source="galecore", tool="galecore-app/dev/galecore_dev.py runtime-report (GET App/Runtime/*, GaleCore Dev)",
+        source="galecore", tool="galecore_ai.application.runtime_report (GET App/Runtime/*, GaleCore de la conexión)",
         params={"spec": spec, "exit_code": code}, retrieved_at=now,
         series=[{"name": "estado del runtime SHADOW (status, instancias, posiciones, evaluaciones, eventos, métricas)"
                  if ok else "error al leer GaleCore", "unit": "n/a", "frequency": "snapshot",
@@ -350,7 +352,7 @@ def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordH
         parts = {"operation": [f"No se pudo leer GaleCore (exit {code}): {(err or out).strip()[:300]}"],
                  "shadow": ["Sin datos de GaleCore en esta ejecución"],
                  "hypothesis": ["Sin cambios: no hubo datos"], "other_versions": [],
-                 "attention": ["GaleCore Dev no respondió: ¿está levantada la API (`galecore_dev.py api`)?"]
+                 "attention": ["GaleCore no respondió: ¿está levantada la API de este entorno?"]
                               + ([] if approved else [f"strategy:{doc.name}/{doc.version} no está aprobada"])}
         status = "ERROR"
     draft = FollowupRecord(

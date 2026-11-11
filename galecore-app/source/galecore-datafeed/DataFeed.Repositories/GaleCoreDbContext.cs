@@ -40,6 +40,7 @@ namespace DataFeed.Repositories
         public DbSet<AgentKey> AgentKeys => Set<AgentKey>();
         public DbSet<AgentFireToken> AgentFireTokens => Set<AgentFireToken>();
         public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
+        public DbSet<AgentAlert> AgentAlerts => Set<AgentAlert>();
         public DbSet<StrategySettingEntity> StrategySettings => Set<StrategySettingEntity>();
 
         // ── Runtime (Trading Runtime SHADOW) ──
@@ -153,6 +154,7 @@ namespace DataFeed.Repositories
                 e.Property(x => x.Origin).HasMaxLength(10).IsRequired();
                 e.Property(x => x.Status).HasMaxLength(10).IsRequired();
                 e.Property(x => x.Summary).HasMaxLength(AgentRun.MaxSummaryLength);
+                e.Property(x => x.ResultJson).HasMaxLength(AgentRun.MaxResultLength);
                 e.Property(x => x.ReasonCode).HasMaxLength(64);
                 e.Property(x => x.TriggerId).HasMaxLength(200);
                 e.Property(x => x.SessionUrl).HasMaxLength(500);
@@ -160,6 +162,19 @@ namespace DataFeed.Repositories
                 e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
                 e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
                 e.HasIndex(x => new { x.OwnerId, x.AgentKey, x.CreatedAt });
+            });
+            b.Entity<AgentAlert>(e =>
+            {
+                e.ToTable("agent_alerts");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.AgentKey).HasMaxLength(64).IsRequired();
+                e.Property(x => x.AlertId).HasMaxLength(AgentAlert.MaxIdLength).IsRequired();
+                e.Property(x => x.Title).HasMaxLength(AgentAlert.MaxTitleLength).IsRequired();
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+                e.HasIndex(x => new { x.OwnerId, x.AgentKey, x.AlertId }).IsUnique();
+                e.HasIndex(x => new { x.OwnerId, x.CreatedAt });
             });
 
             // ── Runtime tables (Trading Runtime SHADOW) ──

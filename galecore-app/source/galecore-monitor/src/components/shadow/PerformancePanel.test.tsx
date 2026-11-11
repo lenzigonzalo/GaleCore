@@ -16,6 +16,7 @@ jest.mock('../../api/client', () => ({ __esModule: true, default: { get: jest.fn
 jest.mock('../../api/shadow', () => ({ fetchPerformancePanel: jest.fn(), fetchShadowDiscards: jest.fn(), fetchShadowEvaluations: jest.fn() }));
 jest.mock('../../api/marketdata', () => ({ fetchQuote: jest.fn() }));
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
+jest.mock('../../api/strategyVersions', () => ({ fetchStrategyVersions: () => Promise.resolve([]), approveStrategyVersion: () => Promise.resolve({}), duplicateStrategy: () => Promise.resolve({}) }));
 jest.mock('lightweight-charts', () => ({ ColorType: { Solid: 'solid' }, LineSeries: {}, AreaSeries: {},
   TickMarkType: { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 },
   createChart: jest.fn(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() })),
@@ -34,17 +35,16 @@ beforeEach(() => {
   (createChart as jest.Mock).mockImplementation(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() }));
 });
 
-test('la evaluación de entradas va sólo en Datos', async () => {
+test('la evaluación de entradas va sólo en Registro', async () => {
   const instance = { instanceId: 'sandwich', versionHash: 'sha256:bc1ec2d9952c8d5', lifecycleState: 'RUNNING' } as ShadowInstance;
   render(<PerformancePanel spec={plain.spec} instance={instance} />);
   await screen.findByText('Ganancia total');
   expect(screen.queryByLabelText('Evaluación de entradas')).not.toBeInTheDocument();
-  expect(fetchShadowEvaluations).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Posiciones' }));
   expect(screen.getByText('Sin operaciones')).toBeInTheDocument();
   expect(screen.queryByText(/seleccioná Todas las versiones/)).not.toBeInTheDocument();
   (apiClient.get as jest.Mock).mockResolvedValue({ data: { spec: plain.spec, storage: 'Sin historia', lastEvaluationAt: null, items: [] } });
-  fireEvent.click(screen.getByRole('tab', { name: 'Datos' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Registro' }));
   expect(await screen.findByLabelText('Evaluación de entradas')).toBeInTheDocument();
   expect(fetchShadowEvaluations).toHaveBeenCalled();
 });
@@ -110,7 +110,7 @@ test('uses API daily values, saved open legs and closed trade rows without deriv
   expect(screen.queryByText('cotización no disponible')).not.toBeInTheDocument();
   expect(screen.getAllByTitle('cotización no disponible')).toHaveLength(2);
   expect(screen.getByText('octubre 2026')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Posiciones' }));
   const exits = screen.getByLabelText('Salidas por motivo');
   expect(exits).toHaveTextContent('Toma de ganancia 2');
   expect(screen.queryByRole('meter')).not.toBeInTheDocument();
@@ -131,7 +131,7 @@ test('long_equity shows entry price, shares and cost from the API, without credi
   expect(screen.getByText('Acciones')).toBeInTheDocument();
   expect(screen.getByText('Costo')).toBeInTheDocument();
   expect(screen.queryByText('Crédito')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Posiciones' }));
   fireEvent.click(screen.getAllByLabelText(/Ver operación AAPL/)[1]);
   expect(screen.getByText('Precio de salida')).toBeInTheDocument();
   expect(screen.queryByText('Crédito')).not.toBeInTheDocument();
@@ -156,7 +156,7 @@ test.each([['TAKE_PROFIT', 'Toma de ganancia'], ['STOP_LOSS', 'Stop loss'], ['DT
   });
   render(<PerformancePanel spec={plain.spec} />);
   await screen.findByText('Ganancia total');
-  fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Posiciones' }));
   const exits = screen.getByLabelText('Salidas por motivo');
   expect(within(exits).getByText(label, { exact: false })).toBeInTheDocument();
   expect(within(screen.getByRole('region', { name: 'Log de operaciones' })).getByText(label)).toBeInTheDocument();
@@ -167,10 +167,10 @@ test('design starts with the page and stays cached when changing tabs', async ()
   labApi.mockResolvedValue({ projects: [] }); render(<PerformancePanel spec={plain.spec} />);
   await screen.findByText('Ganancia total'); expect(labApi).toHaveBeenCalledTimes(1);
   expect(screen.queryByText('Hipótesis:')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: 'Diseño' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Reglas' }));
   await screen.findByText('Esta estrategia no tiene proyecto en el Lab');
   fireEvent.click(screen.getByRole('tab', { name: 'Resumen' }));
-  fireEvent.click(screen.getByRole('tab', { name: 'Diseño' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Reglas' }));
   expect(labApi).toHaveBeenCalledTimes(1);
 });
 test('StrictMode does not duplicate the initial panel request', async () => {
@@ -179,7 +179,7 @@ test('StrictMode does not duplicate the initial panel request', async () => {
 });
 test('design matches the project strategies and supplies the header independently of the selected tab', async () => {
   labApi.mockResolvedValueOnce({ projects: [{ id: plain.spec, strategies: ['otra'] }, { id: 'project-real', strategies: [plain.spec] }] }).mockResolvedValueOnce({ current: { ref: 'v1', approved: true, purpose: 'Diseño asociado', spec_hash: 'hash', hypothesis: { mechanism: 'Mecanismo de prueba', expected_result: 'Objetivo de prueba', capture: '', failure_conditions: [] } } });
-  render(<PerformancePanel spec={plain.spec} />); fireEvent.click(screen.getByRole('tab', { name: 'Diseño' }));
+  render(<PerformancePanel spec={plain.spec} />); fireEvent.click(screen.getByRole('tab', { name: 'Reglas' }));
   await screen.findByText(/Mecanismo de prueba/);
   expect(screen.getByText(/Objetivo de prueba/)).toBeInTheDocument();
   expect(screen.queryByText('Diseño asociado')).not.toBeInTheDocument();
@@ -193,7 +193,7 @@ test('exports raw API trades as JSON and CSV with escaped text and nullable cont
   URL.createObjectURL = jest.fn().mockReturnValue('blob:export'); URL.revokeObjectURL = jest.fn();
   const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   render(<PerformancePanel spec={plain.spec} />); await screen.findByText('Ganancia total');
-  fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Posiciones' }));
   const log = screen.getByRole('region', { name: 'Log de operaciones' });
   expect(within(log).getAllByRole('columnheader')).toHaveLength(7);
   const row = within(log).getByText('+$22.00').closest('tr')!;
@@ -220,18 +220,19 @@ test('the Lab request never blocks panel metrics', async () => {
 test('a failed design can be retried without reloading the panel', async () => {
   labApi.mockRejectedValueOnce(new Error('Lab offline'));
   render(<PerformancePanel spec={plain.spec} />); await screen.findByText('Ganancia total');
-  fireEvent.click(screen.getByRole('tab', { name: 'Diseño' })); await screen.findByText('Lab offline');
+  fireEvent.click(screen.getByRole('tab', { name: 'Reglas' })); await screen.findByText('Lab offline');
   fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
   await screen.findByText('Esta estrategia no tiene proyecto en el Lab');
   expect(panelApi).toHaveBeenCalledTimes(1);
 });
 
-test('Datos sólo consulta su API al abrir la pestaña, incluso en una estrategia en diseño', async()=>{
+test('Reglas incluye los datos de la estrategia y consulta su API una sola vez, incluso en diseño', async()=>{
  const get=apiClient.get as jest.Mock;get.mockResolvedValue({data:{spec:plain.spec,storage:'Sin historia',lastEvaluationAt:null,items:[]}});
  render(<PerformancePanel spec={plain.spec} inDesign/>);
  await screen.findByText('Esta estrategia no tiene proyecto en el Lab');
- expect(panelApi).not.toHaveBeenCalled();expect(get).not.toHaveBeenCalled();
- fireEvent.click(screen.getByRole('tab',{name:'Datos'}));
+ expect(panelApi).not.toHaveBeenCalled();
+ expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Resumen', 'Posiciones', 'Reglas', 'Registro']);
+ expect(screen.getByRole('tab',{name:'Reglas'})).toHaveAttribute('aria-selected','true');
  expect(await screen.findByTitle('Sin historia')).toBeInTheDocument();
  expect(get).toHaveBeenCalledTimes(1);expect(get).toHaveBeenCalledWith('/App/Runtime/Performance/Data',{params:{spec:plain.spec}});
 });

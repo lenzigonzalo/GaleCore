@@ -32,6 +32,9 @@
 .skills-content { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .skills-filebar { padding: 12px 18px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 15px; }
 .skills-filebar .prefs-segmented button { display: inline-flex; gap: 8px; align-items: center; }
+.skills-files { list-style: none; margin: 0; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border); }
+.skills-files button { padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-secondary); font: 14px var(--font-code); cursor: pointer; }
+.skills-files button[aria-pressed=true] { background: var(--bg-secondary); color: var(--text-primary); border-color: var(--text-muted); }
 .skills-document { padding: 28px 32px; overflow-wrap: anywhere; overflow-x: auto; }
 .skills-document pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.8 var(--font-code); margin: 0; }
 .skills-label { display: grid; gap: 10px; margin-top: 22px; font-size: 16px; }
