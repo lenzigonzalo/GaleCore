@@ -300,3 +300,109 @@ def test_a_missing_variable_is_a_clear_error_and_the_key_is_never_printed(galeco
     # saving the environment again keeps the key
     ac.set_environment("env_ZZZ1")
     assert json.loads((lab / "agents.json").read_text(encoding="utf-8"))["agent_key"] == "gca_key1"
+
+
+SKILL_MD = "---\nname: Cierre\ndescription: Cierre de SPY\n---\n# Cierre\n"
+
+
+def with_skill(client, tmp_path, key="cierre"):
+    from galecore_ai.application import skill_space
+    folder = tmp_path / "sk"
+    (folder / "scripts").mkdir(parents=True)
+    (folder / "SKILL.md").write_text(SKILL_MD, encoding="utf-8")
+    (folder / "scripts" / "cierre.py").write_text("print('{}')\n", encoding="utf-8")
+    skill_space.save(client, folder, key=key)
+
+
+def test_market_hours_cron_is_every_whole_hour_in_session_in_est_and_edt():
+    hourly = Schedule.model_validate({"frequency": "market_hours", "minutes": 60, "timezone": "America/New_York"})
+    assert ac.cron_utc(hourly, NOV) == "30 14-20 * * 1-5"                    # 9:30 ... 15:30 NY, EST (UTC-5)
+    assert ac.cron_utc(hourly, date(2026, 7, 15)) == "30 13-19 * * 1-5"      # EDT (UTC-4)
+    two = Schedule.model_validate({"frequency": "market_hours", "minutes": 120, "timezone": "America/New_York"})
+    assert ac.cron_utc(two, NOV) == "30 14-20/2 * * 1-5"
+    half = Schedule.model_validate({"frequency": "market_hours", "minutes": 90, "timezone": "America/New_York"})
+    with pytest.raises(ac.AgentCloudError, match="cada 1 h en rueda"):
+        ac.cron_utc(half, NOV)
+
+
+def test_a_market_hours_agent_builds_its_routine(galecore, lab):  # noqa: F811
+    _, client = galecore
+    configured(lab)
+    when = {"frequency": "market_hours", "minutes": 60, "timezone": "America/New_York"}
+    ac.new(client, "Cada hora", "Mirá SPY", when)
+    assert ac.body(client, "cada-hora", NOV)["body"]["cron_expression"] == "30 14-20 * * 1-5"
+    with pytest.raises(ac.AgentCloudError, match="cada 1 h en rueda"):
+        ac.new(client, "Cada 30", "x", {**when, "minutes": 30})
+
+
+def test_an_agent_with_a_skill_runs_it_and_reports_without_evaluating_on_failure(galecore, lab, tmp_path):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    with_skill(client, tmp_path)
+    ac.new(client, "Cierre SPY", "Decí si cerró arriba", DAILY, skill={"key": "cierre", "script": "cierre.py",
+                                                                      "args": "SPY --tf '1 h'"})
+    p = piece_of(fake, "cierre-spy")
+    assert p["skill"] == {"key": "cierre", "script": "cierre.py", "args": "SPY --tf '1 h'"} == p["request"]["create"]["skill"]
+    text = routine_text(ac.body(client, "cierre-spy", NOV))
+    assert "2. Corré `source ~/.galecore.env && python3 -m galecore_ai.adapters.cli skill run cierre cierre.py SPY --tf '1 h'`" in text
+    assert 'empieza con "Sin evaluar:"' in text and "no repitas ni deduzcas conclusiones de corridas anteriores" in text
+    assert "--status error" in text and "galecore get <capacidad>" not in text
+    assert text.index("skill run") < text.index("Tarea: Decí si cerró arriba") < text.index("agent report")
+
+
+def test_without_a_skill_the_instruction_is_the_same_as_before():
+    text = ac.instruction({"id": "Resumen", "objective": "Resumí SPY"})
+    assert "2. Hacé esta tarea del usuario, con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` " in text
+    assert "skill run" not in text and "Sin evaluar" not in text
+    assert ac.instruction({"id": "Resumen", "objective": "Resumí SPY", "skill": None}) == text
+
+
+def test_the_args_of_the_script_are_quoted_for_the_shell():
+    text = ac.instruction({"id": "A", "objective": "x", "skill": {"key": "k", "script": "s.py", "args": "SPY; rm -rf /"}})
+    assert "skill run k s.py 'SPY;' rm -rf /`" in text      # one token each: `;` can never end the command
+
+
+def test_new_checks_that_the_skill_and_script_exist(galecore, tmp_path):  # noqa: F811
+    _, client = galecore
+    with_skill(client, tmp_path)
+    with pytest.raises(ac.AgentCloudError, match="No encuentro la skill «nada»"):
+        ac.new(client, "A", "x", DAILY, skill={"key": "nada", "script": "x.py"})
+    with pytest.raises(ac.AgentCloudError, match=r"no tiene el script «otro.py» \(tiene: cierre.py\)"):
+        ac.new(client, "A", "x", DAILY, skill={"key": "cierre", "script": "otro.py"})
+    with pytest.raises(ac.AgentCloudError, match="una línea"):
+        ac.new(client, "A", "x", DAILY, skill={"key": "cierre", "script": "cierre.py", "args": "a\nb"})
+    with pytest.raises(ac.AgentCloudError, match="una línea"):
+        ac.new(client, "A", "x", DAILY, skill={"key": "cierre", "script": "cierre.py", "args": "a" * 301})
+    with pytest.raises(ac.AgentCloudError, match="comillas"):
+        ac.new(client, "A", "x", DAILY, skill={"key": "cierre", "script": "cierre.py", "args": "'abierta"})
+    made = ac.new(client, "B", "x", DAILY, skill={"key": "cierre", "script": "cierre.py"})
+    assert made == {"agent": "b", "status": "pending"}
+
+
+def test_settings_can_set_and_remove_the_skill():
+    skill = {"key": "cierre", "script": "cierre.py"}
+    base = {"id": "A", "objective": "x", "schedule_spec": DAILY}
+    on = ac.effective({**base, "request": {"settings": {"skill": skill}}})
+    assert on["skill"] == skill
+    off = ac.effective({**base, "skill": skill, "request": {"settings": {"skill": None}}})
+    assert off["skill"] is None and "skill run" not in ac.instruction({**off, "key": "a"})
+
+
+def test_cli_agent_new_takes_skill_and_script_together(galecore, monkeypatch, capsys, tmp_path):  # noqa: F811
+    from galecore_ai.adapters import galecore_space
+    fake, client = galecore
+    with_skill(client, tmp_path)
+    monkeypatch.setattr(galecore_space, "SpaceClient", lambda: client)
+
+    def run(*extra):
+        monkeypatch.setattr(sys, "argv", ["cli", "agent", "new", "--name", "Cierre SPY", "--what", "x", "--when", json.dumps(DAILY), *extra])
+        with pytest.raises(SystemExit) as stop:
+            cli.main()
+        return stop.value.code, json.loads(capsys.readouterr().out)
+
+    assert run("--skill", "cierre")[0] == 3
+    assert run("--script", "cierre.py")[0] == 3
+    assert run("--script-args", "SPY")[0] == 3
+    code, out = run("--skill", "cierre", "--script", "cierre.py", "--script-args", "SPY")
+    assert code == 0 and out["agent"] == "cierre-spy"
+    assert piece_of(fake, "cierre-spy")["skill"] == {"key": "cierre", "script": "cierre.py", "args": "SPY"}

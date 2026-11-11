@@ -597,8 +597,19 @@ def _cmd_skill(args: argparse.Namespace) -> None:
             folder = skill_dir(args.skill)
         except SkillNotInCatalog:   # not in the catalog: the trader's space (own first, then shared)
             from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+            from galecore_ai.application import agent_report as ar
             try:
-                folder, version = skill_space.materialize(SpaceClient(), args.skill)
+                secret = os.environ.get("GALECORE_AGENT_KEY", "").strip()
+                if secret:   # a cloud routine: no login, the agents key reads the skill
+                    base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
+                    _check_base_url(base_url)
+                    folder, version = skill_space.materialize(None, args.skill, lambda key: ar.get_skill(
+                        base_url=base_url, api_key=os.environ.get("GALECORE_API_KEY"), agent_secret=secret,
+                        skill_key=key))
+                else:
+                    folder, version = skill_space.materialize(SpaceClient(), args.skill)
+            except ar.AgentReportError as exc:
+                raise SkillRunError(str(exc)) from exc
             except SpaceError as exc:
                 raise SkillRunError(f"No skill {args.skill!r} in the catalog; the space is not reachable: {exc}") from exc
             source = "space"
@@ -991,6 +1002,10 @@ def _cmd_agent_cloud(args: argparse.Namespace) -> None:
 
     c = args.agent_command
     try:
+        if c == "new" and (bool(args.skill) != bool(args.script) or (args.script_args and not args.script)):
+            _error_out("Argument error: --skill y --script van juntos (y --script-args los acompaña)",
+                       exit_code=_EXIT_VALIDATION_ERROR)
+            return
         if c == "env":
             if args.set:
                 _json_out({"status": "SAVED", "environment_id": ac.set_environment(args.set)})
@@ -1009,10 +1024,11 @@ def _cmd_agent_cloud(args: argparse.Namespace) -> None:
             try:
                 when = json.loads(args.when)
             except ValueError:
-                _error_out("Argument error: --when es un JSON con frequency (daily|weekdays|days), time, timezone "
+                _error_out("Argument error: --when es un JSON con frequency (daily|weekdays|days|market_hours), time, timezone "
                            "y days si hace falta", exit_code=_EXIT_VALIDATION_ERROR)
                 return
-            _json_out({"status": "REQUESTED", **ac.new(client, args.name, args.what, when)})
+            _json_out({"status": "REQUESTED", **ac.new(client, args.name, args.what, when, skill=(
+                {"key": args.skill, "script": args.script, "args": args.script_args or ""} if args.skill else None))})
     except ac.AgentCloudError as exc:
         _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
     except SpaceError as exc:
@@ -1801,6 +1817,9 @@ def build_parser() -> _JsonArgumentParser:
     p_ag_new.add_argument("--what", required=True, help="What the agent does")
     p_ag_new.add_argument("--when", required=True, metavar="JSON",
                           help='e.g. {"frequency":"daily","time":"08:00","timezone":"America/New_York"}')
+    p_ag_new.add_argument("--skill", help="Key of a skill with code in your space (own or shared) the agent runs")
+    p_ag_new.add_argument("--script", help="The skill's script (NAME.py); needs --skill")
+    p_ag_new.add_argument("--script-args", help="One line of arguments for the script (up to 300 characters)")
     p_ag_env = ag_sub.add_parser("env", help="The claude.ai environment the cloud agents run in (Lab config)")
     p_ag_env.add_argument("--set", metavar="LINK_OR_ID", help="Save it (the env_… id or the claude.ai link)")
 
