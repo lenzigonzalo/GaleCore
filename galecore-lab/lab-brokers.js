@@ -26,9 +26,13 @@ const BROKERS = [
 // <local>/connectors-seen.json guarda lo último que vio Claude (nombre, estado, herramientas) para listar y para negar.
 const IOL_DENIED = ['update_access_mode', 'validate_order', 'validate_caucion', 'validate_fci_subscription',
   'validate_fci_redemption', 'get_ddjj', 'get_caucion_guarantee_assets'];
+// Escrituras conocidas de IBKR: se niegan por nombre aunque el catálogo visto no las traiga (p. ej. visto sin autorizar).
+const IBKR_DENIED = ['create_order_instruction', 'delete_order_instruction', 'create_alert', 'update_alert', 'delete_alert',
+  'set_alert_status', 'create_watchlist', 'edit_watchlist', 'delete_watchlist', 'create_saved_screener',
+  'update_saved_screener', 'delete_saved_screener', 'provide_customer_feedback'];
 const CLAUDE_BROKERS = [
   { test: /\bIoL\b/i, prefix: 'iol_invertironline', label: 'IOL', denied: IOL_DENIED },
-  { test: /Interactive Brokers|IBKR/i, prefix: 'interactive_brokers_ibkr', label: 'IBKR', denied: [] },
+  { test: /Interactive Brokers|IBKR/i, prefix: 'interactive_brokers_ibkr', label: 'IBKR', denied: IBKR_DENIED },
 ];
 const norm = s => String(s).replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
