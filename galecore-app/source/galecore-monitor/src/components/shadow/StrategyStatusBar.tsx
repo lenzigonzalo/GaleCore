@@ -7,7 +7,9 @@ function actionError(e: unknown): string {
   const any = e as { response?: { data?: { error?: string; reason?: string } }; message?: string };
   const d = any.response?.data;
   if (d?.error) return d.reason ? `${d.error} Motivo: ${d.reason}` : d.error;
-  return any.message ?? String(e);
+  const status = (any.response as { status?: number } | undefined)?.status;
+  // Sin respuesta de la API no hay nada más que decir; con una respuesta sin texto, el código es lo único que hay.
+  return status ? `GaleCore respondió con el error ${status} y no dio el motivo.` : 'no se pudo conectar con GaleCore.';
 }
 const shortHash = (h: string) => h.replace('sha256:', '').slice(0, 12);
 // Las lecturas auxiliares nunca rompen la ficha: si fallan (o la API no las tiene), el dato se omite.
@@ -57,7 +59,7 @@ export function StrategyStatusBar({ spec, instance, canControl, openPositions, o
     {l && <span><b>Límites</b> por operación {usdAr(l.perTrade)} · riesgo abierto {usdAr(l.openRisk)} · por apuesta {usdAr(l.perBet)}</span>}
     {canControl && instance && (running || instance.lifecycleState === 'STOPPED') && <span className="status-bar-action">
       {confirm
-        ? <span className="row-confirm">{running && openPositions ? `Tiene ${openPositions} abierta${openPositions > 1 ? 's' : ''}: se siguen valuando. ` : ''}{running ? '¿Pausar?' : '¿Prender de nuevo la misma versión?'} <button type="button" className="row-action danger" disabled={busy}
+        ? <span className="row-confirm">{running ? `¿Pausar? Deja de entrar${openPositions ? `; ${openPositions > 1 ? `las ${openPositions} abiertas se siguen valuando` : 'la abierta se sigue valuando'}` : ''}.` : `¿Prender de nuevo${version ? ` la v${version}` : ' la misma versión'}? Vuelve a evaluar entradas en SHADOW (simulado).`} <button type="button" className="row-action danger" disabled={busy}
           onClick={() => void (running ? run(() => stopShadowInstance(instance.instanceId), 'No se pudo pausar') : run(() => deployShadowSpec(spec, instance.versionHash), 'No se pudo prender'))}>Sí</button> <button type="button" className="row-action" disabled={busy} onClick={() => setConfirm(false)}>No</button></span>
         : <button type="button" className="row-action" onClick={() => setConfirm(true)}>{running ? 'Pausar' : 'Prender'}</button>}
     </span>}

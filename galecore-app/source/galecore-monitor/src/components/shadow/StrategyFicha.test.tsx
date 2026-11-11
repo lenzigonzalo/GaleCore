@@ -90,7 +90,7 @@ test('el titular muestra tal cual el «por qué no opera» que calcula la API, s
   cardApi.mockResolvedValue({ ...card, stall });
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
   const headline = await screen.findByText('4 días hábiles seguidos sin entrar por tope por apuesta');
-  expect(headline.parentElement).toHaveTextContent('supera el tope de 9.00 USD');
+  expect(headline.parentElement).toHaveTextContent('tope por apuesta (SPX, vence la semana 2026-W46): abierto 0 + nueva 200 USD supera el tope de 9 USD');
   expect(discards).not.toHaveBeenCalledWith('i-1', 500, expect.anything());   // la ficha no recuenta eventos
 });
 
@@ -110,7 +110,7 @@ test('Pausar pide confirmación, avisa de las abiertas, llama a stop y refresca'
   await screen.findByText('Ganancia total');
   fireEvent.click(await screen.findByRole('button', { name: 'Pausar' }));
   expect(stopShadowInstance).not.toHaveBeenCalled();
-  expect(screen.getByText(/Tiene 2 abiertas: se siguen valuando/)).toBeInTheDocument();
+  expect(screen.getByText(/¿Pausar\? Deja de entrar; las 2 abiertas se siguen valuando\./)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'No' }));
   expect(screen.getByRole('button', { name: 'Pausar' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Pausar' }));
@@ -126,7 +126,7 @@ test('Prender vuelve a desplegar la misma versión con expectedHash y muestra el
   await screen.findByText('Ganancia total');
   expect(screen.queryByRole('button', { name: 'Pausar' })).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole('button', { name: 'Prender' }));
-  expect(screen.getByText(/¿Prender de nuevo la misma versión\?/)).toBeInTheDocument();
+  expect(screen.getByText(/¿Prender de nuevo la v1\.3\.0\? Vuelve a evaluar entradas en SHADOW \(simulado\)\./)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
   expect(await screen.findByText('No se pudo prender: La spec vigente ya no es esa versión.')).toBeInTheDocument();
   expect(deployShadowSpec).toHaveBeenCalledWith(SPEC, 'sha256:bc1ec2d9952c8d5');
@@ -172,7 +172,7 @@ test('el Registro cuenta lo que pasó, con las reglas bajo su evaluación y qui�
   expect(log).toHaveTextContent('13:45 Evaluó SPX: se cumplen las reglas de entrada');
   expect(within(log).getByText('VIX 20,18 < 24: pasa').closest('ul')).toHaveClass('registry-gates');
   expect(within(log).getByText('FOMC no existe (hoy): pasa')).toBeInTheDocument();
-  expect(log).toHaveTextContent('13:11 No entró: tope por apuesta (SPX unknown 2026-W45): abierto 0.00 + nueva 200.00 USD supera el tope de 9.00 USD');
+  expect(log).toHaveTextContent('13:11 No entró: tope por apuesta (SPX, vence la semana 2026-W45): abierto 0 + nueva 200 USD supera el tope de 9 USD');
   expect(log).toHaveTextContent('09:00 Prendida');
 });
 
@@ -189,4 +189,25 @@ test('formatos: hace X, regla con operador', () => {
   expect(agoText('2026-11-10T10:00:00Z', now)).toBe('hace 2 h');
   expect(agoText('2026-11-06T12:00:00Z', now)).toBe('hace 4 días');
   expect(gateLine({ gateId: 'v', label: 'VIX', status: 'FAIL', value: 26.44, threshold: 24, operator: 'LT', onFail: 'x' })).toBe('VIX 26,44 < 24: no pasa');
+});
+
+test('un candidato que no llegó a abrirse no se cuenta como entrada y una regla sin dato dice qué falta', () => {
+  const cand: ShadowEvent = { eventId: 'c', instanceId: 'i-1', eventType: 'CANDIDATE_CREATED', symbol: 'SPX', timestamp: '2026-11-05T19:00:00Z', payload: { credit: 3.7, max_risk: 130 } };
+  const rows = registryEntries([cand], [], 'u-1');
+  expect(rows[0].text).toBe('Armó la estructura: crédito 3,70, riesgo máx. 130 USD');
+  expect(rows[0].tone).toBeUndefined();
+  expect(gateLine({ gateId: 'v', label: 'VIX < 24', status: 'NO_DATA', value: null, threshold: 24, operator: 'LT', onFail: 'x' })).toBe('VIX: sin dato (tiene que ser < 24)');
+});
+
+test('si la API falla sin dar motivo, Pausar dice qué pasó', async () => {
+  (fetchPerformancePanel as jest.Mock).mockResolvedValue(panel(0));
+  (stopShadowInstance as jest.Mock).mockRejectedValueOnce({ response: { status: 500, data: {} }, message: 'Request failed with status code 500' })
+    .mockRejectedValueOnce(new Error('Network Error'));
+  render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
+  await screen.findByText('Ganancia total');
+  fireEvent.click(await screen.findByRole('button', { name: 'Pausar' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
+  expect(await screen.findByText('No se pudo pausar: GaleCore respondió con el error 500 y no dio el motivo.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
+  expect(await screen.findByText('No se pudo pausar: no se pudo conectar con GaleCore.')).toBeInTheDocument();
 });

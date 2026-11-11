@@ -34,7 +34,7 @@ export function gateLine(g: ShadowEvaluation['gateResults'][number]): string {
   const name = (g.label || g.gateId).replace(/\s*[<>≤≥=].*$/, '').trim() || g.gateId;
   const op = OPERATORS[g.operator];
   if (!op || g.threshold === null) return `${g.label || g.gateId}: ${state}`;
-  return `${name} ${g.value === null ? 'sin dato' : num(g.value)} ${op} ${num(g.threshold)}: ${state}`;
+  return g.value === null ? `${name}: sin dato (tiene que ser ${op} ${num(g.threshold)})` : `${name} ${num(g.value)} ${op} ${num(g.threshold)}: ${state}`;
 }
 
 export interface RegistryEntry { key: string; at: number; day: string; hour: string; text: string; tone?: 'ok' | 'bad'; gates?: string[] }
@@ -61,8 +61,11 @@ function eventBody(e: ShadowEvent, userId: string | null | undefined, opened: Sh
     }
     case 'CANDIDATE_CREATED': case 'POSITION_OPENED': {
       // Una entrada deja dos eventos (candidato y posición): se cuenta una sola vez.
-      if (e.eventType === 'CANDIDATE_CREATED' && opened.some(o => o.symbol === e.symbol && at(o) >= at(e) && at(o) - at(e) < 60000)) return null;
+      const wasOpened = e.eventType === 'CANDIDATE_CREATED' && opened.some(o => o.symbol === e.symbol && at(o) >= at(e) && at(o) - at(e) < 60000);
+      if (wasOpened) return null;
       const parts = [asNum(p.credit) === null ? '' : `crédito ${num(p.credit as number, 2, 2)}`, asNum(p.max_risk) === null ? '' : `riesgo máx. ${num(p.max_risk as number)} USD`].filter(Boolean);
+      // Un candidato que no llegó a abrirse no es una entrada: el motivo viene en la fila siguiente («No entró: …»).
+      if (e.eventType === 'CANDIDATE_CREATED') return { text: parts.length ? `Armó la estructura: ${parts.join(', ')}` : 'Armó la estructura' };
       return { text: parts.length ? `Entró: ${parts.join(', ')}` : 'Entró', tone: 'ok' };
     }
     case 'POSITION_CLOSED': {

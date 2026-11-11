@@ -7,6 +7,16 @@ export function discardLabel(evt: ShadowEvent): string {
   return typeof limit === 'string' && LIMIT_LABELS[limit] ? LIMIT_LABELS[limit] : DISCARD_LABELS[evt.eventType] ?? evt.eventType;
 }
 
+const DIRECTIONS: Record<string, string> = { bullish: ' alcista', bearish: ' bajista', neutral: '', unknown: '' };
+/**
+ * Los motivos viejos del runtime quedaron guardados con jerga y decimales con punto («SPX unknown 2026-W45», «9.00 USD»):
+ * se leen en español sin tocar el registro. Los nuevos ya salen así y esto no les cambia nada.
+ */
+export function tidyReason(text: string): string {
+  return text
+    .replace(/\((\S+) (bullish|bearish|neutral|unknown) (\d{4}-W\d{2})\)/g, (_m, sym: string, dir: string, week: string) => `(${sym}${DIRECTIONS[dir]}, vence la semana ${week})`)
+    .replace(/\b(\d+)\.(\d{2})\b/g, (_m, i: string, d: string) => parseFloat(`${i}.${d}`).toLocaleString('es-AR', { maximumFractionDigits: 2 }));
+}
 export function discardReason(evt: ShadowEvent): string {
   const p = evt.payload ?? {};
   if (Array.isArray(p.gates)) {
@@ -14,7 +24,7 @@ export function discardReason(evt: ShadowEvent): string {
       .map((g) => `${g.gate_id}: ${g.status}${g.value !== null && g.value !== undefined ? ` (${g.value} ${g.operator} ${g.threshold})` : ''}`)
       .join(' · ');
   }
-  if (typeof p.reason === 'string') return p.reason;
+  if (typeof p.reason === 'string') return tidyReason(p.reason);
   if (Array.isArray(p.errors)) return (p.errors as unknown[]).join(' · ');
   return 'sin motivo registrado';
 }

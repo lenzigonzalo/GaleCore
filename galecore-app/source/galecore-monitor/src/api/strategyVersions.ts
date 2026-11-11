@@ -3,7 +3,7 @@ import { labRequest } from './lab';
 export interface VersionDiff {
   from: string;
   spec: { path: string; from: unknown; to: unknown }[];
-  rules: { rule: string; change: string; text: string }[];
+  rules: { rule: string; change: string; text: string; fields?: string[] }[];
   parameters: { name: string; from: unknown; to: unknown }[];
   management?: unknown[];
 }
