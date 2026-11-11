@@ -16,6 +16,7 @@ jest.mock('../../api/client', () => ({ __esModule: true, default: { get: jest.fn
 jest.mock('../../api/shadow', () => ({ fetchPerformancePanel: jest.fn(), fetchShadowDiscards: jest.fn(), fetchShadowEvaluations: jest.fn() }));
 jest.mock('../../api/marketdata', () => ({ fetchQuote: jest.fn() }));
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
+jest.mock('../../api/strategyVersions', () => ({ fetchStrategyVersions: () => Promise.resolve([]), approveStrategyVersion: () => Promise.resolve({}), duplicateStrategy: () => Promise.resolve({}) }));
 jest.mock('lightweight-charts', () => ({ ColorType: { Solid: 'solid' }, LineSeries: {}, AreaSeries: {},
   TickMarkType: { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 },
   createChart: jest.fn(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() })),

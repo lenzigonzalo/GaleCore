@@ -560,6 +560,42 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
+    // WS-0098 inc. 4: versiones, aprobación y duplicado de estrategias desde la ficha (CLI del harness, sin shell).
+    if(parts[0]==='strategies'&&parts.length>=3&&parts.length<=5){
+      const NAME=/^[a-z0-9_]{1,80}$/,VER=/^\d+\.\d+\.\d+$/,USER=/^[A-Za-z0-9._@-]{1,60}$/,NEW=/^[a-z][a-z0-9_]{2,59}$/;
+      const cli=args=>new Promise(resolve=>execute('python',['-B','-m','galecore_ai.adapters.cli','strategy',...args],{cwd:root,env:environment(),windowsHide:true,timeout:60000,maxBuffer:2*1024*1024},(e,out)=>{
+        let data;try{data=JSON.parse(out);}catch{data=null;}
+        if(!e&&data)return resolve({ok:true,data});
+        if(data&&typeof data==='object'&&!Array.isArray(data))return resolve({ok:false,status:e?.code===2?400:409,data:{...data,error:String(data.error||'El harness rechazó la operación.')}});
+        resolve({ok:false,status:500,data:{error:'No se pudo leer la respuesta del harness.'}});
+      }));
+      const name=parts[1];
+      const bad=(m)=>{json(res,400,{error:m});return true;};
+      const reply=r=>{json(res,r.ok?200:r.status,r.data);return true;};
+      if(req.method==='GET'&&parts.length===3&&parts[2]==='versions'){
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        return reply(await cli(['versions','--name',name]));
+      }
+      if(req.method==='POST'&&parts.length===5&&parts[2]==='versions'&&parts[4]==='approve'){
+        const version=parts[3],b=await readBody(req),user=b&&b.user;
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        if(!VER.test(version))return bad('Versión no válida.');
+        if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
+        return reply(await cli(['approve','--ref','strategy:'+name+'/'+version,'--owner-words','Aprobada desde la ficha por '+user+', con confirmación en pantalla: '+name+' '+version+' en SHADOW','--host-provider','monitor','--host-model','ficha']));
+      }
+      if(req.method==='POST'&&parts.length===3&&parts[2]==='duplicate'){
+        const b=await readBody(req)||{},{version,newName,user}=b;
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        if(typeof version!=='string'||!VER.test(version))return bad('Versión no válida.');
+        if(typeof newName!=='string'||!NEW.test(newName)||newName.includes('__')||newName.endsWith('_'))return bad('Nombre nuevo no válido.');
+        if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
+        const r=await cli(['duplicate','--ref','strategy:'+name+'/'+version,'--as',newName,'--host-provider','monitor','--host-model','ficha']);
+        if(!r.ok)return reply(r);
+        const created=createProject({label:newName,type:'strategy'});
+        if(created.id!==newName){json(res,500,{error:'El proyecto creado no coincide con la estrategia duplicada.'});return true;}
+        json(res,200,{ref:r.data.ref,duplicatedFrom:r.data.duplicatedFrom||r.data.duplicated_from||'strategy:'+name+'/'+version,projectId:created.id});return true;
+      }
+    }
     // Conectores que usa el chat, en sólo lectura salvo el interruptor de brókers (WS-0083): GaleCore va siempre; IBKR/IOL sólo
     // consultas y sólo en Codex (lab-brokers.js).
     if(url.pathname==='/connectors'&&req.method==='GET'){json(res,200,{galecore:{enabled:true},brokers:{enabled:brokerSetting(local),engines:['codex','claude']}});return true;}

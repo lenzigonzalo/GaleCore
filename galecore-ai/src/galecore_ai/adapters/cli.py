@@ -1426,6 +1426,16 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
             _knowledge_error_out(exc)
     kb = _build_knowledge_base()
     try:
+        if args.strategy_command == "versions":
+            from galecore_ai.application.strategy_versions import list_versions
+            _json_out(list_versions(kb, args.name))
+        if args.strategy_command == "duplicate":
+            from galecore_ai.application.strategy_versions import duplicate
+            src_key = strategy_key(args.ref)
+            ref, path = duplicate(kb=kb, key=src_key, new_name=args.new_name,
+                                  host=RecordHost(provider=args.host_provider, model=args.host_model))
+            _json_out({"status": "RECORDED", "ref": ref, "duplicated_from": f"strategy:{src_key}",
+                       "approved": False, "path": path})
         if args.strategy_command == "save":
             content, host = _read_proposal_request()
             text, name = _read_spec(args.spec)
@@ -2035,6 +2045,13 @@ def build_parser() -> _JsonArgumentParser:
     p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW (registers the spec, then "
                                                 "deploys it; GaleCore is not called without an intact approval)")
     p_st_dep.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_vers = st_sub.add_parser("versions", help="Stored versions of one strategy: approval, critique, feasibility, diff")
+    p_st_vers.add_argument("--name", required=True, help="strategy name")
+    p_st_dup = st_sub.add_parser("duplicate", help="Store a copy of a version as a new draft strategy (no approval)")
+    p_st_dup.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_dup.add_argument("--as", dest="new_name", required=True, help="name of the new strategy")
+    p_st_dup.add_argument("--host-provider", dest="host_provider", default="claude-code")
+    p_st_dup.add_argument("--host-model", dest="host_model", required=True)
     p_st_stop = st_sub.add_parser("stop", help="Stop a SHADOW instance (it stops entering; what is open keeps being valued)")
     p_st_stop.add_argument("--instance", required=True, help="instance id (from `followup run` or `state`)")
 

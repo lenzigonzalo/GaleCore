@@ -269,3 +269,9 @@
 .registry li.bad { color: var(--red-gc); }
 .registry .registry-gates { margin: 2px 0 0 52px; }
 .registry .registry-gates li { padding: 1px 0; font-size: 14px; color: var(--text-secondary); }
+.strategy-versions { margin: 0 0 14px; font-size: 15px; }
+.strategy-versions select { margin-left: 6px; font: 15px var(--font-sans); }
+.strategy-versions .version-card { margin-top: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.strategy-versions .version-card p { margin: 0; }
+.strategy-versions .version-card ul { margin: 4px 0 0; padding-left: 20px; }
+.strategy-versions b { font-weight: 600; margin-right: 6px; }

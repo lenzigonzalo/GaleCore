@@ -15,6 +15,7 @@ import { StrategyDesign, useStrategyDesign } from './StrategyDesign';
 import { TradeLog } from './TradeLog';
 import { EntryEvaluations } from './EntryEvaluations';
 import { StrategyStatusBar } from './StrategyStatusBar';
+import { StrategyVersions } from './StrategyVersions';
 import { WhyNotOperating } from './WhyNotOperating';
 import { RegistryLog } from './RegistryLog';
 import './PerformancePanel.css';
@@ -98,6 +99,7 @@ export function PerformancePanel({ spec, instance = null, instances, onInstanceC
       onOpenChat={design.projectId && onOpenChat ? () => onOpenChat(design.projectId!) : undefined}
       actions={<>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</>} />
     {!inDesign && <StrategyStatusBar spec={spec} instance={instance} canControl={stage === 'SHADOW' && !!instance} openPositions={panel?.tradesOpen} onInstanceChange={onInstanceChange} />}
+    {!inDesign && <StrategyVersions spec={spec} instance={instance} />}
     <StrategyOverview strategy={design.strategy} />
     {!inDesign && <WhyNotOperating spec={spec} />}
     <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Posiciones', 'Reglas', 'Registro'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
