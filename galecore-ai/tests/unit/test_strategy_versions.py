@@ -284,3 +284,11 @@ def test_revise_renames_the_edited_versions_own_mentions_in_the_text(kb, researc
     assert ref.endswith("/1.0.4") and f"strategy:{NAME}/1.0.4" in text and "1.0.3" not in text
     assert "se reescribieron como 1.0.4" in new.content.pending[-1]
     assert new.content.change.from_version == "1.0.3"
+
+
+def test_revise_keeps_the_change_reason_when_the_text_is_renamed(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    stored(kb, research_ref)   # owner_decisions name 1.0.3, so the rewrite runs
+    ref, _ = revise(kb, KEY, {"risk_limits/max_loss_per_trade_usd": 240}, "", HOST, now=NOW, checker=fake_checker())
+    change = kb.strategies.load(ref.removeprefix("strategy:")).content.change
+    assert change.reason == "Tope por operación: 500.0 → 240.0 USD" and not change.reason.startswith("[")
