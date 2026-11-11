@@ -24,7 +24,7 @@ export function RegistryLog({ instances }: { instances: ShadowInstance[] }) {
   if (!entries.length) return <p>Sin registros todavía.</p>;
   const days = Array.from(new Set(entries.map(e => e.day)));
   return <section className="performance-block registry" aria-label="Registro">
-    {days.map(day => <div key={day}><h3>{day}</h3><ul>{entries.filter(e => e.day === day).map(e => <li key={e.key} className={e.tone}>
+    {days.map(day => <div key={day}><h3>{day} <span className="registry-zone">· hora NY</span></h3><ul>{entries.filter(e => e.day === day).map(e => <li key={e.key} className={e.tone}>
       <time>{e.hour}</time> {e.text}{e.gates && <ul className="registry-gates">{e.gates.map((g, i) => <li key={i}>{g}</li>)}</ul>}</li>)}</ul></div>)}
   </section>;
 }

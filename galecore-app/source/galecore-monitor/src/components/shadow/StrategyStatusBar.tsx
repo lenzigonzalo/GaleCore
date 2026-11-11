@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { deployShadowSpec, fetchShadowEvaluations, fetchShadowMetrics, fetchStrategyCard, stopShadowInstance } from '../../api/shadow';
-import { ShadowInstance, StrategyCard } from '../../types/shadow';
+import { deployShadowSpec, fetchShadowEvaluations, stopShadowInstance } from '../../api/shadow';
+import { ShadowInstance, SpecVersionMetrics, StrategyCard } from '../../types/shadow';
 import { agoText, num, usdAr } from './ficha';
 
 function actionError(e: unknown): string {
@@ -15,26 +15,18 @@ const shortHash = (h: string) => h.replace('sha256:', '').slice(0, 12);
 // Las lecturas auxiliares nunca rompen la ficha: si fallan (o la API no las tiene), el dato se omite.
 function safe<T>(read: () => Promise<T>): Promise<T | null> { return Promise.resolve().then(read).catch(() => null); }
 
-/** Estado de la estrategia bajo el encabezado: versión activa, ventana, última evaluación, límites y Pausar / Prender. */
-export function StrategyStatusBar({ spec, instance, canControl, openPositions, onInstanceChange }: {
-  spec: string; instance: ShadowInstance | null; canControl: boolean; openPositions?: number; onInstanceChange?: () => Promise<void> | void;
+/** Estado de la estrategia bajo el encabezado: interruptor Prendida / Pausada, versión activa, capital y topes en USD, ventana y última evaluación. La tarjeta y las métricas las pide la ficha una vez y se pasan por props. */
+export function StrategyStatusBar({ spec, instance, card = null, metrics = [], canControl, openPositions, onInstanceChange }: {
+  spec: string; instance: ShadowInstance | null; card?: StrategyCard | null; metrics?: SpecVersionMetrics[]; canControl: boolean; openPositions?: number; onInstanceChange?: () => Promise<void> | void;
 }) {
-  const [card, setCard] = useState<StrategyCard | null>(null);
-  const [version, setVersion] = useState<string | null>(null);
   const [lastEval, setLastEval] = useState<string | null | undefined>(undefined);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const hash = instance?.versionHash;
   const id = instance?.instanceId;
-  useEffect(() => { let active = true; safe(() => fetchStrategyCard(spec)).then(c => { if (active) setCard(c); }); return () => { active = false; }; }, [spec]);
-  useEffect(() => {
-    let active = true; setVersion(null);
-    if (!hash) return;
-    if (card?.contentHash === hash && card.version) { setVersion(card.version); return; }
-    safe(fetchShadowMetrics).then(list => { const found = list?.find(m => m.specName === spec && m.contentHash === hash); if (active) setVersion(found?.specVersion ?? null); });
-    return () => { active = false; };
-  }, [spec, hash, card]);
+  // Versión legible de lo que corre: la de la tarjeta si es la misma spec, si no la de las métricas por hash.
+  const version = !hash ? null : card?.contentHash === hash && card.version ? card.version : metrics.find(m => m.specName === spec && m.contentHash === hash)?.specVersion ?? null;
   useEffect(() => {
     let active = true; setLastEval(undefined); setConfirm(false);
     if (!id) return;
@@ -51,18 +43,22 @@ export function StrategyStatusBar({ spec, instance, canControl, openPositions, o
     finally { setBusy(false); }
   };
   const l = card?.limitsUsd;
+  const tz = (z: string) => z === 'America/New_York' ? 'hora NY' : z;
+  const switchable = canControl && !!instance && (running || instance.lifecycleState === 'STOPPED');
   return <div className="strategy-status-bar" aria-label="Estado de la estrategia">
+    {switchable && <span className="status-bar-action">
+      <button type="button" role="switch" aria-checked={running} className="status-switch" disabled={busy} onClick={() => setConfirm(c => !c)}>
+        <span className="switch-track" aria-hidden="true"><span className="switch-thumb" /></span>{running ? 'Prendida' : 'Pausada'}
+      </button>
+      {confirm && <span className="row-confirm">{running ? `¿Pausar? Deja de entrar${openPositions ? `; ${openPositions > 1 ? `las ${openPositions} abiertas se siguen valuando` : 'la abierta se sigue valuando'}` : ''}.` : `¿Prender de nuevo${version ? ` la v${version}` : ' la misma versión'}? Vuelve a evaluar entradas en SHADOW (simulado).`} <button type="button" className="row-action danger" disabled={busy}
+        onClick={() => void (running ? run(() => stopShadowInstance(instance!.instanceId), 'No se pudo pausar') : run(() => deployShadowSpec(spec, instance!.versionHash), 'No se pudo prender'))}>Sí</button> <button type="button" className="row-action" disabled={busy} onClick={() => setConfirm(false)}>No</button></span>}
+    </span>}
     {hash && <span><b>Versión activa</b> {version ? `v${version}` : shortHash(hash)}</span>}
-    {card?.window && <span><b>Ventana de entrada</b> {card.window.start}–{card.window.end} {card.window.timezone}</span>}
+    {l && l.capital !== null && <span><b>Capital simulado</b> {usdAr(l.capital)}</span>}
+    {l && <span><b>Topes</b> por operación {usdAr(l.perTrade)} · riesgo abierto {usdAr(l.openRisk)} · por apuesta {usdAr(l.perBet)}</span>}
+    {card?.window && <span><b>Ventana de entrada</b> {card.window.start}–{card.window.end} {tz(card.window.timezone)}</span>}
     {card && <span><b>Entradas por día</b> {card.maxEntriesPerDay === null ? '—' : num(card.maxEntriesPerDay)}</span>}
     {id && lastEval !== undefined && <span><b>Última evaluación</b> {lastEval ? agoText(lastEval) : 'sin evaluaciones'}</span>}
-    {l && <span><b>Límites</b> por operación {usdAr(l.perTrade)} · riesgo abierto {usdAr(l.openRisk)} · por apuesta {usdAr(l.perBet)}</span>}
-    {canControl && instance && (running || instance.lifecycleState === 'STOPPED') && <span className="status-bar-action">
-      {confirm
-        ? <span className="row-confirm">{running ? `¿Pausar? Deja de entrar${openPositions ? `; ${openPositions > 1 ? `las ${openPositions} abiertas se siguen valuando` : 'la abierta se sigue valuando'}` : ''}.` : `¿Prender de nuevo${version ? ` la v${version}` : ' la misma versión'}? Vuelve a evaluar entradas en SHADOW (simulado).`} <button type="button" className="row-action danger" disabled={busy}
-          onClick={() => void (running ? run(() => stopShadowInstance(instance.instanceId), 'No se pudo pausar') : run(() => deployShadowSpec(spec, instance.versionHash), 'No se pudo prender'))}>Sí</button> <button type="button" className="row-action" disabled={busy} onClick={() => setConfirm(false)}>No</button></span>
-        : <button type="button" className="row-action" onClick={() => setConfirm(true)}>{running ? 'Pausar' : 'Prender'}</button>}
-    </span>}
     {error && <p role="alert" className="status-bar-error">{error}</p>}
   </div>;
 }

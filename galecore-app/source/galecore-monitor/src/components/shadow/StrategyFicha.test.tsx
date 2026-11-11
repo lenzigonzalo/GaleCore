@@ -55,9 +55,10 @@ test('el encabezado muestra versión, ventana, última evaluación y límites de
   const bar = await screen.findByLabelText('Estado de la estrategia');
   await waitFor(() => expect(bar).toHaveTextContent('Última evaluación hace 3 min'));
   await waitFor(() => expect(bar).toHaveTextContent('Versión activa v1.3.0'));
-  expect(bar).toHaveTextContent('Ventana de entrada 09:45–15:00 America/New_York');
+  expect(bar).toHaveTextContent('Ventana de entrada 09:45–15:00 hora NY');
+  expect(bar).toHaveTextContent('Capital simulado 10.000 USD');
   expect(bar).toHaveTextContent('Entradas por día 1');
-  expect(bar).toHaveTextContent('por operación 200 USD · riesgo abierto 400 USD · por apuesta 9 USD');
+  expect(bar).toHaveTextContent('Topes por operación 200 USD · riesgo abierto 400 USD · por apuesta 9 USD');
   expect(fetchShadowEvaluations).toHaveBeenCalledWith('i-1', 1);
 });
 
@@ -69,7 +70,7 @@ test('un 404 en la Card no rompe la ficha: se omiten ventana y límites y la ver
   const bar = screen.getByLabelText('Estado de la estrategia');
   await waitFor(() => expect(bar).toHaveTextContent('Versión activa v1.3.0'));
   expect(bar).not.toHaveTextContent('Ventana de entrada');
-  expect(bar).not.toHaveTextContent('Límites');
+  expect(bar).not.toHaveTextContent('Topes');
   expect(bar.querySelector('[role=alert]')).toBeNull();
 });
 
@@ -77,7 +78,7 @@ test('sin versión conocida se muestra el hash corto, y los límites sin dato va
   cardApi.mockResolvedValue({ ...card, version: null, contentHash: null, window: null, maxEntriesPerDay: null, limitsUsd: { capital: null, perTrade: null, openRisk: null, perBet: 9 } });
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
   const bar = await screen.findByLabelText('Estado de la estrategia');
-  await waitFor(() => expect(bar).toHaveTextContent('Límites por operación — · riesgo abierto — · por apuesta 9 USD'));
+  await waitFor(() => expect(bar).toHaveTextContent('Topes por operación — · riesgo abierto — · por apuesta 9 USD'));
   expect(bar).toHaveTextContent('Versión activa bc1ec2d9952c');
   expect(bar).toHaveTextContent('Entradas por día —');
 });
@@ -86,9 +87,12 @@ const stall = { days: 4, since: '2026-11-03', until: '2026-11-10', cause: 'ENTRY
   reason: 'tope por apuesta (SPX unknown 2026-W46): abierto 0.00 + nueva 200.00 USD supera el tope de 9.00 USD',
   text: '4 días hábiles seguidos sin entrar por tope por apuesta' };
 
-test('el titular muestra tal cual el «por qué no opera» que calcula la API, sin abrir ninguna pestaña', async () => {
+test('el «por qué no opera» que calcula la API es una línea al tope del Registro, no un bloque de arriba', async () => {
   cardApi.mockResolvedValue({ ...card, stall });
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
+  await screen.findByText('Ganancia total');
+  expect(screen.queryByText(/sin entrar por tope por apuesta/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Registro' }));
   const headline = await screen.findByText('4 días hábiles seguidos sin entrar por tope por apuesta');
   expect(headline.parentElement).toHaveTextContent('tope por apuesta (SPX, vence la semana 2026-W46): abierto 0 + nueva 200 USD supera el tope de 9 USD');
   expect(discards).not.toHaveBeenCalledWith('i-1', 500, expect.anything());   // la ficha no recuenta eventos
@@ -108,12 +112,14 @@ test('Pausar pide confirmación, avisa de las abiertas, llama a stop y refresca'
   const changed = jest.fn().mockResolvedValue(undefined);
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" onInstanceChange={changed} />);
   await screen.findByText('Ganancia total');
-  fireEvent.click(await screen.findByRole('button', { name: 'Pausar' }));
+  const toggle = await screen.findByRole('switch', { name: /Prendida/ });
+  expect(toggle).toHaveAttribute('aria-checked', 'true');
+  fireEvent.click(toggle);
   expect(stopShadowInstance).not.toHaveBeenCalled();
   expect(screen.getByText(/¿Pausar\? Deja de entrar; las 2 abiertas se siguen valuando\./)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'No' }));
-  expect(screen.getByRole('button', { name: 'Pausar' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Pausar' }));
+  expect(screen.queryByText(/¿Pausar\?/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('switch', { name: /Prendida/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
   await waitFor(() => expect(stopShadowInstance).toHaveBeenCalledWith('i-1'));
   await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
@@ -124,8 +130,9 @@ test('Prender vuelve a desplegar la misma versión con expectedHash y muestra el
   const changed = jest.fn();
   render(<PerformancePanel spec={SPEC} instance={instance({ lifecycleState: 'STOPPED' })} stage="SHADOW" onInstanceChange={changed} />);
   await screen.findByText('Ganancia total');
-  expect(screen.queryByRole('button', { name: 'Pausar' })).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole('button', { name: 'Prender' }));
+  const toggle = await screen.findByRole('switch', { name: /Pausada/ });
+  expect(toggle).toHaveAttribute('aria-checked', 'false');
+  fireEvent.click(toggle);
   expect(screen.getByText(/¿Prender de nuevo la v1\.3\.0\? Vuelve a evaluar entradas en SHADOW \(simulado\)\./)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
   expect(await screen.findByText('No se pudo prender: La spec vigente ya no es esa versión.')).toBeInTheDocument();
@@ -135,14 +142,14 @@ test('Prender vuelve a desplegar la misma versión con expectedHash y muestra el
   await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
 });
 
-test('sin etapa SHADOW o sin instancia no hay Pausar ni Prender', async () => {
+test('sin etapa SHADOW o sin instancia no hay el interruptor', async () => {
   const live = render(<PerformancePanel spec={SPEC} instance={instance()} stage="LIVE" />);
   await screen.findByText('Ganancia total');
-  expect(screen.queryByRole('button', { name: 'Pausar' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   live.unmount();
   render(<PerformancePanel spec={SPEC} instance={null} stage="SHADOW" />);
   await screen.findByText('Ganancia total');
-  expect(screen.queryByRole('button', { name: 'Prender' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('switch')).not.toBeInTheDocument();
 });
 
 test('el Registro cuenta lo que pasó, con las reglas bajo su evaluación y quién pausó o prendió', async () => {
@@ -205,9 +212,35 @@ test('si la API falla sin dar motivo, Pausar dice qué pasó', async () => {
     .mockRejectedValueOnce(new Error('Network Error'));
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
   await screen.findByText('Ganancia total');
-  fireEvent.click(await screen.findByRole('button', { name: 'Pausar' }));
+  fireEvent.click(await screen.findByRole('switch', { name: /Prendida/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
   expect(await screen.findByText('No se pudo pausar: GaleCore respondió con el error 500 y no dio el motivo.')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
   expect(await screen.findByText('No se pudo pausar: no se pudo conectar con GaleCore.')).toBeInTheDocument();
+});
+
+test('después de activar otra versión la ficha recarga instancia, tarjeta y métricas sin recargar la página', async () => {
+  const v = (version: string, approved: boolean) => ({ version, ref: `r${version}`, recorded_at: '2026-11-10T15:00:00Z', spec_hash: version === '1.3.0' ? 'sha256:bc1ec2d9952c8d5' : 'sha256:nueva', check: 'VALID', approved, approved_at: null, critique: null,
+    factibilidad: { veredicto: 'ok', texto: '', limites_usd: null }, change: null, diff_from_previous: null });
+  (labRequest as jest.Mock).mockImplementation(async (url: string) => url.endsWith('/activate') ? { instance_id: 'i-2' } : { strategy: SPEC, versions: [v('1.3.0', true), v('1.3.1', false)] });
+  useCurrentUserStore.setState({ user: { userId: 'u-1', email: 'gonzalo@x.com', username: null, isAdmin: false, canManagePlatform: false, databaseConfigured: true }, loaded: true });
+  const changed = jest.fn().mockResolvedValue(undefined);
+  render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" onInstanceChange={changed} />);
+  await screen.findByText('Ganancia total');
+  fireEvent.click(await screen.findByRole('button', { name: /Versión activa v1\.3\.0/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^v1\.3\.1 / }));
+  fireEvent.click(screen.getByText('Activar esta versión'));
+  const cardCalls = cardApi.mock.calls.length, metricCalls = (fetchShadowMetrics as jest.Mock).mock.calls.length, panelCalls = (fetchPerformancePanel as jest.Mock).mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Activar' }));
+  await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(cardApi.mock.calls.length).toBe(cardCalls + 1));
+  expect((fetchShadowMetrics as jest.Mock).mock.calls.length).toBe(metricCalls + 1);
+  await waitFor(() => expect((fetchPerformancePanel as jest.Mock).mock.calls.length).toBeGreaterThan(panelCalls));
+});
+
+test('la ficha pide la tarjeta y las métricas una sola vez al abrir', async () => {
+  render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
+  await screen.findByText('Ganancia total');
+  await waitFor(() => expect(cardApi).toHaveBeenCalledTimes(1));
+  expect(fetchShadowMetrics).toHaveBeenCalledTimes(1);
 });
