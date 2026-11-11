@@ -292,3 +292,22 @@ def test_revise_keeps_the_change_reason_when_the_text_is_renamed(kb, research_re
     ref, _ = revise(kb, KEY, {"risk_limits/max_loss_per_trade_usd": 240}, "", HOST, now=NOW, checker=fake_checker())
     change = kb.strategies.load(ref.removeprefix("strategy:")).content.change
     assert change.reason == "Tope por operación: 500.0 → 240.0 USD" and not change.reason.startswith("[")
+
+
+def test_revise_capital_also_sets_the_proposals_simulated_amount(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    spec = json.loads(spec_text())
+    spec["identity"]["version"] = "1.2.0"
+    spec["risk_limits"]["simulated_capital_usd"] = 10000
+
+    def bump(d):
+        d["version"] = "1.2.0"
+        d["owner_decisions"] = []
+    save_proposal(checker=fake_checker(), kb=kb, prompt="x", host=HOST, content=proposal(bump, research_ref=research_ref),
+                  spec_json=json.dumps(spec, indent=2), spec_file=f"{NAME}.json", now=NOW)
+    src = kb.strategies.load(f"{NAME}/1.2.0")
+    ref, _ = revise(kb, f"{NAME}/1.2.0", {"risk_limits/simulated_capital_usd": 25000}, "", HOST, now=NOW, checker=fake_checker())
+    new = kb.strategies.load(ref.removeprefix("strategy:"))
+    assert new.content.simulated_amount_usd == 25000.0 and new.content.limits == src.content.limits
+    other, _ = revise(kb, f"{NAME}/1.2.0", {"risk_limits/max_loss_per_trade_usd": 240}, "", HOST, now=NOW, checker=fake_checker())
+    assert kb.strategies.load(other.removeprefix("strategy:")).content.simulated_amount_usd == src.content.simulated_amount_usd

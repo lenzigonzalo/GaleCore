@@ -252,6 +252,7 @@ def revise(kb: KnowledgeBase, key: str, changes: dict, reason: str, host: Record
     major, minor, patch = _semver(_stored_versions(kb, name)[-1])
     version = f"{major}.{minor}.{patch + 1}"
     lines: list[str] = []
+    changes_capital = None
     for path, raw in changes.items():
         entry = allowed.get(path)
         if entry is None:
@@ -262,6 +263,8 @@ def revise(kb: KnowledgeBase, key: str, changes: dict, reason: str, host: Record
         old = parent[leaf]
         new = _new_value(entry, raw, old)
         parent[leaf] = new
+        if path == "risk_limits/simulated_capital_usd":
+            changes_capital = new   # the proposal's declared amount follows the spec's capital (feasibility reads it)
         unit = f" {entry['unit']}" if entry["unit"] else ""
         lines.append(f"{entry['label']}: {'sin definir' if old is None else old} → {new}{unit}")
     ident.update({"version": version, "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -281,7 +284,8 @@ def revise(kb: KnowledgeBase, key: str, changes: dict, reason: str, host: Record
             base[field], rewritten = json.loads(changed_text), True
     if rewritten:
         base["pending"] = [*base["pending"], f"las menciones de la versión {from_version} en el texto se reescribieron como {version}"]
-    content = ProposalContent.model_validate({**base, "version": version, "change": {
+    amount = {"simulated_amount_usd": float(str(changes_capital))} if changes_capital is not None else {}
+    content = ProposalContent.model_validate({**base, **amount, "version": version, "change": {
         "from_version": from_version, "reason": text, "refs": [f"strategy:{key}"]}})
     if wrong := other_version_mentions(content):
         raise KnowledgeError(f"cannot revise strategy:{key} as {version}: its purpose, hypothesis, rules, evaluation "
