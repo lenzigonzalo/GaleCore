@@ -39,7 +39,6 @@ export function MyConnectors() {
     {data && <table className="connector-table" aria-label="Conectores">
       <thead><tr><th>Conector</th><th>Estado</th><th>Activo</th></tr></thead>
       <tbody>
-        <tr><td>GaleCore</td><td className="is-yes">Conectado</td><td>Siempre</td></tr>
         {data[engine].map(c => <tr key={c.id}><td>{c.name}</td>
           <td className={'conn-state ' + STATE[c.status][1]}>{STATE[c.status][0]}</td>
           <td><Switch on={c.enabled} label={c.name} onChange={next => { if (!saving) void toggle(c.id, next); }}/></td></tr>)}

@@ -14,19 +14,17 @@ const data = {
 };
 beforeEach(() => jest.resetAllMocks());
 
-test('dos pestañas; GaleCore primero y siempre activo; una fila por conector con su estado en español y su interruptor', async () => {
+test('dos pestañas; sin GaleCore (es de la plataforma); una fila por conector con su estado en español y su interruptor', async () => {
   (labRequest as jest.Mock).mockResolvedValue(data);
   render(<MyConnectors/>);
   const table = await screen.findByRole('table', { name: 'Conectores' });
   expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Claude Code', 'Codex']);
   expect(screen.getByRole('tab', { name: 'Claude Code' })).toHaveAttribute('aria-selected', 'true');
   const rows = within(table).getAllByRole('row').slice(1);
-  expect(rows.map(r => within(r).getAllByRole('cell')[0].textContent)).toEqual(['GaleCore', 'IoL', 'Interactive Brokers (IBKR)', 'Gmail']);
-  expect(within(rows[0]).queryByRole('switch')).toBeNull();
-  expect(within(rows[0]).getByText('Siempre')).toBeInTheDocument();
-  expect(within(rows[1]).getByText('Conectado')).toBeInTheDocument();
-  expect(within(rows[2]).getByText('Falta autorizar')).toBeInTheDocument();
-  expect(within(rows[3]).getByText('Falla')).toBeInTheDocument();
+  expect(rows.map(r => within(r).getAllByRole('cell')[0].textContent)).toEqual(['IoL', 'Interactive Brokers (IBKR)', 'Gmail']);
+  expect(within(rows[0]).getByText('Conectado')).toBeInTheDocument();
+  expect(within(rows[1]).getByText('Falta autorizar')).toBeInTheDocument();
+  expect(within(rows[2]).getByText('Falla')).toBeInTheDocument();
   expect(screen.getAllByRole('switch').map(s => s.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
   fireEvent.click(screen.getByRole('tab', { name: 'Codex' }));
   expect(within(screen.getByRole('table')).getByText('IOL invertironline')).toBeInTheDocument();
