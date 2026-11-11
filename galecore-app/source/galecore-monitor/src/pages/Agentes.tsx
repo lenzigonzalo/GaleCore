@@ -21,7 +21,7 @@ interface LastRun {
 }
 interface Agent {
   id: string; capability: string; status: 'active' | 'paused' | 'cancelled' | 'pending'; schedule: string;
-  runs_on?: string; trigger_id?: string | null; routine_url?: string | null;   // WS-0079: agente en la nube (rutina de claude.ai)
+  skill?: SkillRef | null; runs_on?: string; trigger_id?: string | null; routine_url?: string | null;   // WS-0079: agente en la nube (rutina de claude.ai)
   strategy?: string | null; objective: string; state: string; state_detail?: string;
   next_expected_at?: string | null; last_run?: LastRun | null; runs: number; findings?: string | null;
   result_ref?: string | null; request?: AgentRequest; request_error?: string;
@@ -31,10 +31,12 @@ interface Agent {
 }
 
 interface ScheduleSpec { frequency: string; time?: string; days?: string[]; minutes?: number; timezone: string }
-interface NewCloudAgentData { name: string; objective: string; schedule_spec: ScheduleSpec }
+/** La skill con código del espacio que corre el agente en la nube (WS-0099). */
+interface SkillRef { key: string; script: string; args?: string }
+interface NewCloudAgentData { name: string; objective: string; schedule_spec: ScheduleSpec; skill?: SkillRef }
 
-interface AgentSettingsChange { objective?: string; model?: string | null; schedule?: ScheduleSpec; schedule_spec?: ScheduleSpec; tools?: string[] | null; delivery?: string[] }
-interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec }; run?: boolean; delete?: boolean; at?: string }
+interface AgentSettingsChange { skill?: SkillRef | null; objective?: string; model?: string | null; schedule?: ScheduleSpec; schedule_spec?: ScheduleSpec; tools?: string[] | null; delivery?: string[] }
+interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec; skill?: SkillRef }; run?: boolean; delete?: boolean; at?: string }
 
 const REFRESH_MS = 60_000;
 
@@ -120,19 +122,50 @@ function slug(text: string): string {
   return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').split('-').slice(0, 8).join('-').slice(0, 48).replace(/-+$/, '');
 }
 
-const FREQ_OPTIONS: [string, string][] = [['daily', 'Todos los días'], ['weekdays', 'De lunes a viernes'], ['days', 'Días elegidos']];
-const isEditableSchedule = (sp?: ScheduleSpec) => !sp || ['daily', 'weekdays', 'days'].includes(sp.frequency);
+const FREQ_OPTIONS: [string, string][] = [['daily', 'Todos los días'], ['weekdays', 'De lunes a viernes'], ['days', 'Días elegidos'], ['market_hours', 'Cada 1 h en rueda']];
+const MARKET_SCHEDULE: ScheduleSpec = { frequency: 'market_hours', minutes: 60, timezone: 'America/New_York' };
+const isEditableSchedule = (sp?: ScheduleSpec) => !sp || ['daily', 'weekdays', 'days'].includes(sp.frequency) || (sp.frequency === 'market_hours' && sp.minutes === 60);
 
-/** Cuándo corre: todos los días, de lunes a viernes o días elegidos, a una hora y zona. */
+/** Cuándo corre: todos los días, de lunes a viernes, días elegidos (a una hora y zona) o cada 1 h en rueda. */
 function ScheduleFields({ value, onChange }: { value: ScheduleSpec; onChange: (v: ScheduleSpec) => void }) {
   const days = value.days ?? [];
   const toggle = (d: string) => onChange({ ...value, days: days.includes(d) ? days.filter(x => x !== d) : [...days, d] });
   return <fieldset className="agents-fieldset"><legend>Cuándo corre</legend>
-    <select aria-label="Frecuencia" value={value.frequency} onChange={e => onChange({ ...value, frequency: e.target.value, days: e.target.value === 'days' ? (days.length ? days : ['mon']) : undefined })}>
+    <select aria-label="Frecuencia" value={value.frequency} onChange={e => onChange(e.target.value === 'market_hours' ? MARKET_SCHEDULE
+      : { ...value, frequency: e.target.value, time: value.time ?? '09:00', minutes: undefined, days: e.target.value === 'days' ? (days.length ? days : ['mon']) : undefined })}>
       {FREQ_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
     {value.frequency === 'days' && <div className="agents-days" role="group" aria-label="Días">{DAY_LABELS.map(([d, l]) => <label key={d} className={days.includes(d) ? 'on' : ''}><input type="checkbox" checked={days.includes(d)} onChange={() => toggle(d)} />{l}</label>)}</div>}
-    <div className="agents-when"><label>Hora<input type="time" value={value.time ?? '09:00'} onChange={e => onChange({ ...value, time: e.target.value })} required /></label>
-      <label>Zona<select value={value.timezone} onChange={e => onChange({ ...value, timezone: e.target.value })}>{ZONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label></div>
+    {value.frequency !== 'market_hours' && <div className="agents-when"><label>Hora<input type="time" value={value.time ?? '09:00'} onChange={e => onChange({ ...value, time: e.target.value })} required /></label>
+      <label>Zona<select value={value.timezone} onChange={e => onChange({ ...value, timezone: e.target.value })}>{ZONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label></div>}
+  </fieldset>;
+}
+
+/** Skills con código del espacio (propias y compartidas) y sus scripts; sin elegir, el agente sólo lee datos. */
+interface SkillOption { key: string; title: string; scripts: string[] }
+function skillOptions(items: SpaceItem[]): SkillOption[] {
+  const out: SkillOption[] = [];
+  for (const i of items) {
+    if (i.kind !== 'skill' || i.format !== 'json' || out.some(o => o.key === i.key)) continue;
+    try {
+      const data = JSON.parse(i.content);
+      if (data?.format !== 'skill-folder/1' || !data.files) continue;
+      const scripts = Object.keys(data.files).filter(f => /^scripts[/][^/]+[.]py$/.test(f)).map(f => f.slice('scripts/'.length)).sort();
+      if (scripts.length) out.push({ key: i.key, title: i.title, scripts });
+    } catch { /* una skill que no se puede leer no se ofrece */ }
+  }
+  return out;
+}
+
+function SkillFields({ value, options, onChange }: { value: SkillRef | null; options: SkillOption[]; onChange: (v: SkillRef | null) => void }) {
+  if (!options.length && !value) return null;
+  const current = options.find(o => o.key === value?.key);
+  const scripts = current?.scripts ?? (value ? [value.script] : []);
+  return <fieldset className="agents-fieldset"><legend>Skill</legend>
+    <select aria-label="Skill" value={value?.key ?? ''} onChange={e => { const o = options.find(x => x.key === e.target.value); onChange(o ? { key: o.key, script: o.scripts[0] } : null); }}>
+      <option value="">Ninguna</option>
+      {value && !current && <option value={value.key}>{value.key}</option>}
+      {options.map(o => <option key={o.key} value={o.key}>{o.title}</option>)}</select>
+    {value && <select aria-label="Script" value={value.script} onChange={e => onChange({ ...value, script: e.target.value })}>{scripts.map(sc => <option key={sc} value={sc}>{sc}</option>)}</select>}
   </fieldset>;
 }
 
@@ -258,12 +291,14 @@ const isCloud = (a: Agent) => a.runs_on === 'cloud';
 /** La frecuencia de una especificación, para mostrarla mientras la rutina todavía no se creó. */
 function specText(sp: ScheduleSpec): string {
   const days = (sp.days ?? []).map(d => DAY_LABELS.find(x => x[0] === d)?.[1] ?? d).join(', ');
+  if (sp.frequency === 'market_hours') return `Cada ${(sp.minutes ?? 60) / 60} h en rueda, L–V 9:30–16:00 NY`;
   const cadence = sp.frequency === 'weekdays' ? 'De lunes a viernes' : sp.frequency === 'days' ? days : 'Todos los días';
   return `${cadence}, ${sp.time ?? '09:00'} ${ZONES.find(z => z[0] === sp.timezone)?.[1] ?? sp.timezone}`;
 }
 
-function NewCloudAgent({ existing, onCreate, onClose }: { existing: string[]; onCreate: (c: NewCloudAgentData) => Promise<boolean>; onClose: () => void }) {
+function NewCloudAgent({ existing, skills, onCreate, onClose }: { existing: string[]; skills: SkillOption[]; onCreate: (c: NewCloudAgentData) => Promise<boolean>; onClose: () => void }) {
   const [name, setName] = useState('');
+  const [skill, setSkill] = useState<SkillRef | null>(null);
   const [what, setWhat] = useState('');
   const [schedule, setSchedule] = useState<ScheduleSpec>({ frequency: 'daily', time: '09:00', timezone: 'America/New_York' });
   const [saving, setSaving] = useState(false);
@@ -275,7 +310,7 @@ function NewCloudAgent({ existing, onCreate, onClose }: { existing: string[]; on
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    void onCreate({ name: name.trim(), objective: what.trim(), schedule_spec: schedule }).then(ok => { setSaving(false); if (ok) onClose(); });
+    void onCreate({ name: name.trim(), objective: what.trim(), schedule_spec: schedule, ...(skill ? { skill } : {}) }).then(ok => { setSaving(false); if (ok) onClose(); });
   };
   return <div className="agents-modal-backdrop" onClick={onClose}><div className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="agent-new-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
     <div className="agents-modal-title"><h2 id="agent-new-title">Nuevo agente</h2><button ref={closeRef} aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
@@ -284,6 +319,7 @@ function NewCloudAgent({ existing, onCreate, onClose }: { existing: string[]; on
       {taken && <small className="agents-failed">Ya existe un agente con ese nombre.</small>}
       <label htmlFor="agent-new-objective">Qué hace</label><textarea id="agent-new-objective" value={what} onChange={e => setWhat(e.target.value)} rows={6} maxLength={12000} required />
       <ScheduleFields value={schedule} onChange={setSchedule} />
+      <SkillFields value={skill} options={skills} onChange={setSkill} />
       <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!valid || saving}><Save size={14} />Crear</button><button className="agents-text-button" type="button" onClick={onClose}>Cancelar</button></div>
     </form>
   </div></div>;
@@ -310,17 +346,19 @@ function CloudRuns({ runs, error }: { runs: AgentRun[] | null; error: string | n
   </section>;
 }
 
-function CloudSettings({ a, busy, onSave }: { a: Agent; busy: boolean; onSave: (settings: AgentSettingsChange) => Promise<boolean> }) {
+function CloudSettings({ a, skills, busy, onSave }: { a: Agent; skills: SkillOption[]; busy: boolean; onSave: (settings: AgentSettingsChange) => Promise<boolean> }) {
   const [editing, setEditing] = useState(false);
+  const [skill, setSkill] = useState<SkillRef | null>(a.skill ?? null);
   const [objective, setObjective] = useState(a.objective);
   const [schedule, setSchedule] = useState<ScheduleSpec>(a.schedule_spec ?? { frequency: 'daily', time: '09:00', timezone: 'America/New_York' });
   const pending = !!a.request;
-  const edit = () => { setObjective(a.objective); if (a.schedule_spec) setSchedule(a.schedule_spec); setEditing(true); };
+  const edit = () => { setObjective(a.objective); setSkill(a.skill ?? null); if (a.schedule_spec) setSchedule(a.schedule_spec); setEditing(true); };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const change: AgentSettingsChange = {};
     if (objective.trim() !== a.objective.trim()) change.objective = objective.trim();
     if (JSON.stringify(schedule) !== JSON.stringify(a.schedule_spec)) change.schedule_spec = schedule;
+    if (JSON.stringify(skill) !== JSON.stringify(a.skill ?? null)) change.skill = skill;
     if (!Object.keys(change).length) { setEditing(false); return; }
     void onSave(change).then(saved => { if (saved) setEditing(false); });
   };
@@ -328,6 +366,7 @@ function CloudSettings({ a, busy, onSave }: { a: Agent; busy: boolean; onSave: (
     {editing ? <form className="agents-edit-form" onSubmit={submit}>
       <label htmlFor="agent-objective">Qué hace</label><textarea id="agent-objective" value={objective} onChange={e => setObjective(e.target.value)} rows={7} maxLength={12000} required />
       <ScheduleFields value={schedule} onChange={setSchedule} />
+      <SkillFields value={skill} options={skills} onChange={setSkill} />
       <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!objective.trim() || (schedule.frequency === 'days' && !(schedule.days?.length)) || busy || pending}><Save size={14} />Guardar cambios</button><button className="agents-text-button" type="button" onClick={() => setEditing(false)}>Cancelar</button></div>
     </form> : <p className="agents-objective">{a.objective || 'Sin instrucciones.'}</p>}
   </section>;
@@ -348,8 +387,8 @@ function ConfirmDelete({ title, onConfirm, onClose }: { title: string; onConfirm
   </div></div>;
 }
 
-function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
-  a: Agent; item: SpaceItem; title: string; onChange: (r: AgentRequest) => Promise<boolean>; onDelete: () => Promise<void>; busy: boolean; onBack: () => void;
+function CloudDetail({ a, item, title, skills, onChange, onDelete, busy, onBack }: {
+  a: Agent; item: SpaceItem; title: string; skills: SkillOption[]; onChange: (r: AgentRequest) => Promise<boolean>; onDelete: () => Promise<void>; busy: boolean; onBack: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [runs, setRuns] = useState<AgentRun[] | null>(null);
@@ -375,13 +414,13 @@ function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
   const ready = !!a.trigger_id && a.status !== 'pending';
   return <>
     <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Agentes</button><span>/</span><span>{title}</span></div>
-    <header className="agents-detail-heading"><div><h1>{title}</h1><p>{scheduleText(a.schedule)}</p></div>
+    <header className="agents-detail-heading"><div><h1>{title}</h1><p>{scheduleText(a.schedule)}</p>{a.skill && <p>Skill: {skills.find(o => o.key === a.skill?.key)?.title ?? a.skill.key} · {a.skill.script}</p>}</div>
       <div className="agents-actions"><button className="agents-primary" onClick={run} disabled={!ready || starting || busy}><Play size={14} />Ejecutar</button><Toggle a={a} busy={busy} onRequest={status => { void onChange({ status }); }} />{!a.request?.delete && <button className="agents-text-button" disabled={busy} onClick={() => setConfirming(true)}><Trash2 size={14} />Borrar</button>}</div></header>
     {a.request?.delete ? <p className="agents-notice" role="status">Borrando… (se aplica con el Lab abierto)</p> : a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
     {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
     {notice && <p className={notice.error ? 'agents-error' : 'agents-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
     <div className="agents-detail-grid"><CloudRuns runs={runs} error={runsError} /><aside className="agents-settings">
-      <CloudSettings a={a} busy={busy} onSave={settings => onChange({ settings })} />
+      <CloudSettings a={a} skills={skills} busy={busy} onSave={settings => onChange({ settings })} />
       <RoutineLink a={a} />
     </aside></div>
     {confirming && <ConfirmDelete title={title} onConfirm={onDelete} onClose={() => setConfirming(false)} />}
@@ -430,6 +469,7 @@ function Help() {
 
 export function Agentes() {
   const [items, setItems] = useState<SpaceItem[] | null>(null);
+  const [skills, setSkills] = useState<SkillOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -438,8 +478,9 @@ export function Agentes() {
 
   const load = useCallback(async () => {
     try {
-      const { items: own } = await fetchSpace();
+      const { items: own, shared } = await fetchSpace();
       setItems(own.filter((i) => i.kind === 'agent'));
+      setSkills(skillOptions([...own, ...(shared ?? [])]));
       setError(null);
     } catch (e: any) {
       setError(e?.response?.status === 401 ? 'Tu sesión venció: volvé a entrar.' : 'No se pudo leer tus agentes de GaleCore.');
@@ -465,7 +506,8 @@ export function Agentes() {
       const content = {
         id: c.name, runs_on: 'cloud', capability: 'routine', status: 'pending', objective: c.objective, schedule_spec: c.schedule_spec,
         schedule: specText(c.schedule_spec), model: 'claude-sonnet-5', trigger_id: null, routine_url: null, created_at: at,
-        request: { create: { id: c.name, objective: c.objective, schedule_spec: c.schedule_spec }, at },
+        ...(c.skill ? { skill: c.skill } : {}),
+        request: { create: { id: c.name, objective: c.objective, schedule_spec: c.schedule_spec, ...(c.skill ? { skill: c.skill } : {}) }, at },
       };
       await saveSpaceItem('agent', slug(c.name), { title: c.name, format: 'json', visibility: 'private', content: JSON.stringify(content) });
       await load();
@@ -508,7 +550,7 @@ export function Agentes() {
 
   return <div className="agents-page">
     {error && <div className="agents-error" role="alert">{error}<button className="agents-text-button" onClick={load}>Reintentar</button></div>}
-    {current && isCloud(current.a) ? <CloudDetail key={current.item.key} a={current.a} item={current.item} title={taskTitle(current.a, current.item.title)}
+    {current && isCloud(current.a) ? <CloudDetail key={current.item.key} a={current.a} item={current.item} skills={skills} title={taskTitle(current.a, current.item.title)}
       busy={busy === current.item.key} onChange={change => request(current.item, current.a, change)} onDelete={() => remove(current.item, current.a)} onBack={() => setSelected(null)} />
       : current ? <AgentDetail key={current.item.key} a={current.a} title={taskTitle(current.a, current.item.title)}
       publishedAt={current.item.updatedAt} busy={busy === current.item.key} onRequest={status => request(current.item, current.a, { status })} onSave={settings => request(current.item, current.a, { settings })} onBack={() => setSelected(null)} /> : <>
@@ -532,6 +574,6 @@ export function Agentes() {
         </table></div>}
       </>
     </>}
-    {creating && <NewCloudAgent existing={(items ?? []).map(i => i.key)} onCreate={create} onClose={() => setCreating(false)} />}
+    {creating && <NewCloudAgent existing={(items ?? []).map(i => i.key)} skills={skills} onCreate={create} onClose={() => setCreating(false)} />}
   </div>;
 }
