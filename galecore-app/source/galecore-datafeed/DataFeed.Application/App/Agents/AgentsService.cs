@@ -10,9 +10,16 @@ namespace DataFeed.Application.App.Agents
     /// <summary>Corrida tal como la ve el usuario; <see cref="Status"/> ya trae el estado derivado (<c>no_report</c>).</summary>
     public sealed record AgentRunView(
         Guid Id, string AgentKey, string Origin, string Status, string? Summary, string? ReasonCode, string? TriggerId,
-        string? SessionUrl, string? SessionId, DateTime? RequestedAt, DateTime? FiredAt, DateTime? FinishedAt, DateTime CreatedAt);
+        string? SessionUrl, string? SessionId, DateTime? RequestedAt, DateTime? FiredAt, DateTime? FinishedAt, DateTime CreatedAt,
+        string? ResultJson = null);
 
-    public sealed record ReportInput(string? Status, string? Summary, string? ReasonCode, string? TriggerId, DateTime? FiredAt, DateTime? FinishedAt);
+    /// <summary>Aviso de un agente tal como lo ve el usuario (WS-0099).</summary>
+    public sealed record AgentAlertView(string AlertId, string AgentKey, string Title, DateTime CreatedAt);
+
+    public sealed record AlertInput(string? Id, string? Title);
+
+    public sealed record ReportInput(string? Status, string? Summary, string? ReasonCode, string? TriggerId, DateTime? FiredAt, DateTime? FinishedAt,
+        string? ResultJson = null, IReadOnlyList<AlertInput>? Alerts = null);
 
     public sealed record AgentResult<T>(AgentOutcome Outcome, T? Value = default, string? Error = null, int? RetryAfterSeconds = null);
 
@@ -31,6 +38,7 @@ namespace DataFeed.Application.App.Agents
         public const string KeyPrefix = "gca_";
         public static readonly TimeSpan FireInterval = TimeSpan.FromMinutes(5);
         public static readonly TimeSpan ManualMatchWindow = TimeSpan.FromHours(2);
+        public static readonly TimeSpan AlertWindow = TimeSpan.FromDays(7);
         public static readonly TimeSpan NoReportAfter = TimeSpan.FromMinutes(30);
         public const string NoReportStatus = "no_report";
         public const string TokenRejectedMessage = "el token de esta rutina no anda: generá otro en claude.ai";
@@ -117,6 +125,16 @@ namespace DataFeed.Application.App.Agents
                 return new(AgentOutcome.Invalid, Error: $"summary admite hasta {AgentRun.MaxSummaryLength} caracteres");
             if (input.ReasonCode is { Length: > 64 }) return new(AgentOutcome.Invalid, Error: "reason_code admite hasta 64 caracteres");
             if (input.TriggerId is { Length: > 200 }) return new(AgentOutcome.Invalid, Error: "trigger_id admite hasta 200 caracteres");
+            if (input.ResultJson is { Length: > AgentRun.MaxResultLength })
+                return new(AgentOutcome.Invalid, Error: $"result admite hasta {AgentRun.MaxResultLength} caracteres");
+            var alerts = input.Alerts ?? Array.Empty<AlertInput>();
+            if (alerts.Count > AgentAlert.MaxPerReport)
+                return new(AgentOutcome.Invalid, Error: $"alerts admite hasta {AgentAlert.MaxPerReport} avisos");
+            if (alerts.Any(a => string.IsNullOrWhiteSpace(a.Id) || a.Id.Length > AgentAlert.MaxIdLength
+                                || string.IsNullOrWhiteSpace(a.Title) || a.Title.Length > AgentAlert.MaxTitleLength))
+                return new(AgentOutcome.Invalid, Error: $"cada aviso lleva id (hasta {AgentAlert.MaxIdLength}) y title (hasta {AgentAlert.MaxTitleLength} caracteres)");
+            // La conclusión no puede quedar vigente sin cálculo: un ok con el resultado fallido es un error.
+            if (status == "ok" && ResultFailed(input.ResultJson)) status = "error";
 
             var now = Now;
             var firedAt = Utc(input.FiredAt);
@@ -131,6 +149,7 @@ namespace DataFeed.Application.App.Agents
                 run = open;
                 run.Status = status;
                 run.Summary = summary;
+                run.ResultJson = input.ResultJson;
                 run.ReasonCode = reason;
                 run.FiredAt = firedAt ?? run.FiredAt;
                 run.FinishedAt = finishedAt ?? now;
@@ -141,12 +160,34 @@ namespace DataFeed.Application.App.Agents
                 run = await _store.AddRunAsync(new AgentRun
                 {
                     Id = Guid.NewGuid(), OwnerId = ownerId, AgentKey = agentKey, Origin = "schedule", Status = status,
-                    Summary = summary, ReasonCode = reason, TriggerId = triggerId,
+                    Summary = summary, ResultJson = input.ResultJson, ReasonCode = reason, TriggerId = triggerId,
                     FiredAt = firedAt, FinishedAt = finishedAt ?? now, CreatedAt = now,
                 }, ct);
                 await TrimAsync(ownerId, agentKey, ct);
             }
+            // Un aviso sale una sola vez por id; sólo cuentan los de una corrida que terminó ok.
+            if (status == "ok" && alerts.Count > 0)
+                await _store.AddNewAlertsAsync(ownerId, agentKey, run.Id, alerts.Select(a => (a.Id!.Trim(), a.Title!.Trim())).ToList(), now, ct);
             return new(AgentOutcome.Ok, ToView(run, now));
+        }
+
+        private static bool ResultFailed(string? json)
+        {
+            if (string.IsNullOrEmpty(json)) return false;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("ok", out var ok) && ok.ValueKind == System.Text.Json.JsonValueKind.False;
+            }
+            catch (System.Text.Json.JsonException) { return false; }
+        }
+
+        /// <summary>Avisos de los últimos 7 días del usuario, más recientes primero.</summary>
+        public async Task<IReadOnlyList<AgentAlertView>> ListAlertsAsync(Guid ownerId, CancellationToken ct)
+        {
+            var rows = await _store.ListAlertsAsync(ownerId, Now - AlertWindow, ct);
+            return rows.Select(a => new AgentAlertView(a.AlertId, a.AgentKey, a.Title, a.CreatedAt)).ToList();
         }
 
         /// <summary>Npgsql sólo acepta UTC en timestamptz: un valor sin zona se toma como UTC.</summary>
@@ -158,6 +199,7 @@ namespace DataFeed.Application.App.Agents
             var all = await _store.ListRunsAsync(ownerId, agentKey, ct); // más recientes primero
             if (all.Count > AgentRun.MaxPerAgent)
                 await _store.DeleteRunsAsync(all.Skip(AgentRun.MaxPerAgent).Select(r => r.Id).ToList(), ct);
+            await _store.DeleteAlertsBeforeAsync(ownerId, Now - TimeSpan.FromDays(AgentAlert.KeepDays), ct);
         }
 
         public static AgentRunView ToView(AgentRun r, DateTime now)
@@ -165,7 +207,7 @@ namespace DataFeed.Application.App.Agents
             var status = r.Status == "requested" && r.Origin == "manual" && r.RequestedAt != null && now - r.RequestedAt.Value >= NoReportAfter
                 ? NoReportStatus : r.Status;
             return new AgentRunView(r.Id, r.AgentKey, r.Origin, status, r.Summary, r.ReasonCode, r.TriggerId,
-                r.SessionUrl, r.SessionId, r.RequestedAt, r.FiredAt, r.FinishedAt, r.CreatedAt);
+                r.SessionUrl, r.SessionId, r.RequestedAt, r.FiredAt, r.FinishedAt, r.CreatedAt, r.ResultJson);
         }
 
         public async Task<AgentResult<IReadOnlyList<AgentRunView>>> ListRunsAsync(Guid ownerId, string agentKey, CancellationToken ct)

@@ -42,6 +42,12 @@ namespace DataFeed.Application.App.Agents
         /// <summary>Corridas de un agente, más recientes primero.</summary>
         Task<IReadOnlyList<AgentRun>> ListRunsAsync(Guid ownerId, string agentKey, CancellationToken ct);
         Task DeleteRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct);
+
+        /// <summary>Guarda los avisos cuyo (dueño, agente, AlertId) todavía no existe; devuelve cuántos eran nuevos.</summary>
+        Task<int> AddNewAlertsAsync(Guid ownerId, string agentKey, Guid runId, IReadOnlyList<(string AlertId, string Title)> alerts, DateTime now, CancellationToken ct);
+        /// <summary>Avisos del dueño creados desde <paramref name="since"/>, más recientes primero.</summary>
+        Task<IReadOnlyList<AgentAlert>> ListAlertsAsync(Guid ownerId, DateTime since, CancellationToken ct);
+        Task DeleteAlertsBeforeAsync(Guid ownerId, DateTime before, CancellationToken ct);
     }
 
     public sealed class EfAgentStore : IAgentStore
@@ -185,6 +191,36 @@ namespace DataFeed.Application.App.Agents
             if (ids.Count == 0) return;
             await using var db = _newContext();
             await db.AgentRuns.Where(r => ids.Contains(r.Id)).ExecuteDeleteAsync(ct);
+        }
+
+        public async Task<int> AddNewAlertsAsync(Guid ownerId, string agentKey, Guid runId, IReadOnlyList<(string AlertId, string Title)> alerts, DateTime now, CancellationToken ct)
+        {
+            if (alerts.Count == 0) return 0;
+            await using var db = _newContext();
+            var ids = alerts.Select(a => a.AlertId).ToList();
+            var seen = await db.AgentAlerts.AsNoTracking()
+                .Where(a => a.OwnerId == ownerId && a.AgentKey == agentKey && ids.Contains(a.AlertId))
+                .Select(a => a.AlertId).ToListAsync(ct);
+            var fresh = alerts.Where(a => !seen.Contains(a.AlertId)).DistinctBy(a => a.AlertId).ToList();
+            foreach (var a in fresh)
+                db.AgentAlerts.Add(new AgentAlert { Id = Guid.NewGuid(), OwnerId = ownerId, AgentKey = agentKey, AlertId = a.AlertId, Title = a.Title, RunId = runId, CreatedAt = now });
+            if (fresh.Count > 0) await db.SaveChangesAsync(ct);
+            return fresh.Count;
+        }
+
+        public async Task<IReadOnlyList<AgentAlert>> ListAlertsAsync(Guid ownerId, DateTime since, CancellationToken ct)
+        {
+            await using var db = _newContext();
+            return await db.AgentAlerts.AsNoTracking()
+                .Where(a => a.OwnerId == ownerId && a.CreatedAt >= since)
+                .OrderByDescending(a => a.CreatedAt)
+                .ToListAsync(ct);
+        }
+
+        public async Task DeleteAlertsBeforeAsync(Guid ownerId, DateTime before, CancellationToken ct)
+        {
+            await using var db = _newContext();
+            await db.AgentAlerts.Where(a => a.OwnerId == ownerId && a.CreatedAt < before).ExecuteDeleteAsync(ct);
         }
     }
 }

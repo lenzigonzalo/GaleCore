@@ -5,6 +5,7 @@ using DataFeed.Infrastructure.Providers.Tastytrade;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace DataFeed.Controllers
 {
@@ -38,6 +39,14 @@ namespace DataFeed.Controllers
             [JsonProperty("trigger_id")] public string? TriggerId { get; set; }
             [JsonProperty("fired_at")] public DateTime? FiredAt { get; set; }
             [JsonProperty("finished_at")] public DateTime? FinishedAt { get; set; }
+            [JsonProperty("result")] public JObject? Result { get; set; }
+            [JsonProperty("alerts")] public List<AlertRequest>? Alerts { get; set; }
+        }
+
+        public sealed class AlertRequest
+        {
+            [JsonProperty("id")] public string? Id { get; set; }
+            [JsonProperty("title")] public string? Title { get; set; }
         }
 
         public sealed class FireTokenRequest
@@ -64,6 +73,7 @@ namespace DataFeed.Controllers
             id = r.Id, agent_key = r.AgentKey, origin = r.Origin, status = r.Status, summary = r.Summary,
             reason_code = r.ReasonCode, trigger_id = r.TriggerId, session_url = r.SessionUrl, session_id = r.SessionId,
             requested_at = r.RequestedAt, fired_at = r.FiredAt, finished_at = r.FinishedAt, created_at = r.CreatedAt,
+            result = r.ResultJson == null ? null : JToken.Parse(r.ResultJson),
         };
 
         private static object Dto(FireTokenStatus t) => new
@@ -147,7 +157,8 @@ namespace DataFeed.Controllers
                 return Unauthorized(new ApiErrorResponse { Error = "Clave de agentes inválida.", Code = "invalid_agent_key" });
             if (body == null) return BadRequest(new ApiErrorResponse { Error = "Falta el cuerpo.", Code = "invalid_request" });
 
-            var r = await svc.ReportAsync(owner.Value, key, new ReportInput(body.Status, body.Summary, body.ReasonCode, body.TriggerId, body.FiredAt, body.FinishedAt), ct);
+            var r = await svc.ReportAsync(owner.Value, key, new ReportInput(body.Status, body.Summary, body.ReasonCode, body.TriggerId, body.FiredAt, body.FinishedAt,
+                body.Result?.ToString(Formatting.None), body.Alerts?.Select(a => new AlertInput(a.Id, a.Title)).ToList()), ct);
             return r.Outcome == AgentOutcome.Ok ? Ok(Dto(r.Value!)) : Failure(r);
         }
 
@@ -171,6 +182,19 @@ namespace DataFeed.Controllers
         }
 
         // ── Corridas, token de disparo y ejecución (login del usuario) ─────────────────────────────────────────
+
+        /// <summary>Avisos que dejaron tus agentes en los últimos 7 días, más recientes primero.</summary>
+        [Authorize]
+        [HttpGet("GaleCore/Agents/Alerts")]
+        public async Task<IActionResult> ListAlerts(CancellationToken ct)
+        {
+            var uid = _currentUser.UserId;
+            if (uid == null) return Unauthorized();
+            var svc = Service;
+            if (svc == null) return Unavailable();
+            var rows = await svc.ListAlertsAsync(uid.Value, ct);
+            return Ok(new { alerts = rows.Select(a => new { id = a.AlertId, agent_key = a.AgentKey, title = a.Title, created_at = a.CreatedAt }) });
+        }
 
         /// <summary>Corridas de uno de tus agentes, más recientes primero (últimas 50).</summary>
         [Authorize]

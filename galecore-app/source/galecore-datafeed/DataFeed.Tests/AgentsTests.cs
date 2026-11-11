@@ -73,6 +73,16 @@ public class AgentsTests
         public Task<IReadOnlyList<AgentRun>> ListRunsAsync(Guid o, string a, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<AgentRun>>(Runs.Where(r => r.OwnerId == o && r.AgentKey == a).OrderByDescending(r => r.CreatedAt).ToList());
         public Task DeleteRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) { Runs.RemoveAll(r => ids.Contains(r.Id)); return Task.CompletedTask; }
+        public List<AgentAlert> Alerts { get; } = new();
+        public Task<int> AddNewAlertsAsync(Guid o, string a, Guid runId, IReadOnlyList<(string AlertId, string Title)> alerts, DateTime now, CancellationToken ct)
+        {
+            var fresh = alerts.Where(x => !Alerts.Any(e => e.OwnerId == o && e.AgentKey == a && e.AlertId == x.AlertId)).DistinctBy(x => x.AlertId).ToList();
+            Alerts.AddRange(fresh.Select(x => new AgentAlert { Id = Guid.NewGuid(), OwnerId = o, AgentKey = a, AlertId = x.AlertId, Title = x.Title, RunId = runId, CreatedAt = now }));
+            return Task.FromResult(fresh.Count);
+        }
+        public Task<IReadOnlyList<AgentAlert>> ListAlertsAsync(Guid o, DateTime since, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<AgentAlert>>(Alerts.Where(x => x.OwnerId == o && x.CreatedAt >= since).OrderByDescending(x => x.CreatedAt).ToList());
+        public Task DeleteAlertsBeforeAsync(Guid o, DateTime before, CancellationToken ct) { Alerts.RemoveAll(x => x.OwnerId == o && x.CreatedAt < before); return Task.CompletedTask; }
     }
 
     private sealed record Rig(AgentsService Svc, FakeStore Store, FakeFire Fire, FakeTime Time);
@@ -465,6 +475,93 @@ public class AgentsTests
         var list = (await r.Svc.ListRunsAsync(Ana, Agent, default)).Value!;
         Assert.Equal(new[] { "n2", "n1", "n0" }, list.Select(x => x.Summary));
         Assert.Equal(AgentOutcome.NotFound, (await r.Svc.ListRunsAsync(Beto, Agent, default)).Outcome);
+    }
+
+    // ── resultado de la skill y avisos (WS-0099 C) ─────────────────────────────────────────────────────────────
+
+    private static ReportInput WithResult(string status, string? result, params (string Id, string Title)[] alerts) =>
+        new(status, "resumen", null, null, null, null, result, alerts.Select(a => new AlertInput(a.Id, a.Title)).ToList());
+
+    private const string GoodResult = "{\"skill\":\"cierre\",\"version\":2,\"ok\":true,\"error\":null,\"salida\":{\"valores\":{\"spy\":600}}}";
+
+    [Fact]
+    public async Task ElReporteGuardaElResultadoYLoDevuelveEnLaVista()
+    {
+        var r = NewRig();
+        var res = await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult), default);
+        Assert.Equal(GoodResult, res.Value!.ResultJson);
+        Assert.Equal(GoodResult, (await r.Svc.ListRunsAsync(Ana, Agent, default)).Value![0].ResultJson);
+    }
+
+    [Fact]
+    public async Task UnOkConElResultadoFallidoQuedaError()
+    {
+        var r = NewRig();
+        var res = await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", "{\"ok\":false,\"error\":\"boom\"}", ("a1", "Rompió")), default);
+        Assert.Equal("error", res.Value!.Status);
+        Assert.Empty(r.Store.Alerts); // sin cálculo no hay aviso
+    }
+
+    [Fact]
+    public async Task UnAvisoSaleUnaSolaVezPorIdYOtroIdAvisaDeNuevo()
+    {
+        var r = NewRig();
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("ruptura-1", "SPY rompió")), default);
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("ruptura-1", "SPY rompió")), default);
+        Assert.Single(r.Store.Alerts);
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("ruptura-2", "SPY rompió otra vez")), default);
+        Assert.Equal(2, r.Store.Alerts.Count);
+        Assert.Equal(3, r.Store.Runs.Count(x => x.ResultJson == GoodResult)); // cada corrida con su resultado
+    }
+
+    [Fact]
+    public async Task UnaCorridaQueNoTerminoOkNoDejaAvisos()
+    {
+        var r = NewRig();
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("error", GoodResult, ("a1", "x")), default);
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("skipped", null, ("a2", "x")), default);
+        Assert.Empty(r.Store.Alerts);
+    }
+
+    [Fact]
+    public async Task LosLimitesDeResultadoYAvisosSon400()
+    {
+        var r = NewRig();
+        var big = "{\"x\":\"" + new string('a', AgentRun.MaxResultLength) + "\"}";
+        Assert.Equal(AgentOutcome.Invalid, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", big), default)).Outcome);
+        var many = Enumerable.Range(0, 11).Select(i => ($"i{i}", "t")).ToArray();
+        Assert.Equal(AgentOutcome.Invalid, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, many), default)).Outcome);
+        Assert.Equal(AgentOutcome.Invalid, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, (new string('i', 101), "t")), default)).Outcome);
+        Assert.Equal(AgentOutcome.Invalid, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("i", new string('t', 201))), default)).Outcome);
+        Assert.Empty(r.Store.Runs);
+        var ten = Enumerable.Range(0, 10).Select(i => ($"i{i}", "t")).ToArray();
+        Assert.Equal(AgentOutcome.Ok, (await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ten), default)).Outcome);
+        Assert.Equal(10, r.Store.Alerts.Count);
+    }
+
+    [Fact]
+    public async Task ElListadoDeAvisosSonLosDeLosUltimos7DiasSoloDelDueno()
+    {
+        var r = NewRig();
+        r.Store.Agents.Add((Beto, Agent));
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("viejo", "Viejo")), default);
+        r.Time.Advance(TimeSpan.FromDays(8));
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("nuevo", "Nuevo")), default);
+        await r.Svc.ReportAsync(Beto, Agent, WithResult("ok", GoodResult, ("de-beto", "Beto")), default);
+
+        var list = await r.Svc.ListAlertsAsync(Ana, default);
+        var one = Assert.Single(list);
+        Assert.Equal(("nuevo", Agent, "Nuevo"), (one.AlertId, one.AgentKey, one.Title));
+    }
+
+    [Fact]
+    public async Task LosAvisosSeConservan30DiasYLasCorridasQuedanRecortadasSoloEnSuResultado()
+    {
+        var r = NewRig();
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult, ("viejo", "Viejo")), default);
+        r.Time.Advance(TimeSpan.FromDays(31));
+        await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult), default); // el recorte barre los avisos de más de 30 días
+        Assert.Empty(r.Store.Alerts);
     }
 
     // ── aislamiento entre usuarios ─────────────────────────────────────────────────────────────────────────────
