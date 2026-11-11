@@ -8,6 +8,7 @@ not lose its report because it wrote too much.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 import httpx
 
@@ -52,7 +53,7 @@ def get_skill(*, base_url: str, api_key: str | None, agent_secret: str, skill_ke
     headers = {"X-GaleCore-Agent-Key": agent_secret}
     if api_key:
         headers["X-Api-Key"] = api_key
-    url = f"{base_url.rstrip('/')}/App/GaleCore/Agents/Skills/{skill_key}"
+    url = f"{base_url.rstrip('/')}/App/GaleCore/Agents/Skills/{quote(skill_key, safe='')}"
     try:
         with httpx.Client(timeout=timeout, transport=_transport) as http:
             r = http.get(url, headers=headers)

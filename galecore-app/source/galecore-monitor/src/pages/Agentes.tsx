@@ -124,16 +124,16 @@ function slug(text: string): string {
 
 const FREQ_OPTIONS: [string, string][] = [['daily', 'Todos los días'], ['weekdays', 'De lunes a viernes'], ['days', 'Días elegidos'], ['market_hours', 'Cada 1 h en rueda']];
 const MARKET_SCHEDULE: ScheduleSpec = { frequency: 'market_hours', minutes: 60, timezone: 'America/New_York' };
-const isEditableSchedule = (sp?: ScheduleSpec) => !sp || ['daily', 'weekdays', 'days'].includes(sp.frequency) || (sp.frequency === 'market_hours' && sp.minutes === 60);
+const isEditableSchedule = (sp?: ScheduleSpec) => !sp || ['daily', 'weekdays', 'days'].includes(sp.frequency);
 
 /** Cuándo corre: todos los días, de lunes a viernes, días elegidos (a una hora y zona) o cada 1 h en rueda. */
-function ScheduleFields({ value, onChange }: { value: ScheduleSpec; onChange: (v: ScheduleSpec) => void }) {
+function ScheduleFields({ value, onChange, market }: { value: ScheduleSpec; onChange: (v: ScheduleSpec) => void; market?: boolean }) {
   const days = value.days ?? [];
   const toggle = (d: string) => onChange({ ...value, days: days.includes(d) ? days.filter(x => x !== d) : [...days, d] });
   return <fieldset className="agents-fieldset"><legend>Cuándo corre</legend>
     <select aria-label="Frecuencia" value={value.frequency} onChange={e => onChange(e.target.value === 'market_hours' ? MARKET_SCHEDULE
       : { ...value, frequency: e.target.value, time: value.time ?? '09:00', minutes: undefined, days: e.target.value === 'days' ? (days.length ? days : ['mon']) : undefined })}>
-      {FREQ_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+      {FREQ_OPTIONS.filter(([v]) => market || v !== 'market_hours').map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
     {value.frequency === 'days' && <div className="agents-days" role="group" aria-label="Días">{DAY_LABELS.map(([d, l]) => <label key={d} className={days.includes(d) ? 'on' : ''}><input type="checkbox" checked={days.includes(d)} onChange={() => toggle(d)} />{l}</label>)}</div>}
     {value.frequency !== 'market_hours' && <div className="agents-when"><label>Hora<input type="time" value={value.time ?? '09:00'} onChange={e => onChange({ ...value, time: e.target.value })} required /></label>
       <label>Zona<select value={value.timezone} onChange={e => onChange({ ...value, timezone: e.target.value })}>{ZONES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label></div>}
@@ -318,7 +318,7 @@ function NewCloudAgent({ existing, skills, onCreate, onClose }: { existing: stri
       <label htmlFor="agent-name">Nombre</label><input id="agent-name" value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
       {taken && <small className="agents-failed">Ya existe un agente con ese nombre.</small>}
       <label htmlFor="agent-new-objective">Qué hace</label><textarea id="agent-new-objective" value={what} onChange={e => setWhat(e.target.value)} rows={6} maxLength={12000} required />
-      <ScheduleFields value={schedule} onChange={setSchedule} />
+      <ScheduleFields value={schedule} onChange={setSchedule} market />
       <SkillFields value={skill} options={skills} onChange={setSkill} />
       <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!valid || saving}><Save size={14} />Crear</button><button className="agents-text-button" type="button" onClick={onClose}>Cancelar</button></div>
     </form>
@@ -365,7 +365,7 @@ function CloudSettings({ a, skills, busy, onSave }: { a: Agent; skills: SkillOpt
   return <section><div className="agents-section-heading"><h2>Instrucciones y horario</h2>{!editing && <button className="agents-text-button" onClick={edit} disabled={busy || pending}><Pencil size={14} />Editar</button>}</div>
     {editing ? <form className="agents-edit-form" onSubmit={submit}>
       <label htmlFor="agent-objective">Qué hace</label><textarea id="agent-objective" value={objective} onChange={e => setObjective(e.target.value)} rows={7} maxLength={12000} required />
-      <ScheduleFields value={schedule} onChange={setSchedule} />
+      <ScheduleFields value={schedule} onChange={setSchedule} market />
       <SkillFields value={skill} options={skills} onChange={setSkill} />
       <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!objective.trim() || (schedule.frequency === 'days' && !(schedule.days?.length)) || busy || pending}><Save size={14} />Guardar cambios</button><button className="agents-text-button" type="button" onClick={() => setEditing(false)}>Cancelar</button></div>
     </form> : <p className="agents-objective">{a.objective || 'Sin instrucciones.'}</p>}

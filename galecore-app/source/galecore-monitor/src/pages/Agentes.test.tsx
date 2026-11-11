@@ -408,3 +408,14 @@ test('la tarjeta muestra la skill y editar la cambia o la quita con request.sett
   const saved = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
   expect(saved.request.settings).toEqual({ skill: null });
 });
+
+test('las tareas de la PC no ofrecen «Cada 1 h en rueda»; los agentes en la nube sí', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...item, content: JSON.stringify({ ...task, schedule_spec: { frequency: 'daily', time: '10:00', timezone: 'America/New_York' } }) }], shared: [] });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+  expect(within(screen.getByRole('combobox', { name: 'Frecuencia' })).queryByRole('option', { name: 'Cada 1 h en rueda' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo agente' }));
+  expect(within(screen.getByRole('combobox', { name: 'Frecuencia' })).getByRole('option', { name: 'Cada 1 h en rueda' })).toBeInTheDocument();
+});

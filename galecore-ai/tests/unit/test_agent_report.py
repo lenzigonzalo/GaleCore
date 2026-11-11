@@ -182,3 +182,15 @@ def test_skill_run_in_the_cloud_reads_the_skill_with_the_agents_key(env, monkeyp
     code, out = run("nada")
     assert code == 3 and out["ok"] is False and "no existe o no es tuya ni compartida" in out["error"]
     assert AGENT_SECRET not in json.dumps(out)
+
+
+def test_get_skill_escapes_the_key_in_the_url(env, monkeypatch):
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.raw_path.decode())
+        return httpx.Response(200, json={})
+
+    monkeypatch.setattr(agent_report, "_transport", httpx.MockTransport(handler))
+    agent_report.get_skill(base_url="http://localhost:7001", api_key=API_KEY, agent_secret=AGENT_SECRET, skill_key="a/b?c#d")
+    assert seen == ["/App/GaleCore/Agents/Skills/a%2Fb%3Fc%23d"]
