@@ -184,9 +184,10 @@ def cache_root() -> Path:
     return Path(configured).expanduser() if configured else Path.home() / ".cache" / "galecore" / "skills"
 
 
-def materialize(client, key: str) -> tuple[Path, str]:
-    """Folder (cached by version) of a space skill and its version."""
-    data = folder_of(find_piece(client, key))
+def materialize(client, key: str, finder=None) -> tuple[Path, str]:
+    """Folder (cached by version) of a space skill and its version. `finder(key)` replaces the space lookup (the
+    cloud routine reads the skill with its agents key, without a login)."""
+    data = folder_of(finder(key) if finder else find_piece(client, key))
     files = data["files"]
     version = version_of(files)   # recomputed: never trust the stored header for the cache name
     folder = cache_root() / key / version

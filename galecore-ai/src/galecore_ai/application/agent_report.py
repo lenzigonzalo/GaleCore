@@ -47,6 +47,27 @@ def build_body(*, status: str, summary: str, reason_code: str | None, trigger_id
     return body
 
 
+def get_skill(*, base_url: str, api_key: str | None, agent_secret: str, skill_key: str, timeout: float = 30.0) -> dict:
+    """The space piece of a skill (own or shared) as the agents key sees it; the only thing that key can read."""
+    headers = {"X-GaleCore-Agent-Key": agent_secret}
+    if api_key:
+        headers["X-Api-Key"] = api_key
+    url = f"{base_url.rstrip('/')}/App/GaleCore/Agents/Skills/{skill_key}"
+    try:
+        with httpx.Client(timeout=timeout, transport=_transport) as http:
+            r = http.get(url, headers=headers)
+    except httpx.HTTPError as exc:
+        raise AgentReportError(f"GaleCore no respondió en {base_url}: {type(exc).__name__}") from exc
+    if r.status_code == 404:
+        raise AgentReportError(f"La skill «{skill_key}» no existe o no es tuya ni compartida", status=404)
+    if r.status_code >= 400:
+        raise AgentReportError(f"GaleCore rechazó la lectura de la skill (HTTP {r.status_code})", status=r.status_code)
+    try:
+        return r.json()
+    except ValueError as exc:
+        raise AgentReportError("GaleCore respondió algo que no es JSON") from exc
+
+
 def post_run(*, base_url: str, api_key: str | None, agent_secret: str, agent_key: str, body: dict,
              timeout: float = 30.0) -> dict:
     headers = {"X-GaleCore-Agent-Key": agent_secret, "Content-Type": "application/json"}

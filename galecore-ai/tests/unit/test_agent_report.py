@@ -133,3 +133,52 @@ def test_foreign_host_is_blocked(env, monkeypatch, capsys):
     fake = FakeGaleCore()
     code, data, _ = run(monkeypatch, capsys, ["x", "--status", "ok", "--summary", "s"], fake)
     assert code == 1 and "otro.example.com" in data["error"] and fake.requests == []
+
+
+def test_get_skill_sends_both_keys_and_404_says_it_is_not_yours_or_shared(env, monkeypatch):
+    piece = {"kind": "skill", "key": "cierre", "content": "{}", "format": "json"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET" and request.url.path == "/App/GaleCore/Agents/Skills/" + request.url.path.rsplit("/", 1)[1]
+        assert request.headers["X-GaleCore-Agent-Key"] == AGENT_SECRET and request.headers["X-API-KEY"] == API_KEY
+        return httpx.Response(200, json=piece) if request.url.path.endswith("/cierre") else httpx.Response(404, json={})
+
+    monkeypatch.setattr(agent_report, "_transport", httpx.MockTransport(handler))
+    kw = {"base_url": "http://localhost:7001", "api_key": API_KEY, "agent_secret": AGENT_SECRET}
+    assert agent_report.get_skill(skill_key="cierre", **kw) == piece
+    with pytest.raises(agent_report.AgentReportError, match="no existe o no es tuya ni compartida") as err:
+        agent_report.get_skill(skill_key="otra", **kw)
+    assert err.value.status == 404
+
+
+def test_skill_run_in_the_cloud_reads_the_skill_with_the_agents_key(env, monkeypatch, capsys, tmp_path):
+    import argparse
+
+    from galecore_ai.application import skill_space
+    monkeypatch.setenv(skill_space.CACHE_ENV, str(tmp_path / "cache"))
+    monkeypatch.setattr(cli, "knowledge_dir", lambda: tmp_path / "kb")
+    monkeypatch.setattr("galecore_ai.adapters.galecore_space.SpaceClient",
+                        lambda *a, **k: pytest.fail("cloud run must not log in"))
+    files = {"SKILL.md": "---\nname: Cierre\ndescription: x\n---\n", "scripts/c.py": "import json\nprint(json.dumps({'v': 7}))\n"}
+    content, _ = skill_space.build_content(files)
+    gets = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        gets.append(request)
+        if request.url.path.endswith("/cierre"):
+            return httpx.Response(200, json={"kind": "skill", "key": "cierre", "format": "json", "content": content})
+        return httpx.Response(404, json={"error": "x"})
+
+    monkeypatch.setattr(agent_report, "_transport", httpx.MockTransport(handler))
+
+    def run(skill):
+        args = argparse.Namespace(skill_command="run", skill=skill, script="c.py", script_args=[], timeout=30)
+        with pytest.raises(SystemExit) as stop:
+            cli._cmd_skill(args)
+        return stop.value.code, json.loads(capsys.readouterr().out)
+
+    code, out = run("cierre")
+    assert code == 0 and out["ok"] and out["result"] == {"v": 7} and out["source"] == "space"
+    code, out = run("nada")
+    assert code == 3 and out["ok"] is False and "no existe o no es tuya ni compartida" in out["error"]
+    assert AGENT_SECRET not in json.dumps(out)
