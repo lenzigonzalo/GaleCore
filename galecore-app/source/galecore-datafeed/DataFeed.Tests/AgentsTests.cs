@@ -482,7 +482,7 @@ public class AgentsTests
     private static ReportInput WithResult(string status, string? result, params (string Id, string Title)[] alerts) =>
         new(status, "resumen", null, null, null, null, result, alerts.Select(a => new AlertInput(a.Id, a.Title)).ToList());
 
-    private const string GoodResult = "{\"skill\":\"cierre\",\"version\":2,\"ok\":true,\"error\":null,\"salida\":{\"valores\":{\"spy\":600}}}";
+    private const string GoodResult = "{\"corridas\":[{\"skill\":\"cierre\",\"script\":\"cierre.py\",\"version\":2,\"ok\":true,\"error\":null,\"salida\":{\"valores\":{\"spy\":600}}}]}";
 
     [Fact]
     public async Task ElReporteGuardaElResultadoYLoDevuelveEnLaVista()
@@ -497,9 +497,9 @@ public class AgentsTests
     public async Task UnOkConElResultadoFallidoQuedaError()
     {
         var r = NewRig();
-        var res = await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", "{\"ok\":false,\"error\":\"boom\"}", ("a1", "Rompió")), default);
-        Assert.Equal("error", res.Value!.Status);
-        Assert.Empty(r.Store.Alerts); // sin cálculo no hay aviso
+        var res = await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", "{\"corridas\":[{\"skill\":\"a\",\"ok\":true},{\"skill\":\"b\",\"ok\":false,\"error\":\"boom\"}]}", ("a1", "Rompió")), default);
+        Assert.Equal("error", res.Value!.Status); // una corrida fallida deja el estado en error
+        Assert.Single(r.Store.Alerts); // el aviso de la corrida buena se conserva
     }
 
     [Fact]
@@ -515,11 +515,11 @@ public class AgentsTests
     }
 
     [Fact]
-    public async Task UnaCorridaQueNoTerminoOkNoDejaAvisos()
+    public async Task UnOkConTodasLasCorridasBienSigueOk()
     {
         var r = NewRig();
-        await r.Svc.ReportAsync(Ana, Agent, WithResult("error", GoodResult, ("a1", "x")), default);
-        await r.Svc.ReportAsync(Ana, Agent, WithResult("skipped", null, ("a2", "x")), default);
+        var res = await r.Svc.ReportAsync(Ana, Agent, WithResult("ok", GoodResult), default);
+        Assert.Equal("ok", res.Value!.Status);
         Assert.Empty(r.Store.Alerts);
     }
 

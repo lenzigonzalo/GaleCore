@@ -165,8 +165,9 @@ namespace DataFeed.Application.App.Agents
                 }, ct);
                 await TrimAsync(ownerId, agentKey, ct);
             }
-            // Un aviso sale una sola vez por id; sólo cuentan los de una corrida que terminó ok.
-            if (status == "ok" && alerts.Count > 0)
+            // Un aviso sale una sola vez por id. El reporte sólo trae los de las corridas de cálculo que salieron bien
+            // (aunque otra corrida haya fallado y el estado sea error).
+            if (alerts.Count > 0)
                 await _store.AddNewAlertsAsync(ownerId, agentKey, run.Id, alerts.Select(a => (a.Id!.Trim(), a.Title!.Trim())).ToList(), now, ct);
             return new(AgentOutcome.Ok, ToView(run, now));
         }
@@ -177,8 +178,13 @@ namespace DataFeed.Application.App.Agents
             try
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(json);
-                return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
-                    && doc.RootElement.TryGetProperty("ok", out var ok) && ok.ValueKind == System.Text.Json.JsonValueKind.False;
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object
+                    || !doc.RootElement.TryGetProperty("corridas", out var corridas)
+                    || corridas.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
+                foreach (var c in corridas.EnumerateArray())
+                    if (c.ValueKind == System.Text.Json.JsonValueKind.Object
+                        && c.TryGetProperty("ok", out var ok) && ok.ValueKind == System.Text.Json.JsonValueKind.False) return true;
+                return false;
             }
             catch (System.Text.Json.JsonException) { return false; }
         }
