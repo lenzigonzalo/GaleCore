@@ -2,7 +2,8 @@
 
 ``list_versions`` is read-only and by code: the stored versions in semantic order with their approval, critique,
 feasibility and the existing ``strategy_sheet.diff`` against the previous one. ``duplicate`` stores a copy of a
-version under a new name as a draft (saved proposal, no approval, no critique) through ``save_proposal``.
+version under a new name as a draft (saved proposal, no approval, no critique) through ``save_proposal``. ``revise`` (the ficha's «Editar») stores a new version of the same strategy with some
+numeric parameters changed: only the paths of ``EDITABLE``; structure (legs, rules) stays in the Lab.
 """
 
 from __future__ import annotations
@@ -137,5 +138,141 @@ def duplicate(*, kb: KnowledgeBase, key: str, new_name: str, host: RecordHost, n
                              f"plan or owner decisions name the versions {wrong}; only the original's own version is rewritten")
     doc, path = save_proposal(kb=kb, prompt="strategy duplicate", host=host, content=content, spec_json=spec_json,
                               spec_file=f"{new_name}.json", now=now, checker=checker)
+    assert galecore_spec_hash(doc.spec_json) == doc.spec_hash
+    return f"strategy:{doc.name}/{doc.version}", path
+
+
+# ── «Editar» de la ficha: parámetros numéricos → versión nueva ─────────────
+
+# (spec path with "/", human label, unit, kind). kind: "number" (>= 0), "integer" (>= 0) or "time" (HH:MM).
+EDITABLE: tuple[tuple[str, str, str, str], ...] = (
+    ("risk_limits/simulated_capital_usd", "Capital simulado", "USD", "number"),
+    ("risk_limits/max_loss_per_trade_usd", "Tope por operación", "USD", "number"),
+    ("risk_limits/max_risk_per_trade_pct", "Riesgo por operación", "% del capital", "number"),
+    ("risk_limits/max_open_risk_pct", "Riesgo abierto máximo", "% del capital", "number"),
+    ("risk_limits/max_bet_pct", "Tope por apuesta", "% del riesgo abierto", "number"),
+    ("risk_limits/max_concurrent_positions", "Posiciones a la vez", "", "integer"),
+    ("operational/entry_window/start", "Ventana de entrada desde", "hora NY", "time"),
+    ("operational/entry_window/end", "Ventana de entrada hasta", "hora NY", "time"),
+    ("operational/trade_limits/max_entries_per_day", "Entradas por día", "", "integer"),
+    ("candidate_construction/constraints/min_credit", "Crédito mínimo", "USD por contrato", "number"),
+    ("candidate_construction/sizing/fixed_contracts", "Contratos", "", "integer"),
+    ("exits/deterministic/stop_loss/pct_of_credit", "Corte de pérdida", "% del crédito", "number"),
+)
+_TIME_RE = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
+_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _lookup(spec, path: str):
+    """(found, parent, leaf key) for a "/" path; list segments are indexes."""
+    node = spec
+    parts = path.split("/")
+    for part in parts[:-1]:
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        else:
+            return False, None, None
+    leaf = parts[-1]
+    if isinstance(node, dict) and leaf in node:
+        return True, node, leaf
+    return False, None, None
+
+
+def _editable_entries(spec) -> list[dict]:
+    entries = [{"path": p, "label": label, "unit": unit, "kind": kind} for p, label, unit, kind in EDITABLE]
+    gates = (((spec.get("entry_filters") or {}).get("gate_layer") or {}).get("gates")) if isinstance(spec, dict) else None
+    for i, gate in enumerate(gates if isinstance(gates, list) else []):
+        name = (gate.get("label") or gate.get("id")) if isinstance(gate, dict) else None
+        entries.append({"path": f"entry_filters/gate_layer/gates/{i}/threshold/value",
+                        "label": f"Umbral de {name or f'la regla {i + 1}'}", "unit": "", "kind": "number"})
+    return entries
+
+
+def editable(kb: KnowledgeBase, key: str) -> dict:
+    """The editable fields present in this version's spec, with label, unit, kind and current value."""
+    doc = load_proposal(kb, key)
+    spec = json.loads(doc.spec_json, parse_float=_RawNumber, parse_int=_RawNumber)
+    out = []
+    for e in _editable_entries(spec):
+        found, parent, leaf = _lookup(spec, e["path"])
+        if found:
+            value = parent[leaf]
+            out.append({**e, "value": str(value) if isinstance(value, _RawNumber) else value})
+    return {"ref": f"strategy:{key}", "fields": out}
+
+
+def _new_value(entry: dict, raw, old):
+    """Validate ``raw`` against the entry's kind and return what goes in the spec (numbers keep a literal)."""
+    label, kind = entry["label"], entry["kind"]
+    if isinstance(raw, bool):
+        raise KnowledgeError(f"{label}: valor inválido")
+    if kind == "time":
+        if not isinstance(raw, str) or not _TIME_RE.fullmatch(raw):
+            raise KnowledgeError(f"{label}: tiene que ser una hora HH:MM (por ejemplo 13:45)")
+        return raw
+    if isinstance(raw, str):
+        text = raw.strip()
+    elif isinstance(raw, int):
+        text = str(raw)
+    elif isinstance(raw, float):
+        text = repr(raw)
+    else:
+        text = ""
+    if kind == "integer":
+        text = text.removesuffix(".0")
+        if not re.fullmatch(r"\d+", text):
+            raise KnowledgeError(f"{label}: tiene que ser un número entero, 0 o más")
+        return _RawNumber(text)
+    if not _NUMBER_RE.fullmatch(text):
+        raise KnowledgeError(f"{label}: tiene que ser un número, 0 o más")
+    if "." not in text and isinstance(old, _RawNumber) and "." in old:
+        text += ".0"   # same literal style as the field it replaces
+    return _RawNumber(text)
+
+
+def revise(kb: KnowledgeBase, key: str, changes: dict, reason: str, host: RecordHost, now: datetime | None = None,
+           checker: SpecChecker | None = None) -> tuple[str, str]:
+    """Store a new version of ``key``'s strategy (the greatest stored one + 1 patch) with numeric parameters changed.
+    Only ``EDITABLE`` paths present in the spec; never overwrites a version. Returns (ref, path)."""
+    if not isinstance(changes, dict) or not changes:
+        raise KnowledgeError("no hay cambios para guardar")
+    src = load_proposal(kb, key)
+    name, _, from_version = key.partition("/")
+    now = now or datetime.now(UTC)
+    spec = json.loads(src.spec_json, parse_float=_RawNumber, parse_int=_RawNumber)
+    ident = spec.get("identity")
+    if not isinstance(ident, dict):
+        raise KnowledgeError(f"strategy:{key}: its spec has no identity to revise")
+    allowed = {e["path"]: e for e in _editable_entries(spec)}
+    major, minor, patch = _semver(_stored_versions(kb, name)[-1])
+    version = f"{major}.{minor}.{patch + 1}"
+    lines: list[str] = []
+    for path, raw in changes.items():
+        entry = allowed.get(path)
+        if entry is None:
+            raise KnowledgeError(f"{path}: este parámetro no se edita desde la ficha")
+        found, parent, leaf = _lookup(spec, path)
+        if not found:
+            raise KnowledgeError(f"{entry['label']}: esta estrategia no tiene ese parámetro")
+        old = parent[leaf]
+        new = _new_value(entry, raw, old)
+        parent[leaf] = new
+        unit = f" {entry['unit']}" if entry["unit"] else ""
+        lines.append(f"{entry['label']}: {'sin definir' if old is None else old} → {new}{unit}")
+    ident.update({"version": version, "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                  "parent_version_hash": src.spec_hash})
+    spec["content_hash"] = None   # GaleCore computes it; the file carries null (check_proposal)
+    spec_json = _dump(spec) + "\n"
+    text = "; ".join(lines) + (f". {reason.strip()}" if reason and reason.strip() else "")
+    base = src.content.model_dump(mode="json")
+    content = ProposalContent.model_validate({**base, "version": version, "change": {
+        "from_version": from_version, "reason": text, "refs": [f"strategy:{key}"]}})
+    if wrong := other_version_mentions(content):
+        raise KnowledgeError(f"cannot revise strategy:{key} as {version}: its purpose, hypothesis, rules, evaluation "
+                             f"plan or owner decisions name the versions {wrong}")
+    doc, path = save_proposal(kb=kb, prompt="strategy revise", host=host, content=content, spec_json=spec_json,
+                              spec_file=src.spec_file, now=now, checker=checker)
     assert galecore_spec_hash(doc.spec_json) == doc.spec_hash
     return f"strategy:{doc.name}/{doc.version}", path

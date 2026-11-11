@@ -1436,6 +1436,22 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                                   host=RecordHost(provider=args.host_provider, model=args.host_model))
             _json_out({"status": "RECORDED", "ref": ref, "duplicated_from": f"strategy:{src_key}",
                        "approved": False, "path": path})
+        if args.strategy_command == "editable":
+            from galecore_ai.application.strategy_versions import editable
+            _json_out(editable(kb, strategy_key(args.ref)))
+        if args.strategy_command == "revise":
+            from galecore_ai.application.strategy_versions import revise
+            src_key = strategy_key(args.ref)
+            changes: dict[str, str] = {}
+            for item in args.set:
+                path, sep, value = item.partition("=")
+                if not sep or not path:
+                    raise KnowledgeError(f"--set {item!r}: usá <ruta>=<valor>")
+                changes[path] = value
+            ref, path = revise(kb, src_key, changes, args.reason or "",
+                               RecordHost(provider=args.host_provider, model=args.host_model))
+            _json_out({"status": "RECORDED", "ref": ref, "revised_from": f"strategy:{src_key}",
+                       "approved": False, "path": path})
         if args.strategy_command == "save":
             content, host = _read_proposal_request()
             text, name = _read_spec(args.spec)
@@ -2057,6 +2073,16 @@ def build_parser() -> _JsonArgumentParser:
     p_st_dup.add_argument("--as", dest="new_name", required=True, help="name of the new strategy")
     p_st_dup.add_argument("--host-provider", dest="host_provider", default="claude-code")
     p_st_dup.add_argument("--host-model", dest="host_model", required=True)
+    p_st_rev = st_sub.add_parser("revise", help="Store a new version of the strategy with numeric parameters changed "
+                                                "(the ficha's «Editar»; a draft, no approval)")
+    p_st_rev.add_argument("--ref", required=True, help="strategy:<name>/<version> being edited")
+    p_st_rev.add_argument("--set", action="append", default=[], required=True, metavar="RUTA=VALOR",
+                          help="parameter path (see `strategy editable`) and its new value; repeatable")
+    p_st_rev.add_argument("--reason", default="", help="optional: why, in the user's words")
+    p_st_rev.add_argument("--host-provider", dest="host_provider", default="claude-code")
+    p_st_rev.add_argument("--host-model", dest="host_model", required=True)
+    p_st_edt = st_sub.add_parser("editable", help="The parameters of a version that the ficha can edit (label, unit, value)")
+    p_st_edt.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_stop = st_sub.add_parser("stop", help="Stop a SHADOW instance (it stops entering; what is open keeps being valued)")
     p_st_stop.add_argument("--instance", required=True, help="instance id (from `followup run` or `state`)")
 

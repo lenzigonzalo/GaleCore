@@ -191,3 +191,83 @@ def test_without_critique_does_not_skip_the_other_approval_rules(kb, research_re
     with pytest.raises(KnowledgeError, match="the owner's words name version"):
         approve(kb=kb, key=KEY, owner_words="Apruebo la 9.9.9", host=HOST, now=NOW, require_critique=False)
     assert kb.strategies.load_approval(KEY) is None and doc
+
+
+# ── «Editar»: strategy revise / editable (WS-0098) ──
+
+def test_editable_lists_only_the_present_fields_with_label_unit_and_value(kb, research_ref):  # noqa: F811
+    save_version(kb, research_ref, "1.2.0")
+    from galecore_ai.application.strategy_versions import editable
+    fields = {f["path"]: f for f in editable(kb, f"{NAME}/1.2.0")["fields"]}
+    assert fields["risk_limits/max_loss_per_trade_usd"] == {
+        "path": "risk_limits/max_loss_per_trade_usd", "label": "Tope por operación", "unit": "USD", "kind": "number", "value": "500.0"}
+    assert fields["risk_limits/max_risk_per_trade_pct"]["value"] is None
+    assert fields["candidate_construction/sizing/fixed_contracts"]["kind"] == "integer"
+    assert fields["entry_filters/gate_layer/gates/0/threshold/value"]["label"] == "Umbral de VIX < 30"
+    assert "risk_limits/max_bet_pct" not in fields and "operational/entry_window/start" not in fields
+
+
+def test_revise_stores_the_next_patch_with_only_the_asked_changes(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    save_version(kb, research_ref, "1.2.0")
+    save_version(kb, research_ref, "1.2.1", "1.2.0")
+    base_key = f"{NAME}/1.2.0"
+    before = _snapshot(kb.base / "strategies" / NAME)
+    ref, path = revise(kb, base_key, {"risk_limits/max_loss_per_trade_usd": 240,
+                                      "entry_filters/gate_layer/gates/0/threshold/value": "28"},
+                       "bajar el riesgo", HOST, now=NOW, checker=fake_checker())
+    assert ref == f"strategy:{NAME}/1.2.2" and Path(path).is_file()
+    after = _snapshot(kb.base / "strategies" / NAME)
+    assert {k: v for k, v in after.items() if k in before} == before   # nothing stored before changes
+    src, new = kb.strategies.load(base_key), kb.strategies.load(f"{NAME}/1.2.2")
+    assert kb.strategies.load_approval(f"{NAME}/1.2.2") is None and kb.strategies.load_critique(f"{NAME}/1.2.2") is None
+    a, b = src.spec_json.splitlines(), new.spec_json.splitlines()
+    changed = {x.strip().split(":")[0] for x, y in zip(a, b, strict=True) if x != y}
+    assert changed == {'"version"', '"created_at"', '"parent_version_hash"', '"value"', '"max_loss_per_trade_usd"'}
+    assert '"max_loss_per_trade_usd": 240.0' in new.spec_json and '"value": 28' in new.spec_json   # literal style kept
+    spec = json.loads(new.spec_json)
+    assert spec["identity"]["version"] == "1.2.2" and spec["identity"]["parent_version_hash"] == src.spec_hash
+    assert spec["content_hash"] is None and new.spec_hash == galecore_spec_hash(new.spec_json)
+    assert new.content.change.from_version == "1.2.0" and new.content.change.refs == [f"strategy:{base_key}"]
+    assert new.content.change.reason == "Tope por operación: 500.0 → 240.0 USD; Umbral de VIX < 30: 30 → 28. bajar el riesgo"
+    assert new.prompt == "strategy revise"
+
+
+def test_revise_refuses_paths_values_and_types_outside_the_list(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import revise
+    save_version(kb, research_ref, "1.2.0")
+    before = kb.strategies.versions()
+
+    def attempt(changes):
+        return revise(kb, f"{NAME}/1.2.0", changes, "", HOST, now=NOW, checker=fake_checker())
+    with pytest.raises(KnowledgeError, match="no se edita desde la ficha"):
+        attempt({"identity/name": "otra"})
+    with pytest.raises(KnowledgeError, match="no se edita desde la ficha"):
+        attempt({"candidate_construction/legs/0/strike_selection/width": 5})
+    with pytest.raises(KnowledgeError, match="no tiene ese parámetro"):
+        attempt({"risk_limits/max_bet_pct": 10})   # in the list, not in this spec
+    with pytest.raises(KnowledgeError, match="número, 0 o más"):
+        attempt({"risk_limits/max_loss_per_trade_usd": -5})
+    with pytest.raises(KnowledgeError, match="número, 0 o más"):
+        attempt({"risk_limits/max_loss_per_trade_usd": "mucho"})
+    with pytest.raises(KnowledgeError, match="entero"):
+        attempt({"risk_limits/max_concurrent_positions": 1.5})
+    with pytest.raises(KnowledgeError, match="no hay cambios"):
+        attempt({})
+    assert kb.strategies.versions() == before
+
+
+def test_revise_validates_times_and_cli_roundtrip(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_versions import _new_value
+    entry = {"label": "Ventana de entrada desde", "kind": "time"}
+    assert _new_value(entry, "13:45", "09:30") == "13:45"
+    for bad in ("25:00", "9:30", 1345, "13:60"):
+        with pytest.raises(KnowledgeError, match="HH:MM"):
+            _new_value(entry, bad, "09:30")
+    save_version(kb, research_ref, "1.2.0")
+    env = {KNOWLEDGE_DIR_ENV: str(kb.base)}
+    code, out = _cli("strategy", "editable", "--ref", f"strategy:{NAME}/1.2.0", env=env)
+    assert code == 0 and any(f["path"] == "risk_limits/max_loss_per_trade_usd" for f in out["fields"])
+    code, out = _cli("strategy", "revise", "--ref", f"strategy:{NAME}/1.2.0", "--set", "identity/name=x",
+                     "--host-model", "t", env=env)
+    assert code == 3 and out["status"] == "REJECTED"
