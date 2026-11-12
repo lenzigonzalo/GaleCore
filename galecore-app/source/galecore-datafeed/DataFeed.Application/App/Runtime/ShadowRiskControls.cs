@@ -122,7 +122,7 @@ namespace DataFeed.Application.App.Runtime
                     && (ShadowCapital.ExpiryWeek(ShadowCapital.Expiration(p)) ?? "?") == week).Sum(p => p.MaxRisk);
             if (betRisk + candidate.MaxRisk > limits.MaxBetUsd + 1e-9)
                 return new RiskBlock(Limits.MaxBet,
-                    $"tope por apuesta ({candidate.Symbol} {direction} {week}): abierto {Usd(betRisk)} + nueva {Usd(candidate.MaxRisk)} USD supera el tope de {Usd(limits.MaxBetUsd)} USD");
+                    $"tope por apuesta ({candidate.Symbol}{DirectionText(direction)}, vence la semana {week}): abierto {Usd(betRisk)} + nueva {Usd(candidate.MaxRisk)} USD supera el tope de {Usd(limits.MaxBetUsd)} USD");
 
             if (openRisk + candidate.MaxRisk > limits.RiskBudgetUsd + 1e-9)
                 return new RiskBlock(Limits.RiskBudget,
@@ -140,6 +140,9 @@ namespace DataFeed.Application.App.Runtime
                     $"margen intradiario: requisito abierto {Usd(openRisk)} + nuevo {Usd(candidate.MaxRisk)} USD supera el equity {Usd(equity)} menos la reserva {Usd(limits.ReserveUsd)} USD");
             return null;
         }
+
+        /// <summary>«alcista»/«bajista» para el texto del motivo; neutral y desconocida no agregan nada.</summary>
+        private static string DirectionText(string direction) => direction switch { "bullish" => " alcista", "bearish" => " bajista", _ => "" };
 
         private static string Usd(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
     }

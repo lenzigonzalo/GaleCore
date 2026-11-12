@@ -2698,6 +2698,37 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-039 — Skills por carpetas y ajustes de Agentes y Programadas (feedback UX del video 11/11)
+
+**Estado:** pendiente; sin implementación ni cambio del orden del plan.
+**Origen:** owner, 11/11/2026, video recorriendo Tuqui y una UI web de Claude Code como referencia para el Lab (buzón
+`2026-11-11-feedback-ux-video-11-11-recorrido`); pidió dejarlo como BL.
+**Target:** GaleCore (monitor): `components/settings/SkillsView.tsx`, `pages/Agentes.tsx` (agentes y programadas).
+Sobre todo front: el formato de carpeta de skill (`skill-folder/1`, con sus archivos) ya existe desde WS-0099.
+**Hoy:** las skills se listan con filtro y buscador; las que tienen código muestran sus archivos uno por uno, pero se
+editan en un solo cuadro de texto («Instrucciones en Markdown»). Los agentes eligen skills, instrucciones, herramientas
+y modelo. Las programadas corren todos los días, lunes a viernes, días elegidos o cada 1 h, con modelo.
+
+| Qué | Lo que pidió el owner | Prioridad |
+|---|---|---|
+| Editor de skill por carpetas | Árbol navegable como las skills de Anthropic (`SKILL.md`, README, `scripts/`, `references/`), editable archivo por archivo; nada de todo en un textarea | Eje de la pieza |
+| Lista de skills | Más compacta («este es el tamaño ideal»), filtros Todas/Workspace/Personal/Compartida, menú por fila: probar, editar, compartir, desactivar, historial; importar desde `.zip` | Alta |
+| Agentes | Elegir conectores y skills en una ventana con buscador; adjuntar archivos | Media |
+| Programadas | Sumar «una vez por mes» y cuánto piensa el modelo | Media |
+
+**Fuera (ideas aparte, no entran acá):** Biblioteca con «Nuevo artefacto» desde plantilla (Informe / Presentación /
+One-pager, ligado a skills; el owner lo dijo como nice to have) y vista tipo Claude Code web en el Lab (resumen
+automático de la conversación, explorador de archivos grande).
+**A verificar al empezar:** si importar `.zip`, adjuntar archivos al agente y «cuánto piensa» en programadas necesitan
+un campo o endpoint nuevo; si alguno lo pide, va acotado en el back de GaleCore antes del front.
+**Entry gate:** cuando el owner la pase a Próximo.
+**Aceptación:** una skill con carpeta se abre como árbol, se edita y guarda un archivo sin tocar los demás, y el
+resultado corre igual en el Lab; la lista entra en una pantalla con filtros y menú por fila; un agente se arma
+eligiendo conectores y skills desde la ventana con buscador; una programada mensual se guarda y figura con su próxima
+corrida; todo mirado en el navegador (:3039) antes de mostrarlo.
+
+---
+
 ## BL-038 — Cadena de opciones en vivo en el front
 
 **Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.

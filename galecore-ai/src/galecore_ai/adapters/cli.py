@@ -1509,6 +1509,22 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                                   host=RecordHost(provider=args.host_provider, model=args.host_model))
             _json_out({"status": "RECORDED", "ref": ref, "duplicated_from": f"strategy:{src_key}",
                        "approved": False, "path": path})
+        if args.strategy_command == "editable":
+            from galecore_ai.application.strategy_versions import editable
+            _json_out(editable(kb, strategy_key(args.ref)))
+        if args.strategy_command == "revise":
+            from galecore_ai.application.strategy_versions import revise
+            src_key = strategy_key(args.ref)
+            changes: dict[str, str] = {}
+            for item in args.set:
+                path, sep, value = item.partition("=")
+                if not sep or not path:
+                    raise KnowledgeError(f"--set {item!r}: usá <ruta>=<valor>")
+                changes[path] = value
+            ref, path = revise(kb, src_key, changes, args.reason or "",
+                               RecordHost(provider=args.host_provider, model=args.host_model))
+            _json_out({"status": "RECORDED", "ref": ref, "revised_from": f"strategy:{src_key}",
+                       "approved": False, "path": path})
         if args.strategy_command == "save":
             content, host = _read_proposal_request()
             text, name = _read_spec(args.spec)
@@ -1520,7 +1536,8 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
         key = strategy_key(args.ref)
         if args.strategy_command == "approve":
             approval, path = strategy_approve(kb=kb, key=key, spec_hash=args.spec_hash, owner_words=args.owner_words,
-                                              host=RecordHost(provider=args.host_provider, model=args.host_model))
+                                              host=RecordHost(provider=args.host_provider, model=args.host_model),
+                                              require_critique=not args.without_critique)
             _json_out({"status": "APPROVED", "ref": approval.strategy_ref, "path": path,
                        "spec_hash": approval.spec_hash, "scope": approval.scope,
                        "content_hash": approval.content_hash})
@@ -1568,7 +1585,7 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                                          "restart the Dev API)")
             _json_out(deploy_check(kb=kb, key=key, galecore_hash=galecore_hash))
         if args.strategy_command == "deploy":
-            _json_out(deploy_strategy(kb=kb, key=key))
+            _json_out(deploy_strategy(kb=kb, key=key, require_critique=not args.without_critique))
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
 
@@ -2107,6 +2124,8 @@ def build_parser() -> _JsonArgumentParser:
                               help="optional: the owner's yes to the named version is enough; if given, it must match")
     p_st_approve.add_argument("--owner-words", dest="owner_words", required=True,
                               help="the owner's approval, verbatim")
+    p_st_approve.add_argument("--without-critique", dest="without_critique", action="store_true",
+                              help="the ficha's path: the owner's confirmed click is the approval, no critique required")
     p_st_approve.add_argument("--host-provider", dest="host_provider", default="claude-code")
     p_st_approve.add_argument("--host-model", dest="host_model", required=True)
     p_st_inst = st_sub.add_parser("install-spec", help="Copy the approved spec into GaleCore Dev's Files/Runtime")
@@ -2130,6 +2149,8 @@ def build_parser() -> _JsonArgumentParser:
     p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW (registers the spec, then "
                                                 "deploys it; GaleCore is not called without an intact approval)")
     p_st_dep.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_dep.add_argument("--without-critique", dest="without_critique", action="store_true",
+                          help="the ficha's path: do not require a critique of this version")
     p_st_vers = st_sub.add_parser("versions", help="Stored versions of one strategy: approval, critique, feasibility, diff")
     p_st_vers.add_argument("--name", required=True, help="strategy name")
     p_st_dup = st_sub.add_parser("duplicate", help="Store a copy of a version as a new draft strategy (no approval)")
@@ -2137,6 +2158,16 @@ def build_parser() -> _JsonArgumentParser:
     p_st_dup.add_argument("--as", dest="new_name", required=True, help="name of the new strategy")
     p_st_dup.add_argument("--host-provider", dest="host_provider", default="claude-code")
     p_st_dup.add_argument("--host-model", dest="host_model", required=True)
+    p_st_rev = st_sub.add_parser("revise", help="Store a new version of the strategy with numeric parameters changed "
+                                                "(the ficha's «Editar»; a draft, no approval)")
+    p_st_rev.add_argument("--ref", required=True, help="strategy:<name>/<version> being edited")
+    p_st_rev.add_argument("--set", action="append", default=[], required=True, metavar="RUTA=VALOR",
+                          help="parameter path (see `strategy editable`) and its new value; repeatable")
+    p_st_rev.add_argument("--reason", default="", help="optional: why, in the user's words")
+    p_st_rev.add_argument("--host-provider", dest="host_provider", default="claude-code")
+    p_st_rev.add_argument("--host-model", dest="host_model", required=True)
+    p_st_edt = st_sub.add_parser("editable", help="The parameters of a version that the ficha can edit (label, unit, value)")
+    p_st_edt.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_stop = st_sub.add_parser("stop", help="Stop a SHADOW instance (it stops entering; what is open keeps being valued)")
     p_st_stop.add_argument("--instance", required=True, help="instance id (from `followup run` or `state`)")
 

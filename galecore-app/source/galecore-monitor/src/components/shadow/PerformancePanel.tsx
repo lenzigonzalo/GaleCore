@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { IChartApi, UTCTimestamp, Time, TickMarkType as ChartTickMarkType } from 'lightweight-charts';
-import { fetchPerformancePanel } from '../../api/shadow';
-import { Metric, PerformancePanelParams, PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
+import { fetchPerformancePanel, fetchShadowMetrics, fetchStrategyCard } from '../../api/shadow';
+import { Metric, PerformancePanelParams, PerformancePanelResponse, ShadowInstance, SpecVersionMetrics, StrategyCard } from '../../types/shadow';
 import { fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
 import { amount, date, days, exitLabel, metricText, pct, rate, readPanelError, usd, strategyName } from './panelPresentation';
 import { LivePositionRow } from '../positions/PositionRow';
@@ -74,6 +74,19 @@ export function PerformancePanel({ spec, instance = null, instances, onInstanceC
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState(inDesign ? 'Reglas' : 'Resumen');
+  // La tarjeta y las métricas por versión se piden una vez y las usan la barra de estado, las versiones y el «por qué no opera».
+  const [card, setCard] = useState<StrategyCard | null>(null);
+  const [metrics, setMetrics] = useState<SpecVersionMetrics[]>([]);
+  const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    if (inDesign) return;
+    let active = true;
+    Promise.resolve().then(() => fetchStrategyCard(spec)).then(c => { if (active) setCard(c); }).catch(() => { if (active) setCard(null); });
+    Promise.resolve().then(fetchShadowMetrics).then(m => { if (active) setMetrics(m ?? []); }).catch(() => undefined);
+    return () => { active = false; };
+  }, [spec, inDesign, refresh]);
+  // Después de prender/pausar, activar, editar o duplicar: instancia, tarjeta, versiones y métricas de nuevo, sin recargar la página.
+  const changed = async () => { await onInstanceChange?.(); setRefresh(n => n + 1); setRetry(n => n + 1); };
   const design = useStrategyDesign(spec);
   const request = useRef<{ key: string; promise: Promise<PerformancePanelResponse> } | undefined>(undefined);
   useEffect(() => {
@@ -98,10 +111,9 @@ export function PerformancePanel({ spec, instance = null, instances, onInstanceC
       chips={<>{inDesign ? <span className="instance-state">En diseño</span> : <InstanceState instance={instance} />}<StageModeChip stage={inDesign ? undefined : stage} mode={mode} /></>}
       onOpenChat={design.projectId && onOpenChat ? () => onOpenChat(design.projectId!) : undefined}
       actions={<>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</>} />
-    {!inDesign && <StrategyStatusBar spec={spec} instance={instance} canControl={stage === 'SHADOW' && !!instance} openPositions={panel?.tradesOpen} onInstanceChange={onInstanceChange} />}
-    {!inDesign && <StrategyVersions spec={spec} instance={instance} />}
+    {!inDesign && <StrategyStatusBar spec={spec} instance={instance} card={card} metrics={metrics} canControl={stage === 'SHADOW' && !!instance} openPositions={panel?.tradesOpen} onInstanceChange={changed} />}
+    {!inDesign && <StrategyVersions spec={spec} instance={instance} metrics={metrics} onChanged={changed} />}
     <StrategyOverview strategy={design.strategy} />
-    {!inDesign && <WhyNotOperating spec={spec} />}
     <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Posiciones', 'Reglas', 'Registro'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
     {inDesign && (tab === 'Resumen' || tab === 'Posiciones') && <p>Esta estrategia está en diseño. Abrí su proyecto en el chat para prepararla para SHADOW.</p>}
     {(tab === 'Resumen' || tab === 'Posiciones') && loading && <div role="status" aria-label="Cargando rendimiento" className="performance-loading"><div className="performance-metrics">{Array.from({ length: 12 }, (_, i) => <div key={i} className="performance-skeleton metric-skeleton" />)}</div><div className="performance-skeleton chart-skeleton" /></div>}
@@ -156,6 +168,6 @@ export function PerformancePanel({ spec, instance = null, instances, onInstanceC
       <TradeLog trades={panel.closedTrades} open={panel.openPositions} spec={spec} exits={panel.byExitRule} />
     </div>}
     {tab === 'Reglas' && <div role="tabpanel" id="pane-Reglas" aria-labelledby="tab-Reglas"><StrategyDesign design={design} /><StrategyData spec={spec} quality={(design.strategy?.current?.spec as AlgorithmSpec | undefined)?.data_quality}/></div>}
-    {tab === 'Registro' && <div role="tabpanel" id="pane-Registro" aria-labelledby="tab-Registro">{!inDesign && <RegistryLog instances={(instances ?? (instance ? [instance] : [])).slice(0, 3)} />}{!inDesign && (version ? <p>Para ver la evaluación de la instancia actual, seleccioná Todas las versiones.</p> : <EntryEvaluations key={instance?.instanceId} instance={instance} />)}{runtime}</div>}
+    {tab === 'Registro' && <div role="tabpanel" id="pane-Registro" aria-labelledby="tab-Registro">{!inDesign && <WhyNotOperating card={card} />}{!inDesign && <RegistryLog instances={(instances ?? (instance ? [instance] : [])).slice(0, 3)} />}{!inDesign && (version ? <p>Para ver la evaluación de la instancia actual, seleccioná Todas las versiones.</p> : <EntryEvaluations key={instance?.instanceId} instance={instance} />)}{runtime}</div>}
   </div>;
 }

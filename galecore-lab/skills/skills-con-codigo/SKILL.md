@@ -13,7 +13,7 @@ Todos los comandos son `python -B -m galecore_ai.adapters.cli skill …`.
 
 1. **Armá la carpeta en el proyecto**: `skills/<nombre>/` con
    - `SKILL.md` con frontmatter `name` y `description` (una frase: qué calcula y cuándo usarla) y el cuerpo corto: qué recibe, qué devuelve.
-   - `scripts/<x>.py`: trae los datos con `from galecore_ai import data` y `data.get("<capacidad>", symbol=…)` (las capacidades salen de `galecore list`); imprime **un JSON** por stdout. Si faltan datos o GaleCore no responde, el JSON lo dice (`"estado": "sin evaluar"` y qué falta); nunca inventa ni completa un número.
+   - `scripts/<x>.py`: trae los datos con `from galecore_ai import data` y `data.get("<capacidad>", symbol=…)` (las capacidades salen de `galecore list`); imprime **un JSON** por stdout. Sólo la biblioteca estándar de Python y `galecore_ai`: el agente en la nube instala nada más que el harness, así que otra librería (pandas, pandas_market_calendars…) anda en la PC y falla en la nube. Si faltan datos o GaleCore no responde, el JSON lo dice (`"estado": "sin evaluar"` y qué falta); nunca inventa ni completa un número.
    - Opcional: `references/*` (notas) y `assets/*` (texto). Sólo se guardan esos archivos, en texto.
    - **Nada de claves ni tokens en los archivos**: el script lee el entorno que ya tiene. Si el guardado dice que parece una clave, sacala.
 2. **Probala y guardala de una vez**: `skill save skills/<nombre> --test "<script>.py [args]"`. Si la prueba no sale bien (código distinto de 0 o sin JSON), no se sube: arreglá y repetí. Se sube privada.
