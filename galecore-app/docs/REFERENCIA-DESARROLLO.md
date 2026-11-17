@@ -176,10 +176,55 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   The API runs on production: https://vps-6285555-x.dattaweb.com/swagger/index.html
 
 - Producción — VPS Linux, no PaaS
-  Desde el 2026-08-19 la API corre en un **VPS de Donweb** (Ubuntu 24.04, x64): la app en
-  `/srv/galecore/app` bajo el usuario de servicio `galecore`, Kestrel escuchando solo en
+  Desde el 2026-08-19 la API corre en un **VPS de Donweb** (Ubuntu 24.04, x64, 2 CPU, 2 GB RAM): la
+  app en `/srv/galecore/app` bajo el usuario de servicio `galecore`, Kestrel escuchando solo en
   `127.0.0.1:5001`, y Nginx adelante terminando TLS con certificado de Let's Encrypt. Antes estaba
   en Azure App Service, cuyo host dejó de resolver por DNS.
+
+  **Usuarios y acceso SSH** (WS-0105, 2026-11-17):
+
+  | Usuario | Para qué | Shell | sudo | Clave SSH |
+  |---|---|---|---|---|
+  | `elenzi` | Owner (Eric) — administración | bash | total, sin contraseña | `elenzi@galecore-vps` |
+  | `galecore-deploy` | Deploy automático (GitHub Actions) y manual | bash | sólo `/usr/local/bin/galecore-deploy` sin args (NOPASSWD) | `galecore-deploy-github` |
+  | `galecore` | Servicio (la API corre como este usuario) | nologin | — | — |
+  | `glenzi` | Owner (Gonzalo) — administración | bash | grupo `sudo`, con contraseña | pendiente de su clave pública |
+
+  SSH escucha en el **puerto 5061** (no el 22). Login de root y por contraseña deshabilitados
+  (`/etc/ssh/sshd_config.d/10-galecore.conf`). DonWeb mantiene su bloque propio
+  (`00-0-trusted-ca.conf`, sus IPs) y su agente puede reescribirlo.
+
+  **Cómo entrar:**
+  * **PuTTY:** sesión «DonWeb», host `149.50.154.221`, puerto `5061`, clave
+    `C:\Users\Usuario\.ssh\id_ed25519.ppk`. Si no conecta: revisar que no use contraseña ni el 22.
+  * **FileZilla:** sitio `donweb_galecore`, misma clave `.ppk`, SFTP puerto `5061`.
+  * **Desde terminal (alias):** `ssh meatnet` (configurado en `~/.ssh/config`, usuario `elenzi`).
+
+  **Firewall (ufw activo):**
+
+  | Puerto | Protocolo | Desde | Para qué |
+  |---|---|---|---|
+  | 5061 | TCP | cualquiera | SSH |
+  | 80, 443 | TCP | cualquiera | HTTP/HTTPS (Nginx) |
+  | 22, 161/udp | TCP/UDP | 200.58.112.191, 2800:6c0::2 | Acceso de DonWeb (su agente) |
+
+  **Límites de memoria del servicio** (`systemctl edit galecore-datafeed`):
+  * `MemoryHigh=800M` — throttle (el kernel presiona, no mata). Margen ~30% sobre el pico medido
+    (619 MB al 2026-11-16).
+  * `MemoryMax=1200M` — OOM kill. Margen amplio para picos sin comerse toda la RAM.
+  * Swap: **2 GB** (`/swapfile`).
+
+  **Respaldo previo al endurecimiento:** `/root/respaldo-ssh-20261117.tgz` (contiene `/etc/ssh`,
+  sudoers, `.ssh` de root y elenzi) y `authorized_keys.bak-20261117`.
+
+  **Vuelta atrás de cada cambio:**
+
+  | Cambio | Cómo revertir |
+  |---|---|
+  | Usuario `galecore-deploy` | `sudo userdel -r galecore-deploy`; restaurar la clave `galecore-deploy-github` en `~elenzi/.ssh/authorized_keys`; revertir `SSH_USER` en `deploy.yml` y `deploy-api.ps1` a `elenzi` |
+  | Límites de memoria | `sudo systemctl revert galecore-datafeed && sudo systemctl daemon-reload && sudo systemctl restart galecore-datafeed` |
+  | Swap 2 GB → 1 GB | `sudo swapoff /swapfile && sudo fallocate -l 1G /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile` |
+  | SSH/firewall (todo) | Restaurar desde `/root/respaldo-ssh-20261117.tgz` |
 
   **Los secretos van en `/etc/galecore/datafeed.env`** (modo 600, `EnvironmentFile` de la unidad de
   systemd), nunca en `appsettings.*.json`: las variables de entorno le ganan a cualquier JSON, y el
@@ -199,15 +244,15 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
 
   El hostname de hoy es el que asigna el proveedor, no un dominio propio.
 
-  **El deploy es `deploy-api.ps1`, en la raíz del repo:** publish, empaquetado, transferencia,
-  stop/extract/start y verificación contra el `swagger.json`. No cuelga de un target de MSBuild a
-  propósito —un target atado a `Publish` dispararía en todo publish, incluido el de un CI— y
-  **excluye los archivos de estado de runtime** (`Files/**/*_switch_state.json`,
-  `Files/skew25_history.json`): extraerlos encima pisaría los switches del operador con los de la
-  máquina que deploya, y una estrategia amanecería apagada sin que nadie la tocara. Empaqueta **el
-  working tree**, no lo que está en master. Pide la contraseña de sudo dos veces (`ssh -t` abre
-  TTY), así que no es desatendible sin una regla de sudoers acotada que nadie decidió, y **no tiene
-  rollback**: `tar -xzf` extrae encima, sin backup y sin borrar lo que ya no va. Volver atrás es
+  **Deploy** (WS-0081, WS-0105): al mergear a `main`, `.github/workflows/deploy.yml` publica,
+  empaqueta, sube por SCP con el usuario `galecore-deploy` y ejecuta
+  `sudo /usr/local/bin/galecore-deploy` (el script en `deploy/remote-deploy.sh`). El script para el
+  servicio, extrae el tarball en `/srv/galecore/app`, arranca el servicio y borra el tarball. Si falla
+  a mitad de extracción, un trap vuelve a arrancar el servicio.
+
+  `deploy-api.ps1` es el respaldo manual (mismo flujo, desde la PC del owner). Ambos **excluyen los
+  archivos de estado de runtime** (`Files/**/*_switch_state.json`, `Files/skew25_history.json`):
+  extraerlos encima pisaría los switches del operador. **No hay rollback automático**: volver atrás es
   hacer checkout del commit anterior y deployar de nuevo.
 
 - Configuración por entorno — qué archivo se lee dónde

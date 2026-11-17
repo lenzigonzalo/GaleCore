@@ -14,7 +14,7 @@ set -euo pipefail
 
 APP_DIR=/srv/galecore/app
 SERVICE=galecore-datafeed
-TARBALL=/home/elenzi/galecore-publish.tar.gz
+TARBALL=/home/galecore-deploy/galecore-publish.tar.gz
 
 if [[ $# -ne 0 ]]; then
   echo "FALLO: galecore-deploy no recibe argumentos (despliega $TARBALL)" >&2
