@@ -16,7 +16,7 @@ concurrency:
 env:
   SSH_HOST: 149.50.154.221
   SSH_PORT: "5061"
-  SSH_USER: elenzi
+  SSH_USER: galecore-deploy
   # El login es anónimo y sólo acepta POST: un GET da 405 desde la app (502 si Kestrel está caído).
   HEALTH_URL: https://vps-6285555-x.dattaweb.com/App/GaleCore/Auth/Login
 

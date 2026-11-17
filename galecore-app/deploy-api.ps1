@@ -41,7 +41,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $Server     = 'elenzi@149.50.154.221',
+    [string] $Server     = 'galecore-deploy@149.50.154.221',
     [int]    $Port       = 5061,
     [string] $RemoteApp  = '/srv/galecore/app',
     [string] $Service    = 'galecore-datafeed',
