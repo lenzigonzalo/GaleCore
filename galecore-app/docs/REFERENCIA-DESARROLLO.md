@@ -188,7 +188,7 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   | `elenzi` | Owner (Eric) — administración | bash | total, sin contraseña | `elenzi@galecore-vps` |
   | `galecore-deploy` | Deploy automático (GitHub Actions) y manual | bash | sólo `/usr/local/bin/galecore-deploy` sin args (NOPASSWD) | `galecore-deploy-github` |
   | `galecore` | Servicio (la API corre como este usuario) | nologin | — | — |
-  | `glenzi` | Owner (Gonzalo) — administración | bash | grupo `sudo`, con contraseña | pendiente de su clave pública |
+  | `glenzi` | Owner (Gonzalo) — administración | bash | grupo `sudo`, con contraseña | `glenzi` (ed25519) |
 
   SSH escucha en el **puerto 5061** (no el 22). Login de root y por contraseña deshabilitados
   (`/etc/ssh/sshd_config.d/10-galecore.conf`). DonWeb mantiene su bloque propio
@@ -196,7 +196,7 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
 
   **Cómo entrar:**
   * **PuTTY:** sesión «DonWeb», host `149.50.154.221`, puerto `5061`, clave
-    `C:\Users\Usuario\.ssh\id_ed25519.ppk`. Si no conecta: revisar que no use contraseña ni el 22.
+    `C:\Users\Usuario\.ssh\id_ed25519.ppk` (ruta en la PC de cada owner). Si no conecta: revisar que no use contraseña ni el 22.
   * **FileZilla:** sitio `donweb_galecore`, misma clave `.ppk`, SFTP puerto `5061`.
   * **Desde terminal (alias):** `ssh meatnet` (configurado en `~/.ssh/config`, usuario `elenzi`).
 
