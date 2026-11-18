@@ -5,7 +5,7 @@
 # Se instala una vez en el VPS, como root (ver "Configuracion de una vez" en WS-0081):
 #   sudo install -o root -g root -m 755 remote-deploy.sh /usr/local/bin/galecore-deploy
 # y se invoca SIN argumentos:  sudo /usr/local/bin/galecore-deploy
-# El tarball tiene ruta fija (lo sube scp al home de elenzi): la regla de sudoers no acepta argumentos,
+# El tarball tiene ruta fija (lo sube scp al home de galecore-deploy): la regla de sudoers no acepta argumentos,
 # asi el NOPASSWD no sirve para extraer como root cualquier otro archivo.
 #
 # El tarball ya viene sin los archivos de estado de runtime (Files/*_switch_state.json,
