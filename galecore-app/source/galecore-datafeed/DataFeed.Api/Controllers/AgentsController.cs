@@ -60,6 +60,12 @@ namespace DataFeed.Controllers
             [JsonProperty("text")] public string? Text { get; set; }
         }
 
+        public sealed class SkillRunRequest
+        {
+            [JsonProperty("script")] public string? Script { get; set; }
+            [JsonProperty("args")] public List<string>? Args { get; set; }
+        }
+
         private AgentsService? Service => _services.GetService(typeof(AgentsService)) as AgentsService;
 
         private IActionResult Unavailable() => StatusCode(503, new ApiErrorResponse
@@ -179,6 +185,49 @@ namespace DataFeed.Controllers
             var s = r.Value!;
             return Ok(new { kind = s.Kind, key = s.Key, title = s.Title, content = s.Content, format = s.Format,
                             visibility = s.Visibility, version = s.Version, updatedAt = s.UpdatedAt, owner = s.Owner });
+        }
+
+        // ── Ejecución remota de skills (clave de agentes, sin login) ───────────────────────────────────────────
+
+        /// <summary>
+        /// Una rutina cloud corre un script de una skill en el VPS (WS-0093): el cálculo se hace acá (con knowledge/
+        /// del usuario), la narrativa la escribe el modelo en la nube. Misma autenticación que el reporte y la lectura
+        /// de skills (<c>X-GaleCore-Agent-Key</c>). Solo skills de la whitelist de <c>SkillRunner:AllowedSkills</c>.
+        /// </summary>
+        [HttpPost("GaleCore/Agents/Skills/{skillKey}/Run")]
+        public async Task<IActionResult> RunSkill(string skillKey, [FromBody] SkillRunRequest? body, CancellationToken ct)
+        {
+            var runner = _services.GetService<DataFeed.Api.Infrastructure.SkillRunnerService>();
+            if (runner == null || !runner.IsAvailable)
+                return StatusCode(503, new ApiErrorResponse
+                    { Error = "Skill runner no disponible en este entorno.", Code = "skill_runner_unavailable" });
+
+            var svc = Service;
+            if (svc == null) return Unavailable();
+
+            var owner = await svc.ResolveKeyAsync(Request.Headers[AgentKeyHeader].ToString(), ct);
+            if (owner == null)
+                return Unauthorized(new ApiErrorResponse { Error = "Clave de agentes inválida.", Code = "invalid_agent_key" });
+
+            if (body == null || string.IsNullOrEmpty(body.Script))
+                return BadRequest(new ApiErrorResponse { Error = "Falta script.", Code = "invalid_request" });
+
+            var (username, _) = await _users.ReadProfileAsync(owner.Value, ct);
+            if (string.IsNullOrEmpty(username))
+                return BadRequest(new ApiErrorResponse { Error = "Usuario sin username.", Code = "invalid_request" });
+
+            var result = await runner.RunAsync(username, skillKey, body.Script,
+                body.Args?.ToArray() ?? Array.Empty<string>(),
+                Request.Headers[AgentKeyHeader].ToString(), ct);
+
+            if (result.Error != null)
+            {
+                var code = result.Error.Contains("concurrentes") ? 429 : 400;
+                return StatusCode(code, new ApiErrorResponse { Error = result.Error,
+                    Code = code == 429 ? "rate_limited" : "skill_run_failed" });
+            }
+
+            return Content(result.Json!, "application/json");
         }
 
         // ── Corridas, token de disparo y ejecución (login del usuario) ─────────────────────────────────────────

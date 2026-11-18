@@ -580,6 +580,47 @@ def _agent_key_skill_finder():
                                     agent_secret=os.environ["GALECORE_AGENT_KEY"].strip(), skill_key=key)
 
 
+def _skill_run_remote(skill: str, script: str, script_args: list[str], timeout: float) -> dict:
+    """WS-0093: proxy ``skill run`` to the VPS endpoint (POST /App/GaleCore/Agents/Skills/{skill}/Run).
+
+    Used by cloud routines (GALECORE_SKILL_RUN_REMOTE=true): the VPS has knowledge/ and runs the script; the cloud
+    agent gets the JSON result and writes the narrative.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    base = os.environ.get("GALECORE_BASE_URL", "").rstrip("/")
+    api_key = os.environ.get("GALECORE_API_KEY", "")
+    agent_key = os.environ.get("GALECORE_AGENT_KEY", "")
+    if not base or not api_key or not agent_key:
+        return {"ok": False, "skill": skill, "script": script, "source": "remote",
+                "error": "GALECORE_BASE_URL, GALECORE_API_KEY and GALECORE_AGENT_KEY are required for remote skill run"}
+    url = f"{base}/App/GaleCore/Agents/Skills/{skill}/Run"
+    body = json.dumps({"script": script, "args": script_args}, ensure_ascii=False).encode()
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Content-Type": "application/json",
+        "X-API-KEY": api_key,
+        "X-GaleCore-Agent-Key": agent_key,
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=timeout + 30) as resp:
+            result = json.loads(resp.read())
+            result["source"] = "remote"
+            return result
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+        except (OSError, ValueError):
+            pass
+        return {"ok": False, "skill": skill, "script": script, "source": "remote",
+                "error": f"VPS returned HTTP {exc.code}: {detail}"}
+    except (OSError, ValueError, urllib.error.URLError) as exc:
+        return {"ok": False, "skill": skill, "script": script, "source": "remote",
+                "error": f"Remote skill run failed: {exc}"}
+
+
 def _cmd_skill(args: argparse.Namespace) -> None:
     from galecore_ai.application import skill_space
     from galecore_ai.application.agent_report import AgentReportError
@@ -607,6 +648,13 @@ def _cmd_skill(args: argparse.Namespace) -> None:
         except (SkillRunError, SpaceError, AgentReportError) as exc:
             _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
         return
+    # WS-0093: proxy to the VPS endpoint when GALECORE_SKILL_RUN_REMOTE is set (cloud routines).
+    if os.environ.get("GALECORE_SKILL_RUN_REMOTE", "").strip():
+        result = _skill_run_remote(args.skill, args.script, args.script_args, args.timeout)
+        save_output(result)
+        _json_out(result, exit_code=_EXIT_SUCCESS if result.get("ok") else _EXIT_INTERNAL_ERROR)
+        return
+
     source, version = "catalog", None
     try:
         try:
