@@ -188,7 +188,7 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   | `elenzi` | Owner (Eric) — administración | bash | total, sin contraseña | `elenzi@galecore-vps` |
   | `galecore-deploy` | Deploy automático (GitHub Actions) y manual | bash | sólo `/usr/local/bin/galecore-deploy` sin args (NOPASSWD) | `galecore-deploy-github` |
   | `galecore` | Servicio (la API corre como este usuario) | nologin | — | — |
-  | `glenzi` | Owner (Gonzalo) — administración | bash | grupo `sudo`, con contraseña | pendiente de su clave pública |
+  | `glenzi` | Owner (Gonzalo) — administración | bash | grupo `sudo`, con contraseña | `glenzi` (ed25519) |
 
   SSH escucha en el **puerto 5061** (no el 22). Login de root y por contraseña deshabilitados
   (`/etc/ssh/sshd_config.d/10-galecore.conf`). DonWeb mantiene su bloque propio
