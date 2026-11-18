@@ -196,7 +196,7 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
 
   **Cómo entrar:**
   * **PuTTY:** sesión «DonWeb», host `149.50.154.221`, puerto `5061`, clave
-    `C:\Users\Usuario\.ssh\id_ed25519.ppk`. Si no conecta: revisar que no use contraseña ni el 22.
+    `C:\Users\Usuario\.ssh\id_ed25519.ppk` (ruta en la PC de cada owner). Si no conecta: revisar que no use contraseña ni el 22.
   * **FileZilla:** sitio `donweb_galecore`, misma clave `.ppk`, SFTP puerto `5061`.
   * **Desde terminal (alias):** `ssh meatnet` (configurado en `~/.ssh/config`, usuario `elenzi`).
 
