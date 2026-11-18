@@ -580,11 +580,11 @@ def _agent_key_skill_finder():
                                     agent_secret=os.environ["GALECORE_AGENT_KEY"].strip(), skill_key=key)
 
 
-def _skill_run_remote(skill: str, script: str, script_args: list[str], timeout: float) -> dict:
-    """WS-0093: proxy ``skill run`` to the VPS endpoint (POST /App/GaleCore/Agents/Skills/{skill}/Run).
+def _cli_run_remote(cli_args: list[str], timeout: float = 210) -> dict:
+    """WS-0093: proxy a CLI command to the VPS (POST /App/GaleCore/Agents/CLI/Run).
 
-    Used by cloud routines (GALECORE_SKILL_RUN_REMOTE=true): the VPS has knowledge/ and runs the script; the cloud
-    agent gets the JSON result and writes the narrative.
+    Used by cloud routines (GALECORE_CLI_REMOTE=true): the VPS has knowledge/ and runs the command; the cloud agent
+    gets stdout/stderr and writes the narrative.
     """
     import json
     import urllib.error
@@ -594,17 +594,17 @@ def _skill_run_remote(skill: str, script: str, script_args: list[str], timeout: 
     api_key = os.environ.get("GALECORE_API_KEY", "")
     agent_key = os.environ.get("GALECORE_AGENT_KEY", "")
     if not base or not api_key or not agent_key:
-        return {"ok": False, "skill": skill, "script": script, "source": "remote",
-                "error": "GALECORE_BASE_URL, GALECORE_API_KEY and GALECORE_AGENT_KEY are required for remote skill run"}
-    url = f"{base}/App/GaleCore/Agents/Skills/{skill}/Run"
-    body = json.dumps({"script": script, "args": script_args}, ensure_ascii=False).encode()
+        return {"ok": False, "source": "remote",
+                "error": "GALECORE_BASE_URL, GALECORE_API_KEY and GALECORE_AGENT_KEY are required for remote CLI run"}
+    url = f"{base}/App/GaleCore/Agents/CLI/Run"
+    body = json.dumps({"args": cli_args}, ensure_ascii=False).encode()
     req = urllib.request.Request(url, data=body, method="POST", headers={
         "Content-Type": "application/json",
         "X-API-KEY": api_key,
         "X-GaleCore-Agent-Key": agent_key,
     })
     try:
-        with urllib.request.urlopen(req, timeout=timeout + 30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             result = json.loads(resp.read())
             result["source"] = "remote"
             return result
@@ -614,11 +614,11 @@ def _skill_run_remote(skill: str, script: str, script_args: list[str], timeout: 
             detail = exc.read().decode("utf-8", errors="replace")[:500]
         except (OSError, ValueError):
             pass
-        return {"ok": False, "skill": skill, "script": script, "source": "remote",
+        return {"ok": False, "source": "remote",
                 "error": f"VPS returned HTTP {exc.code}: {detail}"}
     except (OSError, ValueError, urllib.error.URLError) as exc:
-        return {"ok": False, "skill": skill, "script": script, "source": "remote",
-                "error": f"Remote skill run failed: {exc}"}
+        return {"ok": False, "source": "remote",
+                "error": f"Remote CLI run failed: {exc}"}
 
 
 def _cmd_skill(args: argparse.Namespace) -> None:
@@ -648,13 +648,6 @@ def _cmd_skill(args: argparse.Namespace) -> None:
         except (SkillRunError, SpaceError, AgentReportError) as exc:
             _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
         return
-    # WS-0093: proxy to the VPS endpoint when GALECORE_SKILL_RUN_REMOTE is set (cloud routines).
-    if os.environ.get("GALECORE_SKILL_RUN_REMOTE", "").strip():
-        result = _skill_run_remote(args.skill, args.script, args.script_args, args.timeout)
-        save_output(result)
-        _json_out(result, exit_code=_EXIT_SUCCESS if result.get("ok") else _EXIT_INTERNAL_ERROR)
-        return
-
     source, version = "catalog", None
     try:
         try:
@@ -2275,6 +2268,19 @@ def main() -> None:
     for key in ("host_model", "host_provider"):   # same rule as _declared for the flags
         if hasattr(args, key):
             setattr(args, key, _declared({key: getattr(args, key, None)}, key))
+
+    # WS-0093: proxy allowed commands to the VPS when GALECORE_CLI_REMOTE is set (cloud routines).
+    _remote_commands = {"story", "kb", "research", "skill"}
+    if os.environ.get("GALECORE_CLI_REMOTE", "").strip() and args.command in _remote_commands:
+        import sys
+        result = _cli_run_remote(sys.argv[1:])
+        if result.get("ok") and result.get("stdout"):
+            print(result["stdout"], end="")
+            if result.get("stderr"):
+                print(result["stderr"], end="", file=sys.stderr)
+            raise SystemExit(result.get("exit_code", 0))
+        _json_out(result, exit_code=result.get("exit_code") or _EXIT_INTERNAL_ERROR)
+        return
 
     try:
         if args.command == "prepare":
