@@ -2270,7 +2270,7 @@ def main() -> None:
             setattr(args, key, _declared({key: getattr(args, key, None)}, key))
 
     # WS-0093: proxy allowed commands to the VPS when GALECORE_CLI_REMOTE is set (cloud routines).
-    _remote_commands = {"story", "kb", "research", "skill"}
+    _remote_commands = {"story", "kb", "research"}
     if os.environ.get("GALECORE_CLI_REMOTE", "").strip() and args.command in _remote_commands:
         import sys
         result = _cli_run_remote(sys.argv[1:])
