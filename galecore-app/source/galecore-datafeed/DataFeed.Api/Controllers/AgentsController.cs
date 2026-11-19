@@ -60,6 +60,11 @@ namespace DataFeed.Controllers
             [JsonProperty("text")] public string? Text { get; set; }
         }
 
+        public sealed class CliRunRequest
+        {
+            [JsonProperty("args")] public List<string>? Args { get; set; }
+        }
+
         private AgentsService? Service => _services.GetService(typeof(AgentsService)) as AgentsService;
 
         private IActionResult Unavailable() => StatusCode(503, new ApiErrorResponse
@@ -179,6 +184,48 @@ namespace DataFeed.Controllers
             var s = r.Value!;
             return Ok(new { kind = s.Kind, key = s.Key, title = s.Title, content = s.Content, format = s.Format,
                             visibility = s.Visibility, version = s.Version, updatedAt = s.UpdatedAt, owner = s.Owner });
+        }
+
+        // ── Ejecución remota de comandos CLI (clave de agentes, sin login) ────────────────────────────────────
+
+        /// <summary>
+        /// Una rutina cloud corre un comando del CLI de galecore-ai en el VPS (WS-0093): el cálculo se hace acá (con
+        /// knowledge/ del usuario), la narrativa la escribe el modelo en la nube. Misma autenticación que el reporte
+        /// (<c>X-GaleCore-Agent-Key</c>). Solo comandos de <c>SkillRunner:AllowedCommands</c> (story, kb, research, skill).
+        /// </summary>
+        [HttpPost("GaleCore/Agents/CLI/Run")]
+        public async Task<IActionResult> RunCli([FromBody] CliRunRequest? body, CancellationToken ct)
+        {
+            var runner = _services.GetService<DataFeed.Api.Infrastructure.SkillRunnerService>();
+            if (runner == null || !runner.IsAvailable)
+                return StatusCode(503, new ApiErrorResponse
+                    { Error = "CLI runner no disponible en este entorno.", Code = "cli_runner_unavailable" });
+
+            var svc = Service;
+            if (svc == null) return Unavailable();
+
+            var owner = await svc.ResolveKeyAsync(Request.Headers[AgentKeyHeader].ToString(), ct);
+            if (owner == null)
+                return Unauthorized(new ApiErrorResponse { Error = "Clave de agentes inválida.", Code = "invalid_agent_key" });
+
+            if (body?.Args == null || body.Args.Count == 0)
+                return BadRequest(new ApiErrorResponse { Error = "Faltan args.", Code = "invalid_request" });
+
+            var (username, _) = await _users.ReadProfileAsync(owner.Value, ct);
+            if (string.IsNullOrEmpty(username))
+                return BadRequest(new ApiErrorResponse { Error = "Usuario sin username.", Code = "invalid_request" });
+
+            var result = await runner.RunCliAsync(username, body.Args.ToArray(),
+                Request.Headers[AgentKeyHeader].ToString(), ct);
+
+            if (result.Error != null)
+            {
+                var code = result.Error.Contains("concurrentes") ? 429 : 400;
+                return StatusCode(code, new ApiErrorResponse { Error = result.Error,
+                    Code = code == 429 ? "rate_limited" : "cli_run_failed" });
+            }
+
+            return Ok(new { ok = result.Ok, exit_code = result.ExitCode, stdout = result.Stdout, stderr = result.Stderr });
         }
 
         // ── Corridas, token de disparo y ejecución (login del usuario) ─────────────────────────────────────────

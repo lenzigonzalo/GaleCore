@@ -292,6 +292,17 @@ namespace DataFeed
                 });
             }
 
+            // SkillRunner (WS-0093): corre skills Python del VPS para las rutinas cloud. PythonPath
+            // apunta al venv del VPS; en desarrollo no existe y el endpoint da 503.
+            builder.Services.AddSingleton<DataFeed.Api.Infrastructure.SkillRunnerService>(sp =>
+            {
+                var opts = new DataFeed.Api.Infrastructure.SkillRunnerService.Options();
+                builder.Configuration.GetSection("SkillRunner").Bind(opts);
+                return new DataFeed.Api.Infrastructure.SkillRunnerService(opts,
+                    builder.Configuration.GetValue<string>("ApiKey") ?? "",
+                    sp.GetRequiredService<ILogger<DataFeed.Api.Infrastructure.SkillRunnerService>>());
+            });
+
             // ABM de operadores desde Administrator: crea, edita y borra usuarios en Supabase Auth.
             // Se registra siempre; adentro comprueba si tiene la service_role key y, si no, los
             // endpoints contestan 503 con el motivo. Que falte un secreto no puede tumbar el feed.
