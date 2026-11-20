@@ -287,6 +287,40 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// Endpoint interno para el auth_request de nginx del Lab (WS-0088 F2). Dado un JWT válido,
+        /// responde 204 con el header `X-Lab-Upstream: 127.0.0.1:<puerto>` que señala a cuál de los
+        /// labs por trader hay que rutear (elenzi → 8781, glenzi → 8782). Para un usuario sin Lab
+        /// asignado responde 403; sin JWT, 401 (el [Authorize] lo hace solo).
+        ///
+        /// No es un endpoint "público" del tablero — lo consulta nginx para cada request a `/lab/*`
+        /// con `proxy_pass_request_body off`. Por eso: cuerpo vacío, costo mínimo, sin DB más allá de
+        /// leer el `username`.
+        ///
+        /// El mapeo username→puerto vive acá adentro a propósito: con dos traders y una variable
+        /// chica no justifica una tabla ni una config aparte; si crece, se migra a `users` como
+        /// columna.
+        /// </summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/Me/LabUpstream")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> LabUpstreamAsync(CancellationToken ct)
+        {
+            var userId = _currentUser.UserId;
+            if (!userId.HasValue) return Unauthorized();
+            var (username, _) = await _users.ReadProfileAsync(userId.Value, ct);
+            var upstream = username switch
+            {
+                "elenzi" => "127.0.0.1:8781",
+                "glenzi" => "127.0.0.1:8782",
+                _ => null,
+            };
+            if (upstream is null) return StatusCode(StatusCodes.Status403Forbidden);
+            Response.Headers["X-Lab-Upstream"] = upstream;
+            return NoContent();
+        }
+
+        /// <summary>
         /// Respuesta para los endpoints que necesitan la base cuando la API está corriendo sin ella.
         ///
         /// La base es OPCIONAL a propósito (`Program.cs`): sin cadena configurada la API igual
