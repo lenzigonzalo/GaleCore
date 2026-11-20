@@ -202,14 +202,23 @@ def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
     return pieces
 
 
-def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None = None) -> dict:
+def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None = None,
+         current_items: list[dict] | None = None) -> dict:
     """Write the pieces that are new or changed; return what was created, updated and left alone.
 
     `seen` (kind, key) -> version read before deciding: a piece whose version moved since (the monitor wrote a new
     request meanwhile) is not overwritten; the next pass picks it up.
+
+    The current state is read only for the pieces' kind (BF-0017: the whole space is costly to download); with
+    several kinds it is the whole space. `current_items` skips the read when the caller has a fresh one.
     """
-    current = {(i["kind"], i["key"]): i for i in client.items()["items"]}
     out = {"created": [], "updated": [], "unchanged": [], "deferred": []}
+    if not pieces:
+        return out
+    if current_items is None:
+        kinds = {p["kind"] for p in pieces}
+        current_items = client.items(next(iter(kinds)))["items"] if len(kinds) == 1 else client.items()["items"]
+    current = {(i["kind"], i["key"]): i for i in current_items}
     for p in pieces:
         before = current.get((p["kind"], p["key"]))
         same = before is not None and all(before.get(k) == p[k] for k in ("title", "content", "format", "visibility"))
@@ -225,14 +234,14 @@ def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None 
     return out
 
 
-def _agent_items(client: SpaceClient, cloud: bool = False) -> list[tuple[dict, dict]]:
+def _agent_items(client: SpaceClient, cloud: bool = False, rows: list[dict] | None = None) -> list[tuple[dict, dict]]:
     """The readable agent pieces: the PC's own, or with `cloud` the ones that run in the cloud (WS-0079).
 
     The PC publishes, applies requests to and deletes only its own: a `runs_on: "cloud"` piece belongs to the Lab's
     routine flow (`agent_cloud`) and is never touched here.
     """
     out = []
-    for item in client.items("agent")["items"]:
+    for item in (rows if rows is not None else client.items("agent")["items"]):
         try:
             content = json.loads(item["content"])
         except (json.JSONDecodeError, TypeError):
@@ -473,6 +482,30 @@ def apply_unwatch(kb: KnowledgeBase, content: dict, user: str | None) -> dict[st
     return errors
 
 
+def _ideas_stamp(pieces: list[dict]) -> str:
+    return hashlib.sha256(json.dumps(pieces, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _ideas_stamp_path(kb: KnowledgeBase):
+    return kb.workspace / ".local" / "space-ideas.sha256"     # `.local/` is per-PC and never versioned
+
+
+def _read_ideas_stamp(kb: KnowledgeBase) -> str | None:
+    try:
+        return _ideas_stamp_path(kb).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def _write_ideas_stamp(kb: KnowledgeBase, stamp: str) -> None:
+    try:
+        path = _ideas_stamp_path(kb)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(stamp, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None,
                    supervise=None) -> dict:
     """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written).
@@ -480,13 +513,14 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     A refusal stays in the piece (`request_error`) until the next request. A piece whose agent is cancelled or gone
     from this PC is removed from the space (WS-0063), unless a refused request must still be explained: then it is published as cancelled once.
     """
-    items = _agent_items(client)
+    agent_rows = client.items("agent")["items"]    # one read for the pass (BF-0017)
+    items = _agent_items(client, rows=agent_rows)
     # Every agent piece, readable or not: one with broken content must not stay deferred forever.
-    seen = {("agent", i["key"]): i["version"] for i in client.items("agent")["items"]}
+    seen = {("agent", i["key"]): i["version"] for i in agent_rows}
     requests = apply_requests(client, kb, scheduler, now, items)
     refused = {r["agent"]: r["error"] for r in requests if r["result"] == "refused"}
     kept = {i["key"]: c["request_error"] for i, c in items if c.get("request_error") and not c.get("request")}
-    cloud_keys = {i["key"] for i, _ in _agent_items(client, cloud=True)}
+    cloud_keys = {i["key"] for i, _ in _agent_items(client, cloud=True, rows=agent_rows)}
     pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent" and p["key"] not in cloud_keys]
     responses: list[dict] = []
     if supervise is not None:                    # WS-0007: answers first, then a pass, then the piece
@@ -541,10 +575,17 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
                            "visibility": item.get("visibility", "private"),
                            "content": json.dumps({**gone, "status": "cancelled", "state": "CANCELLED",
                                                   "request_error": refused.get(item["key"])}, ensure_ascii=False)})
+    # No `current_items` here: the sync re-reads (filtered by kind) so a request the monitor wrote since `agent_rows`
+    # changes the version and defers the piece instead of being overwritten.
     result = sync(client, pieces, seen)
     try:                                         # ideas: published as they are, never deleted from the space
-        ideas = sync(client, idea_pieces(kb))
-        result = {k: result[k] + ideas[k] for k in result}
+        idea_list = idea_pieces(kb)
+        stamp = _ideas_stamp(idea_list)
+        if stamp != _read_ideas_stamp(kb):       # BF-0017: unchanged local ideas are not read back every pass
+            ideas = sync(client, idea_list)
+            result = {k: result[k] + ideas[k] for k in result}
+            if not ideas["deferred"]:
+                _write_ideas_stamp(kb, stamp)
     except (KnowledgeError, OSError, ValueError):   # a damaged local record must not stop the agents
         pass
     return {"requests": requests, "responses": responses, **result}
