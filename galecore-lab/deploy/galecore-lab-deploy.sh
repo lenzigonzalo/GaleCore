@@ -25,15 +25,38 @@ fi
 
 # El Lab persiste su estado en /home/<user>/.galecore/lab-state (fuera de $LAB_DIR): el extract
 # nunca pisa chats ni sesiones de los traders.
-echo "==> Extrayendo tarball a $LAB_DIR"
+# Rollback: guardamos $LAB_DIR.prev con el codigo anterior y restauramos si cualquier paso del
+# deploy falla antes del try-restart. Asi si npm ci rompe, los labs no quedan con codigo inconsistente
+# cuando la proxima vez reinicien (crash, reboot).
+BACKUP_DIR="$LAB_DIR.prev"
+rollback() {
+  echo "FALLO a mitad del deploy; restaurando $LAB_DIR desde $BACKUP_DIR" >&2
+  rm -rf "$LAB_DIR"
+  if [[ -d "$BACKUP_DIR" ]]; then mv "$BACKUP_DIR" "$LAB_DIR"; fi
+}
+trap rollback ERR
+
 install -d -o galecore -g galecore -m 755 "$LAB_DIR"
-tar -xzf "$TARBALL" -C "$LAB_DIR"
+# Guardar codigo anterior (sin node_modules para ahorrar espacio/tiempo; se reinstala con npm ci).
+rm -rf "$BACKUP_DIR"
+if [[ -n "$(ls -A "$LAB_DIR" 2>/dev/null)" ]]; then
+  mkdir -p "$BACKUP_DIR"
+  find "$LAB_DIR" -mindepth 1 -maxdepth 1 -not -name node_modules -not -name .npm \
+       -exec mv -t "$BACKUP_DIR" {} +
+fi
+
+echo "==> Extrayendo tarball a $LAB_DIR"
+tar -xzf "$TARBALL" -C "$LAB_DIR" --no-same-owner
 chown -R galecore:galecore "$LAB_DIR"
 
 echo "==> npm ci --omit=dev"
 # npm necesita HOME escribible; el service user galecore no tiene /home/galecore creado.
 sudo -u galecore env HOME="$LAB_DIR" npm_config_cache="$LAB_DIR/.npm" \
      bash -c "cd '$LAB_DIR' && npm ci --omit=dev"
+
+# Exito: ya no hay que restaurar; limpiar el backup antes del restart.
+trap - ERR
+rm -rf "$BACKUP_DIR"
 
 # Si el unit file del repo cambio, aplicarlo antes del restart. El install.sh ya lo instala en
 # la primera vuelta; aca lo refrescamos por si evoluciono con el deploy.
