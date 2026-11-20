@@ -108,3 +108,63 @@ jobs:
         if: failure()
         run: |
           echo "::error::El deploy de la API falló. Las migraciones de este push YA se aplicaron (son aditivas: la API vieja las tolera). Revisá el paso rojo de arriba."
+
+  lab:
+    name: Lab (rsync + restart por trader)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    # Independiente de la API: el Lab no depende de que el datafeed este arriba durante su
+    # despliegue. Si la API falla, el Lab igual se actualiza y los traders no quedan atados.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Empaquetar galecore-lab (sin node_modules ni tests)
+        run: |
+          tar -czf "$RUNNER_TEMP/galecore-lab.tar.gz" -C galecore-lab \
+            --exclude='./node_modules' \
+            --exclude='./.local' \
+            --exclude='./fixtures' \
+            --exclude='./*.test.js' \
+            --exclude='./start-lab.ps1' \
+            .
+          ls -lh "$RUNNER_TEMP/galecore-lab.tar.gz"
+
+      - name: Preparar SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+
+      - name: Subir y desplegar (galecore-deploy)
+        run: |
+          SSH_OPTS="-i $HOME/.ssh/deploy_key -p $SSH_PORT -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/galecore-lab.tar.gz" "$SSH_USER@$SSH_HOST:galecore-lab.tar.gz"
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "sudo /usr/local/bin/galecore-lab-deploy"
+
+      - name: Verificar que el Lab responde (preflight OPTIONS, sin auth)
+        run: |
+          for i in 1 2 3 4; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+              -X OPTIONS -H 'Origin: https://galecore.vercel.app' \
+              -H 'Access-Control-Request-Method: GET' \
+              https://vps-6285555-x.dattaweb.com/lab/bootstrap || true)
+            if [ "$code" = "204" ]; then
+              echo "Lab/nginx responde al preflight ($code)."
+              exit 0
+            fi
+            echo "intento $i sin preflight del Lab todavía ($code)..."
+            sleep 3
+          done
+          echo "El Lab no respondió al preflight. Logs: ssh -p $SSH_PORT $SSH_USER@$SSH_HOST 'sudo journalctl -u galecore-lab@elenzi -n 60 --no-pager'" >&2
+          exit 1
+
+      - name: Aviso si falló el deploy del Lab
+        if: failure()
+        run: |
+          echo "::error::El deploy del Lab falló. La API sigue andando; el chat del monitor puede quedar en la version anterior del Lab. Revisá el paso rojo de arriba."
