@@ -168,7 +168,11 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => {
     if(!chatId) { setChat(null); return; }
     let active = true;
-    const poll = async () => { try { const c = await labRequest<WorkspaceChat>('/chats/' + chatId); if(active) { setChat(c); setError(old => old === 'No se pudo recuperar esta conversación.' ? '' : old); } } catch { if(active) setError('No se pudo recuperar esta conversación.'); } };
+    const poll = async () => { try { const c = await labRequest<WorkspaceChat>('/chats/' + chatId); if(active) { setChat(c); setError(old => old === 'No se pudo recuperar esta conversación.' ? '' : old); } } catch (e) { if(!active) return;
+      // WS-0088: un chatId que quedó en sessionStorage y no existe en este Lab (p. ej. apuntamos al Lab remoto después del local)
+      // genera 404 en loop; mejor olvidar el chat seleccionado que mostrar un error permanente.
+      if ((e as { status?: number }).status === 404) { setChatId(null); setChat(null); setError(''); return; }
+      setError('No se pudo recuperar esta conversación.'); } };
     poll(); const timer = window.setInterval(poll, 1000);
     return () => { active = false; window.clearInterval(timer); };
   }, [chatId]);
