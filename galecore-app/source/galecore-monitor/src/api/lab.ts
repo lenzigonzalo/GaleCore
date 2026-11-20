@@ -3,7 +3,7 @@
  * para que el browser incluya la basic auth que lo protege en F1. Para loopback sigue como antes.
  */
 export const LAB_URL = process.env.REACT_APP_LAB_URL || 'http://127.0.0.1:8771';
-const LAB_IS_LOOPBACK = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(LAB_URL);
+export const LAB_IS_LOOPBACK = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(LAB_URL);
 /** Chrome pide declarar "loopback" en el preflight cuando https le habla a esta PC; para un host público no corresponde. */
 export const LOCAL_FETCH: RequestInit = LAB_IS_LOOPBACK ? { targetAddressSpace: 'loopback' } as RequestInit : { credentials: 'include' };
 export interface LabProject { id: string; label: string }
@@ -34,7 +34,7 @@ export async function labRequest<T>(url: string, body?: object, timeout = 12000)
   let r = await send();
   if (r.status === 401) { token = null; r = await send(); }
   const value = await r.json();
-  if (!r.ok) throw new Error(value.error || 'No se pudo completar el pedido.');
+  if (!r.ok) { const err = new Error(value.error || 'No se pudo completar el pedido.') as Error & { status?: number }; err.status = r.status; throw err; }
   return value;
 }
 

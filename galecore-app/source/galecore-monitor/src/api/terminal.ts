@@ -3,9 +3,13 @@
  * producto), sólo en loopback. Abre `claude` en GaleCore (el harness, por defecto), o en la carpeta de una estrategia, y lo pasa por
  * WebSocket. Si no corre (otra PC, producción), el panel lo dice y nada más.
  */
-import { LOCAL_FETCH } from './lab';
+import { LOCAL_FETCH, LAB_IS_LOOPBACK } from './lab';
 
 export const TERMINAL_URL = process.env.REACT_APP_TERMINAL_URL || 'http://127.0.0.1:8770';
+// WS-0088: cuando el Lab corre en un servidor (no loopback), el server.js local no esta deployado
+// y tampoco lo puede alcanzar el browser desde https. Se omite la consulta al terminal.
+const TERMINAL_IS_LOOPBACK = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(TERMINAL_URL);
+const TERMINAL_AVAILABLE = !TERMINAL_IS_LOOPBACK || LAB_IS_LOOPBACK;
 
 export interface TerminalFolder { key: string; label: string }
 
@@ -25,6 +29,8 @@ export const TERMINAL_START_HINT = 'node galecore-lab/server.js   (desde la raí
 
 export interface ProviderAuth { id: 'claude' | 'codex'; status: 'authenticated' | 'signed-out' | 'not-installed' | 'unknown' }
 export async function fetchProviderAuth(): Promise<{ providers: ProviderAuth[] }> {
+  // Lab remoto sin terminal deployado: no hacer la llamada para no ensuciar la consola con CORS.
+  if (!TERMINAL_AVAILABLE) return { providers: [{ id: 'claude', status: 'unknown' }, { id: 'codex', status: 'unknown' }] };
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 15000);
   try {
