@@ -3,7 +3,7 @@ const fs = require('fs'); const path = require('path'); const os = require('os')
 const { createWorkspaces } = require('./lab-workspaces');
 
 // El CLI del harness se reemplaza por un doble que anota los argumentos y contesta lo que cada caso necesita.
-function world(t, { answers = {}, autoSync = false, session, request } = {}) {
+function world(t, { answers = {}, autoSync = false, now, session, request } = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-lab-test-')); t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const kb = path.join(base, 'knowledge'), local = path.join(base, 'local'); fs.mkdirSync(kb); fs.mkdirSync(local);
   fs.mkdirSync(path.join(base, 'galecore-ai')); fs.writeFileSync(path.join(base, 'galecore-ai', 'PRODUCT.md'), 'núcleo');
@@ -14,7 +14,7 @@ function world(t, { answers = {}, autoSync = false, session, request } = {}) {
     setImmediate(() => answer === undefined ? cb(new Error('x'), JSON.stringify({ error: 'sin respuesta' })) : Promise.resolve(answer).then(a=>cb(null, JSON.stringify(a))));
   };
   const spawnProcess = () => { const p = new EventEmitter(); p.stdout = new EventEmitter(); p.stderr = new EventEmitter(); p.stdin = { write() {}, end() {} }; p.kill = () => {}; procs.push(p); return p; };
-  const service = createWorkspaces({ root: base, kb, local, binaries: { claude: 'claude' }, environment: () => ({}), legacyProjects: () => [], legacySessions: () => [], execute, spawnProcess, autoSync,
+  const service = createWorkspaces({ root: base, kb, local, binaries: { claude: 'claude' }, environment: () => ({}), legacyProjects: () => [], legacySessions: () => [], execute, spawnProcess, autoSync, now,
     sessionFile: () => path.join(base, 'session.json'), request: request || (() => { throw new Error('sin red en los tests'); }) });
   if (session) fs.writeFileSync(path.join(base, 'session.json'), JSON.stringify(session));
   return { base, kb, service, calls, procs };
@@ -178,6 +178,16 @@ test('al arrancar sincroniza una vez los proyectos seguidos, sin descargar los n
   await new Promise(r => setTimeout(r, 50));
   assert.deepEqual(calls.map(c => c.join(' ')), ['project shared', 'project sync ' + p.id]);
   const off = world(t); await new Promise(r => setTimeout(r, 30)); assert.deepEqual(off.calls, []);
+});
+
+test('al abrir el Lab sincroniza en segundo plano sólo si el último automático fue hace más de 12 h', async t => {
+  let clock = 1e12; const H = 3600e3;
+  const { kb, service, calls } = world(t, { autoSync: true, now: () => clock, answers: { 'project shared': { projects: [] }, 'project sync': { pulled: 0, pushed: 0, conflicts: [], skipped: [] } } });
+  const p = await create(service, 'Seguido'); share(kb, p.id);
+  const syncs = async () => { await new Promise(r => setTimeout(r, 30)); return calls.filter(c => c[1] === 'shared').length; };
+  assert.equal(await syncs(), 1);                                         // el de arranque
+  clock += 11 * H; await route(service, 'GET', '/workspaces'); assert.equal(await syncs(), 1);   // antes de 12 h: no
+  clock += 2 * H; await route(service, 'GET', '/workspaces'); await route(service, 'GET', '/workspaces'); assert.equal(await syncs(), 2);   // después: uno solo
 });
 
 test('el archivo de estado no aparece en Archivos', async t => {
