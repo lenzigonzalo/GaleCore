@@ -20,8 +20,8 @@ if [[ $EUID -ne 0 ]]; then
   echo "FALLO: install.sh corre como root (usa sudo)" >&2
   exit 2
 fi
-if [[ ! -f "$LAB_SRC/package.json" ]]; then
-  echo "FALLO: LAB_SRC no es galecore-lab/ (no hay package.json en $LAB_SRC)" >&2
+if [[ ! -f "$LAB_SRC/deploy/galecore-lab-deploy.sh" ]]; then
+  echo "FALLO: LAB_SRC no es galecore-lab/ (no hay deploy/galecore-lab-deploy.sh en $LAB_SRC)" >&2
   exit 2
 fi
 
