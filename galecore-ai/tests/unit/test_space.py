@@ -22,6 +22,7 @@ class FakeGaleCore:
         self.rows: dict[tuple, dict] = {}
         self.puts = 0
         self.keys = 0
+        self.reads: list[str | None] = []   # the `kind` of each GET /Space (None = the whole space)
         self.rows[("skill", "ajena")] = {"kind": "skill", "key": "ajena", "title": "De otro", "content": "x",
                                          "format": "markdown", "visibility": "shared", "version": 1, "isOwn": False,
                                          "owner": "otro"}
@@ -36,6 +37,7 @@ class FakeGaleCore:
             return httpx.Response(401)
         if request.method == "GET" and path == "/App/GaleCore/Space":
             kind = request.url.params.get("kind")
+            self.reads.append(kind)
             rows = [r for r in self.rows.values() if kind in (None, r["kind"])]
             return httpx.Response(200, json={"items": [r for r in rows if r["isOwn"]],
                                              "shared": [r for r in rows if not r["isOwn"]]})
@@ -624,6 +626,40 @@ def test_publish_agents_also_publishes_ideas(env, galecore):  # noqa: F811
     out = space.publish_agents(client, kb_, sch)
     assert any(x.startswith("idea/inbox-") for x in out["created"])
     assert space.publish_agents(client, kb_, sch)["created"] == []
+
+
+def test_sync_and_publish_agents_never_read_the_whole_space(env, galecore):  # noqa: F811  # BF-0017
+    kb_, sch, _ = env
+    fake, client = galecore
+    client.login()
+    space.sync(client, [p for p in PIECES if p["kind"] == "objective"])
+    assert fake.reads == ["objective"]
+    fake.reads.clear()
+    space.sync(client, [])
+    assert fake.reads == []
+    space.sync(client, PIECES)                       # several kinds: the whole space, as before
+    assert fake.reads == [None]
+    fake.reads.clear()
+    space.sync(client, PIECES[:1], current_items=[])  # a fresh read from the caller: no request at all
+    assert fake.reads == []
+    space.publish_agents(client, kb_, sch)
+    assert None not in fake.reads
+    assert fake.reads.count("agent") <= 2
+
+
+def test_unchanged_ideas_are_not_read_back_on_every_pass(env, galecore):  # noqa: F811  # BF-0017
+    from galecore_ai.application import inbox
+    kb_, sch, _ = env
+    fake, client = galecore
+    inbox.add(kb=kb_, words="una idea", prompt="anotá")
+    space.publish_agents(client, kb_, sch)
+    fake.reads.clear()
+    space.publish_agents(client, kb_, sch)
+    assert "idea" not in fake.reads
+    inbox.add(kb=kb_, words="otra idea", prompt="anotá")
+    out = space.publish_agents(client, kb_, sch)
+    assert "idea" in fake.reads
+    assert sum(x.startswith("idea/inbox-") for x in out["created"]) == 1
 
 
 def test_a_broken_research_file_is_skipped_and_the_rest_is_published(env, caplog):  # noqa: F811  # BF-0004

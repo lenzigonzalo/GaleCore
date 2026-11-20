@@ -9,7 +9,7 @@ export interface Watch {
   label?: string;
 }
 
-const REFRESH_MS = 60_000;
+const REFRESH_MS = 300_000;
 const PRICE_METRICS = ['price', 'gamma_zero', 'call_wall', 'put_wall'];
 
 /** Avisos con unidades de precio de un símbolo; excluye bajas pendientes y reglas inactivas. */
@@ -53,7 +53,7 @@ function parse(item: SpaceItem | undefined): Record<string, any> {
 
 /** Marca un aviso como borrado: lo suma al mapa `unwatch` de la pieza (el back lo saca en su próxima pasada). */
 export async function removeWatch(ruleId: string): Promise<void> {
-  const { items } = await fetchSpace();
+  const { items } = await fetchSpace('agent');
   const item = items.find(i => i.kind === 'agent' && i.key === 'supervisor');
   if (!item) return;
   const content = parse(item);
@@ -63,7 +63,7 @@ export async function removeWatch(ruleId: string): Promise<void> {
   });
 }
 
-/** Niveles del símbolo, refrescados cada 60 s; si falla, no hay líneas. `remove` los oculta al instante. */
+/** Niveles del símbolo, refrescados cada 5 min (lo que tarda el supervisor en actualizar la pieza); si falla, no hay líneas. `remove` los oculta al instante. */
 export function useWatches(symbol: string | null | undefined): { watches: Watch[]; remove: (id: string) => void } {
   const [all, setAll] = useState<Watch[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
@@ -72,7 +72,7 @@ export function useWatches(symbol: string | null | undefined): { watches: Watch[
     let alive = true;
     const load = async () => {
       try {
-        const { items } = await fetchSpace();
+        const { items } = await fetchSpace('agent');
         const it = items.find(i => i.kind === 'agent' && i.key === 'supervisor');
         if (alive) {
           const content = parse(it);

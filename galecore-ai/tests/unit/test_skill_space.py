@@ -49,6 +49,7 @@ def folder(tmp_path):
 def cache(tmp_path, monkeypatch):
     monkeypatch.setenv(skill_space.CACHE_ENV, str(tmp_path / "cache"))
     monkeypatch.delenv("GALECORE_API_KEY", raising=False)
+    monkeypatch.delenv("GALECORE_AGENT_KEY", raising=False)   # set on a PC that runs agents: it would route to the cloud path
 
 
 def saved(client, folder, key="mi-calculo", **kw):

@@ -34,29 +34,33 @@ export const SPACE_KINDS: { id: SpaceKind; label: string; hint: string }[] = [
 // WS-0057 D: varias pantallas piden el espacio a la vez (Inicio, avisos, Chat, watchlist); se comparte el pedido en curso
 // y la respuesta vale unos segundos. Guardar o borrar la invalida.
 const SPACE_TTL_MS = 10_000;
-let spaceCache: { at: number; promise: Promise<{ items: SpaceItem[]; shared: SpaceItem[] }> } | null = null;
+type SpaceResponse = { items: SpaceItem[]; shared: SpaceItem[] };
+// BF-0017: una clave por `kind` ('' = todo el espacio); pedir un solo tipo baja una fracción de lo que se descarga.
+const spaceCache = new Map<string, { at: number; promise: Promise<SpaceResponse> }>();
 
 /** Para tests: cada caso arranca sin la respuesta del anterior. */
-export function clearSpaceCache(): void { spaceCache = null; }
+export function clearSpaceCache(): void { spaceCache.clear(); }
 
-export function fetchSpace(): Promise<{ items: SpaceItem[]; shared: SpaceItem[] }> {
-  if (spaceCache && Date.now() - spaceCache.at < SPACE_TTL_MS) return spaceCache.promise;
-  const promise = apiClient.get<{ items: SpaceItem[]; shared: SpaceItem[] }>('/App/GaleCore/Space')
+export function fetchSpace(kind?: string): Promise<SpaceResponse> {
+  const key = kind ?? '';
+  const hit = spaceCache.get(key);
+  if (hit && Date.now() - hit.at < SPACE_TTL_MS) return hit.promise;
+  const promise = apiClient.get<SpaceResponse>('/App/GaleCore/Space', kind ? { params: { kind } } : undefined)
     .then(({ data }) => ({ items: data.items ?? [], shared: data.shared ?? [] }));
-  spaceCache = { at: Date.now(), promise };
-  promise.catch(() => { if (spaceCache?.promise === promise) spaceCache = null; });
+  spaceCache.set(key, { at: Date.now(), promise });
+  promise.catch(() => { if (spaceCache.get(key)?.promise === promise) spaceCache.delete(key); });
   return promise;
 }
 
 export async function saveSpaceItem(kind: SpaceKind, key: string, body: {
   title: string; content: string; format: SpaceFormat; visibility: SpaceVisibility;
 }): Promise<void> {
-  spaceCache = null;
+  spaceCache.clear();
   await apiClient.put(`/App/GaleCore/Space/${kind}/${encodeURIComponent(key)}`, body);
 }
 
 export async function deleteSpaceItem(kind: SpaceKind, key: string): Promise<void> {
-  spaceCache = null;
+  spaceCache.clear();
   await apiClient.delete(`/App/GaleCore/Space/${kind}/${encodeURIComponent(key)}`);
 }
 
