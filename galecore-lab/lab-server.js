@@ -240,7 +240,12 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { requested: true });
     }
     json(res, 404, { error: 'Ruta desconocida.' });
-  } catch (e) { json(res, e.status || 500, { error: e.status ? e.message : 'No se pudo completar la operación local. Revisá el servicio del Lab.' }); }
+  } catch (e) {
+    // WS-0088: cuando el Lab corre en un servidor, el 500 sin traza deja ciego al que diagnostica. Los errores con `status`
+    // son los esperados (el `fail(mensaje, código)` del Lab para pedidos inválidos); el resto va al journal.
+    if (!e.status) console.error('[lab] handler error:', e);
+    json(res, e.status || 500, { error: e.status ? e.message : 'No se pudo completar la operación local. Revisá el servicio del Lab.' });
+  }
 });
 const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
 // Shell (owner 17/10): una terminal común (PowerShell) en la carpeta del proyecto, al lado de Archivos. Vive mientras
