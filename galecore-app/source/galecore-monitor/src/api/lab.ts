@@ -1,11 +1,19 @@
 /** Puente al Lab. Token efímero sólo en memoria, nunca en URL o localStorage.
  * Si REACT_APP_LAB_URL apunta a un host público (WS-0088: Lab en el VPS) va con `credentials: 'include'`
- * para que el browser incluya la basic auth que lo protege en F1. Para loopback sigue como antes.
+ * y el JWT de GaleCore en Authorization — nginx valida el JWT con `auth_request` y rutea al Lab del
+ * trader (WS-0088 F2). Para loopback sigue como antes.
  */
+import { getAccessToken } from '../auth/supabase';
 export const LAB_URL = process.env.REACT_APP_LAB_URL || 'http://127.0.0.1:8771';
 export const LAB_IS_LOOPBACK = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(LAB_URL);
 /** Chrome pide declarar "loopback" en el preflight cuando https le habla a esta PC; para un host público no corresponde. */
 export const LOCAL_FETCH: RequestInit = LAB_IS_LOOPBACK ? { targetAddressSpace: 'loopback' } as RequestInit : { credentials: 'include' };
+/** JWT de GaleCore que nginx lee para su auth_request. Vacío en loopback (no hay auth_request local). */
+async function galecoreAuthHeader(): Promise<Record<string, string>> {
+  if (LAB_IS_LOOPBACK) return {};
+  const jwt = await getAccessToken();
+  return jwt ? { Authorization: 'Bearer ' + jwt } : {};
+}
 export interface LabProject { id: string; label: string }
 export interface LabProvider { id: 'codex' | 'claude'; label: string; installed: boolean }
 export interface LabSession { id: string; project: string; provider: 'codex' | 'claude'; title: string; createdAt: string; state: 'running' | 'ended' | 'interrupted'; nativeId: string | null; exitCode: number | null; resumeOf: string | null }
@@ -16,7 +24,12 @@ let pendingToken: Promise<string> | null = null;
 async function request(url: string, options: RequestInit = {}, timeout = 12000) {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeout);
-  try { return await fetch(LAB_URL + url, { ...LOCAL_FETCH, ...options, signal: controller.signal }); }
+  // El JWT de GaleCore va en TODAS las requests al Lab remoto (incluída /bootstrap) porque nginx
+  // corre el auth_request antes de ver la ruta. Para loopback no corresponde (no hay auth_request).
+  const authHeader = await galecoreAuthHeader();
+  const merged: RequestInit = { ...LOCAL_FETCH, ...options, signal: controller.signal,
+    headers: { ...(options.headers as Record<string, string> | undefined), ...authHeader } };
+  try { return await fetch(LAB_URL + url, merged); }
   finally { window.clearTimeout(timer); }
 }
 export async function labToken(): Promise<string> {
