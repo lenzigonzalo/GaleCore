@@ -1,8 +1,11 @@
-/** Puente local del Lab. Token efímero sólo en memoria, nunca en URL o localStorage. */
-// Producción: el Lab de :8771. En desarrollo (.env.development / galecore_dev.py monitor) el Lab de Dev, :8781.
+/** Puente al Lab. Token efímero sólo en memoria, nunca en URL o localStorage.
+ * Si REACT_APP_LAB_URL apunta a un host público (WS-0088: Lab en el VPS) va con `credentials: 'include'`
+ * para que el browser incluya la basic auth que lo protege en F1. Para loopback sigue como antes.
+ */
 export const LAB_URL = process.env.REACT_APP_LAB_URL || 'http://127.0.0.1:8771';
-/** Desde la plataforma (https) Chrome sólo deja hablarle a esta PC si el pedido lo declara: así pide el permiso de red local. */
-export const LOCAL_FETCH = { targetAddressSpace: 'loopback' } as RequestInit;
+const LAB_IS_LOOPBACK = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/i.test(LAB_URL);
+/** Chrome pide declarar "loopback" en el preflight cuando https le habla a esta PC; para un host público no corresponde. */
+export const LOCAL_FETCH: RequestInit = LAB_IS_LOOPBACK ? { targetAddressSpace: 'loopback' } as RequestInit : { credentials: 'include' };
 export interface LabProject { id: string; label: string }
 export interface LabProvider { id: 'codex' | 'claude'; label: string; installed: boolean }
 export interface LabSession { id: string; project: string; provider: 'codex' | 'claude'; title: string; createdAt: string; state: 'running' | 'ended' | 'interrupted'; nativeId: string | null; exitCode: number | null; resumeOf: string | null }
@@ -26,7 +29,7 @@ export async function labToken(): Promise<string> {
 }
 export async function labRequest<T>(url: string, body?: object, timeout = 12000): Promise<T> {
   const send = async () => request(url, { method: body ? 'POST' : 'GET',
-    headers: { Authorization: 'Bearer ' + await labToken(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { 'X-Lab-Token': await labToken(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}) }, timeout);
   let r = await send();
   if (r.status === 401) { token = null; r = await send(); }
@@ -52,7 +55,7 @@ export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'f
 export async function labUpload(projectId: string, file: File, dir?: string): Promise<{ path: string; name: string; size: number }> {
   // Con `dir` (Archivos → Subir) va a esa carpeta con su nombre; sin él, a adjuntos/.
   const send = async () => request('/workspaces/' + encodeURIComponent(projectId) + '/attachments' + (dir !== undefined ? '?dir=' + encodeURIComponent(dir) : ''), { method: 'POST',
-    headers: { Authorization: 'Bearer ' + await labToken(), 'X-File-Name': encodeURIComponent(file.name) }, body: file }, 120000);
+    headers: { 'X-Lab-Token': await labToken(), 'X-File-Name': encodeURIComponent(file.name) }, body: file }, 120000);
   let r = await send();
   if (r.status === 401) { token = null; r = await send(); }
   const value = await r.json();
@@ -63,7 +66,7 @@ export async function labUpload(projectId: string, file: File, dir?: string): Pr
 /** Lee el adjunto con la misma autenticación local del chat, sin tokens en URLs. */
 export async function labAttachment(projectId: string, path: string): Promise<Blob> {
   const send = async () => request('/workspaces/' + encodeURIComponent(projectId) + '/attachments?path=' + encodeURIComponent(path), {
-    headers: { Authorization: 'Bearer ' + await labToken() },
+    headers: { 'X-Lab-Token': await labToken() },
   }, 120000);
   let r = await send();
   if (r.status === 401) { token = null; r = await send(); }
@@ -77,7 +80,7 @@ export const labShellUrl = () => LAB_URL.replace(/^http/, 'ws') + '/shell';
 /** Imagen de cualquier carpeta del proyecto, para la vista previa (misma autenticación que el adjunto). */
 export async function labRaw(projectId: string, path: string): Promise<Blob> {
   const send = async () => request('/workspaces/' + encodeURIComponent(projectId) + '/raw?path=' + encodeURIComponent(path), {
-    headers: { Authorization: 'Bearer ' + await labToken() },
+    headers: { 'X-Lab-Token': await labToken() },
   }, 120000);
   let r = await send();
   if (r.status === 401) { token = null; r = await send(); }
