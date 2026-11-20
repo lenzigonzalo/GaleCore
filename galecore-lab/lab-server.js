@@ -211,7 +211,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
   res.setHeader('Vary', 'Origin');
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-File-Name');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-File-Name, X-Lab-Token');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     // La plataforma (https) le habla a esta PC: Chrome pide permiso de red local en el preflight.
     if (req.headers['access-control-request-private-network'] === 'true') res.setHeader('Access-Control-Allow-Private-Network', 'true');
@@ -219,7 +219,10 @@ const server = http.createServer(async (req, res) => {
   }
   const url = new URL(req.url, 'http://127.0.0.1');
   if (req.method === 'GET' && url.pathname === '/bootstrap') return json(res, 200, { token: TOKEN, scope: 'local-os-user' });
-  if (req.headers.authorization !== 'Bearer ' + TOKEN) return json(res, 401, { error: 'Conexión local no autorizada. Reconectá el Lab.' });
+  // WS-0088: también se admite X-Lab-Token para que el Authorization quede libre para un gate externo (basic auth en F1, en F2 lo maneja auth_request).
+  const bearer = req.headers.authorization === 'Bearer ' + TOKEN;
+  const header = req.headers['x-lab-token'] === TOKEN;
+  if (!bearer && !header) return json(res, 401, { error: 'Conexión local no autorizada. Reconectá el Lab.' });
   try {
     if (await workspaces.route(req,res,url,json,readBody)) return;
     if (req.method === 'POST' && url.pathname === '/update') return json(res, 200, { status: await updater.request((await readBody(req)).commit) });
