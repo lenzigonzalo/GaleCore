@@ -1,7 +1,7 @@
 /**
  * Proyectos compartidos en el Lab (WS-0064 Fase 2b). La sincronización la hace el CLI del harness
- * (`project share|unshare|shared|sync`, galecore-ai); el Lab sólo lo invoca: al arrancar el Lab (`sync --all`)
- * y a pedido del usuario. Un proyecto sin `.sync.json` no se toca nunca.
+ * (`project share|unshare|shared|sync`, galecore-ai); el Lab sólo lo invoca: al arrancar el Lab (`sync --all`),
+ * al abrirlo si el último sync automático fue hace más de 12 h, y a pedido del usuario. Un proyecto sin `.sync.json` no se toca nunca.
  */
 const fs = require('fs');
 const path = require('path');
@@ -128,7 +128,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   }
 
   // `busy(p)`: hay un turno del motor escribiendo en el proyecto; traer cambios ajenos en ese momento los pisaría.
-  // Cada sync inicia sesión en GaleCore (límite 10 cada 5 min): sólo corre al arrancar el Lab y a pedido del usuario.
+  // Cada sync inicia sesión en GaleCore (límite 10 cada 5 min): sólo corre al arrancar el Lab, al abrirlo si el último fue hace más de 12 h, y a pedido del usuario.
   function sync(p, { busy = () => false } = {}) {
     if (!isShared(p)) return Promise.resolve(null);
     if (!inThisEnvironment(p)) return Promise.resolve({ otherEnvironment: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });

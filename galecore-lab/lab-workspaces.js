@@ -356,7 +356,9 @@ function permissionMode(provider, raw) {
   return PERMISSION_MODES[engine].includes(raw) ? raw : safe;
 }
 
-function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile, update = () => null }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, now = Date.now, request, sessionFile, update = () => null }) {
+  const AUTO_SYNC_EVERY_MS = 12 * 60 * 60 * 1000; let lastAutoSync = 0;   // hora del último sync automático (arranque o apertura)
+  const autoSyncNow = () => { lastAutoSync = now(); sharing.syncAll(listProjects, { busy }).catch(() => {}); };
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
   const overridesFile=path.join(local,'lab-project-overrides.json');
@@ -679,7 +681,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // Reglas de permisos de Claude Code: las del producto (fijas) y las del usuario (lab-permissions.js).
     if(url.pathname==='/permissions/claude'&&req.method==='GET'){json(res,200,permissionRules(kb,local));return true;}
     if(url.pathname==='/permissions/claude'&&req.method==='POST'){saveUserRules(local,await readBody(req),fail);json(res,200,permissionRules(kb,local));return true;}
-    if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),update:update(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
+    if(req.method==='GET' && url.pathname==='/workspaces'){if(autoSync&&now()-lastAutoSync>AUTO_SYNC_EVERY_MS)autoSyncNow();   // al abrir el Lab, si el último fue hace más de 12 h; en segundo plano
+      const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),update:update(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/shared'){json(res,200,await sharing.catalog({busy,projectsOf:listProjects}));return true;}
@@ -837,7 +840,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     return false;
   }
-  if(autoSync)sharing.syncAll(listProjects,{busy}).catch(()=>{});   // una vez al arrancar: sólo los proyectos seguidos; no descarga los nuevos
+  if(autoSync)autoSyncNow();   // al arrancar: sólo los proyectos seguidos; no descarga los nuevos
   function reserveShell(p){
     if(sharing.isRunning(p))throw fail('El proyecto está sincronizando; volvé a abrir la terminal al terminar.',409);
     shellProjects.set(p.id,(shellProjects.get(p.id)||0)+1);
