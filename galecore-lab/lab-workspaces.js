@@ -8,6 +8,36 @@ const { modelOptions, selection, modelFlags, normalize } = require('./lab-models
 const { createSharing } = require('./lab-sharing');
 const { codexConnectors, claudeConnectors, recordClaudeInit, listConnectors, knownConnector, setConnector } = require('./lab-brokers');
 const { permissionRules, saveUserRules, mergedSettings } = require('./lab-permissions');
+
+// WS-0088: semáforo compartido con las tareas del VPS. task_service.py (galecore-ai) usa archivos
+// `place-<n>.lock` con O_EXCL en GALECORE_TASKS_SLOTS_DIR; GALECORE_TASKS_MAX_PARALLEL fija cuántos
+// (default 1). Un lock más viejo que 30 min se considera muerto y se rompe (mismo que tasks.LOCK_STALE_MINUTES).
+// Sin la env: no estamos en el VPS y el semáforo no aplica (Lab local corre solo).
+const LAB_SLOT_STALE_MIN = 30;
+function acquireTaskSlot() {
+  const dir = process.env.GALECORE_TASKS_SLOTS_DIR;
+  if (!dir) return { held: null, skipped: true };
+  const places = Math.max(1, parseInt(process.env.GALECORE_TASKS_MAX_PARALLEL || '1', 10) || 1);
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* best effort */ }
+  for (let n = 0; n < places; n++) {
+    const p = path.join(dir, `place-${n}.lock`);
+    try {
+      fs.closeSync(fs.openSync(p, 'wx'));
+      return { held: p, skipped: false };
+    } catch (e) {
+      if (e.code !== 'EEXIST') continue;
+      try {
+        const ageMin = (Date.now() - fs.statSync(p).mtimeMs) / 60000;
+        if (ageMin >= LAB_SLOT_STALE_MIN) { fs.unlinkSync(p); n--; }
+      } catch { /* releasado entre stat/unlink: siguiente slot */ }
+    }
+  }
+  return { held: null, skipped: false };
+}
+function releaseTaskSlot(slotPath) {
+  if (!slotPath) return;
+  try { fs.unlinkSync(slotPath); } catch { /* best effort */ }
+}
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -533,8 +563,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const mine=p.strategies||[];
     const resume=mine.length&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
     const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.'+' Si el trader pide un agente que corra solo («creame un agente que…»), aplicá la skill '+agentesSkill+'.'+' Si el trader pide una skill con código (un cálculo reutilizable), aplicá la skill '+codigoSkill+'.';
-    const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    const job={proc:null,project:p.id,chat,asks:new Map(),slot:null};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
+    // WS-0088: el chat del Lab comparte el semáforo de corridas con las tareas del VPS (contrato con el owner 05/11).
+    // En Lab local, GALECORE_TASKS_SLOTS_DIR no está seteado y `skipped` vuelve true: no afecta.
+    const acquired = acquireTaskSlot();
+    if (!acquired.skipped && !acquired.held) { chat.error = 'El VPS está ocupado con una tarea. Volvé a mandar en un momento.'; chat.state = 'failed'; chat.activity = ''; saveChat(chat); jobs.delete(chat.id); return chat; }
+    job.slot = acquired.held;
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);releaseTaskSlot(job.slot);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor

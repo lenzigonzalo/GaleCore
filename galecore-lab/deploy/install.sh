@@ -50,19 +50,23 @@ echo "==> 6) .scratch sticky (shared entre traders)"
 install -d /srv/galecore/ai/galecore-ai/.scratch
 chmod 1777 /srv/galecore/ai/galecore-ai/.scratch
 
-echo "==> 7) Nginx snippet (F2 con auth_request) y backup del anterior"
+echo "==> 7) Nginx map para WebSocket upgrade (nivel http)"
+# Sin este mapa el proxy_pass del Lab manda `Connection:` vacio y los WebSocket fallan.
+install -o root -g root -m 644 "$LAB_SRC/deploy/nginx-galecore-lab-map.conf" /etc/nginx/conf.d/galecore-lab-map.conf
+
+echo "==> 8) Nginx snippet (F2 con auth_request) y backup del anterior"
 if [[ -f "$NGINX_SNIPPET" ]] && ! cmp -s "$LAB_SRC/deploy/nginx-galecore-lab.conf" "$NGINX_SNIPPET"; then
   cp "$NGINX_SNIPPET" "$NGINX_SNIPPET.bak.$(date +%Y%m%d%H%M%S)"
 fi
 install -o root -g root -m 644 "$LAB_SRC/deploy/nginx-galecore-lab.conf" "$NGINX_SNIPPET"
 
-echo "==> 8) Asegurar include en el site de nginx"
+echo "==> 9) Asegurar include en el site de nginx"
 if ! grep -q 'include snippets/galecore-lab.conf;' "$NGINX_SITE"; then
   echo "AVISO: $NGINX_SITE no incluye snippets/galecore-lab.conf; agregalo a mano"
   echo "       (buscar donde esten los otros 'include snippets/...')"
 fi
 
-echo "==> 9) Validar y recargar nginx"
+echo "==> 10) Validar y recargar nginx"
 nginx -t
 systemctl reload nginx
 
