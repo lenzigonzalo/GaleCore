@@ -99,7 +99,26 @@ def reason_text(ev: dict | None) -> str | None:
     return REASON_TEXT.get((ev or {}).get("reason_code"))
 
 
-# ── scheduler adapter (schtasks.exe) ─────────────────────────────
+# ── scheduler adapters ────────────────────────────────────────────
+
+
+class VpsScheduler:
+    """Stub for the VPS: tasks are managed by systemd timers, not schtasks (WS-0093)."""
+
+    def create(self, *a, **kw):
+        pass
+
+    def create_every(self, *a, **kw):
+        pass
+
+    def delete(self, *a, **kw):
+        pass
+
+    def set_enabled(self, *a, **kw):
+        pass
+
+    def query(self, name):
+        return {"registered": False}
 
 
 class WindowsScheduler:

@@ -1,0 +1,19 @@
+# GaleCore supervisor for a trader — systemd oneshot template (WS-0093).
+# Instance = Linux username: galecore-supervisor@elenzi, galecore-supervisor@glenzi.
+#
+# Install once:
+#   sudo cp galecore-supervisor@.service galecore-supervisor@.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now galecore-supervisor@elenzi.timer
+[Unit]
+Description=GaleCore supervisor for %i
+After=galecore-datafeed.service
+
+[Service]
+Type=oneshot
+User=%i
+EnvironmentFile=/home/%i/.galecore-ai.env
+ExecStart=/srv/galecore/ai/venv/bin/python -B /srv/galecore/ai/galecore-ai/tools/vps_supervisor.py
+TimeoutStartSec=120
+MemoryHigh=200M
+MemoryMax=300M

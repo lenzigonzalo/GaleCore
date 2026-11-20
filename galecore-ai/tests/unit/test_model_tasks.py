@@ -28,7 +28,8 @@ LATER = NOW + timedelta(hours=1)
 def test_task_commit_pushes_pending_knowledge_to_private_remote(tmp_path):
     repo, remote = tmp_path / "knowledge", tmp_path / "backup.git"
     repo.mkdir()
-    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "checkout", "-b", "main"], check=True, capture_output=True)
     subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
     for key, value in (("user.name", "Test"), ("user.email", "test@example.com")):
         subprocess.run(["git", "-C", str(repo), "config", key, value], check=True)

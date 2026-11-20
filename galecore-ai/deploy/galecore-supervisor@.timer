@@ -1,0 +1,12 @@
+# Runs the GaleCore supervisor every 5 minutes for a trader (WS-0093).
+# See galecore-supervisor@.service for install instructions.
+[Unit]
+Description=Run GaleCore supervisor every 5 min for %i
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

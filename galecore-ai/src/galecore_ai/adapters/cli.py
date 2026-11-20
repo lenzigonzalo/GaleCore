@@ -580,6 +580,47 @@ def _agent_key_skill_finder():
                                     agent_secret=os.environ["GALECORE_AGENT_KEY"].strip(), skill_key=key)
 
 
+def _cli_run_remote(cli_args: list[str], timeout: float = 210) -> dict:
+    """WS-0093: proxy a CLI command to the VPS (POST /App/GaleCore/Agents/CLI/Run).
+
+    Used by cloud routines (GALECORE_CLI_REMOTE=true): the VPS has knowledge/ and runs the command; the cloud agent
+    gets stdout/stderr and writes the narrative.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    base = os.environ.get("GALECORE_BASE_URL", "").rstrip("/")
+    api_key = os.environ.get("GALECORE_API_KEY", "")
+    agent_key = os.environ.get("GALECORE_AGENT_KEY", "")
+    if not base or not api_key or not agent_key:
+        return {"ok": False, "source": "remote",
+                "error": "GALECORE_BASE_URL, GALECORE_API_KEY and GALECORE_AGENT_KEY are required for remote CLI run"}
+    url = f"{base}/App/GaleCore/Agents/CLI/Run"
+    body = json.dumps({"args": cli_args}, ensure_ascii=False).encode()
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Content-Type": "application/json",
+        "X-API-KEY": api_key,
+        "X-GaleCore-Agent-Key": agent_key,
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result = json.loads(resp.read())
+            result["source"] = "remote"
+            return result
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+        except (OSError, ValueError):
+            pass
+        return {"ok": False, "source": "remote",
+                "error": f"VPS returned HTTP {exc.code}: {detail}"}
+    except (OSError, ValueError, urllib.error.URLError) as exc:
+        return {"ok": False, "source": "remote",
+                "error": f"Remote CLI run failed: {exc}"}
+
+
 def _cmd_skill(args: argparse.Namespace) -> None:
     from galecore_ai.application import skill_space
     from galecore_ai.application.agent_report import AgentReportError
@@ -2227,6 +2268,19 @@ def main() -> None:
     for key in ("host_model", "host_provider"):   # same rule as _declared for the flags
         if hasattr(args, key):
             setattr(args, key, _declared({key: getattr(args, key, None)}, key))
+
+    # WS-0093: proxy allowed commands to the VPS when GALECORE_CLI_REMOTE is set (cloud routines).
+    _remote_commands = {"story", "kb", "research"}
+    if os.environ.get("GALECORE_CLI_REMOTE", "").strip() and args.command in _remote_commands:
+        import sys
+        result = _cli_run_remote(sys.argv[1:])
+        if result.get("ok") and result.get("stdout"):
+            print(result["stdout"], end="")
+            if result.get("stderr"):
+                print(result["stderr"], end="", file=sys.stderr)
+            raise SystemExit(result.get("exit_code", 0))
+        _json_out(result, exit_code=result.get("exit_code") or _EXIT_INTERNAL_ERROR)
+        return
 
     try:
         if args.command == "prepare":
