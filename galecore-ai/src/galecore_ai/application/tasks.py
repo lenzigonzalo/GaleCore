@@ -105,19 +105,19 @@ def reason_text(ev: dict | None) -> str | None:
 class VpsScheduler:
     """Stub for the VPS: tasks are managed by systemd timers, not schtasks (WS-0093)."""
 
-    def create(self, *a, **kw):  # noqa: ARG002
+    def create(self, *a, **kw):
         pass
 
-    def create_every(self, *a, **kw):  # noqa: ARG002
+    def create_every(self, *a, **kw):
         pass
 
-    def delete(self, *a, **kw):  # noqa: ARG002
+    def delete(self, *a, **kw):
         pass
 
-    def set_enabled(self, *a, **kw):  # noqa: ARG002
+    def set_enabled(self, *a, **kw):
         pass
 
-    def query(self, name):  # noqa: ARG002
+    def query(self, name):
         return {"registered": False}
 
 

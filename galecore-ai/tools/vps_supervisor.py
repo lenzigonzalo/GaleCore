@@ -19,14 +19,14 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from galecore_ai.adapters.galecore_space import SpaceClient  # noqa: E402
-from galecore_ai.adapters.knowledge_base import knowledge_dir  # noqa: E402
-from galecore_ai.adapters.record_store import FileRecordStore, default_records_dir  # noqa: E402
-from galecore_ai.adapters.research_store import FileResearchStore  # noqa: E402
-from galecore_ai.application.knowledge import KnowledgeBase  # noqa: E402
-from galecore_ai.application.space import publish_agents  # noqa: E402
-from galecore_ai.application.supervisor import api_reader  # noqa: E402
-from galecore_ai.application.tasks import VpsScheduler  # noqa: E402
+from galecore_ai.adapters.galecore_space import SpaceClient
+from galecore_ai.adapters.knowledge_base import knowledge_dir
+from galecore_ai.adapters.record_store import FileRecordStore, default_records_dir
+from galecore_ai.adapters.research_store import FileResearchStore
+from galecore_ai.application.knowledge import KnowledgeBase
+from galecore_ai.application.space import publish_agents
+from galecore_ai.application.supervisor import api_reader
+from galecore_ai.application.tasks import VpsScheduler
 
 
 def main() -> int:
