@@ -13,9 +13,10 @@ test('refresca las líneas publicadas y conserva el piso de puts como otro aviso
   (fetchSpace as jest.Mock).mockResolvedValue(response({ watches: [rule('750')] }));
   const { result } = renderHook(() => useWatches('SPY'));
   await act(async () => {});
+  expect(fetchSpace).toHaveBeenCalledWith('agent');
   expect(result.current.watches.map(w => w.id)).toEqual(['750']);
   (fetchSpace as jest.Mock).mockResolvedValue(response({ watches: [rule('715'), rule('700'), rule('690'), rule('puts', 'put_wall')] }));
-  await act(async () => { jest.advanceTimersByTime(60_000); });
+  await act(async () => { jest.advanceTimersByTime(300_000); });
   expect(result.current.watches.map(w => w.id)).toEqual(['715', '700', '690', 'puts']);
 });
 
@@ -28,7 +29,7 @@ test('oculta la baja al instante, la guarda y restaura la línea si el superviso
   const saved = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
   expect(saved.unwatch['700'].at).toBeTruthy();
   (fetchSpace as jest.Mock).mockResolvedValue(response({ watches: [rule('700')], unwatch: saved.unwatch, unwatch_errors: { '700': 'rechazada' } }));
-  await act(async () => { jest.advanceTimersByTime(60_000); });
+  await act(async () => { jest.advanceTimersByTime(300_000); });
   expect(result.current.watches.map(w => w.id)).toEqual(['700']);
 });
 
@@ -40,6 +41,6 @@ test('una falla al guardar revierte la baja optimista y una falla al leer limpia
   await act(async () => { result.current.remove('700'); });
   expect(result.current.watches.map(w => w.id)).toEqual(['700']);
   (fetchSpace as jest.Mock).mockRejectedValue(new Error('offline'));
-  await act(async () => { jest.advanceTimersByTime(60_000); });
+  await act(async () => { jest.advanceTimersByTime(300_000); });
   expect(result.current.watches).toEqual([]);
 });

@@ -1,4 +1,4 @@
-import { clearSpaceCache, fetchReferenceCapital, SpaceItem } from './space';
+import { clearSpaceCache, fetchReferenceCapital, fetchSpace, SpaceItem } from './space';
 import apiClient from './client';
 jest.mock('./client', () => ({ __esModule: true, default: { get: jest.fn() } }));
 const get = apiClient.get as jest.Mock;
@@ -13,4 +13,16 @@ test('profile failure or malformed JSON still permits a panel without capital', 
   get.mockRejectedValueOnce(new Error('offline')); expect(await fetchReferenceCapital()).toBeUndefined();
   get.mockResolvedValue({ data: { items: [{ ...profile('USD', 12000), content: '{bad json' }] } });
   expect(await fetchReferenceCapital()).toBeUndefined();
+});
+
+test('fetchSpace(kind) pide sólo ese tipo y cachea por tipo (BF-0017)', async () => {
+  get.mockReset();
+  get.mockResolvedValue({ data: { items: [], shared: [] } });
+  await fetchSpace('agent');
+  await fetchSpace('agent');
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(get).toHaveBeenLastCalledWith('/App/GaleCore/Space', { params: { kind: 'agent' } });
+  await fetchSpace();
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(get).toHaveBeenLastCalledWith('/App/GaleCore/Space', undefined);
 });
