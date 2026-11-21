@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { deployShadowSpec, fetchShadowEvaluations, stopShadowInstance } from '../../api/shadow';
 import { ShadowInstance, SpecVersionMetrics, StrategyCard } from '../../types/shadow';
-import { agoText, usdAr } from './ficha';
+import { agoText, num, usdAr } from './ficha';
 
 function actionError(e: unknown): string {
   const any = e as { response?: { data?: { error?: string; reason?: string } }; message?: string };
@@ -54,7 +54,7 @@ export function StrategyStatusBar({ spec, instance, card = null, metrics = [], c
     </span>}
     {l && l.capital !== null && <span><b>Capital</b> {usdAr(l.capital)}</span>}
     {l && <span title={`Riesgo abierto ${usdAr(l.openRisk)} · por apuesta ${usdAr(l.perBet)}`}><b>Topes</b> {usdAr(l.perTrade)} por operación</span>}
-    {card?.window && <span><b>Ventana</b> {card.window.start}–{card.window.end} {tz(card.window.timezone)}</span>}
+    {card?.window && <span title={card.maxEntriesPerDay === null ? undefined : `Entradas por día: ${num(card.maxEntriesPerDay)}`}><b>Ventana</b> {card.window.start}–{card.window.end} {tz(card.window.timezone)}</span>}
     {id && lastEval !== undefined && <span><b>Última evaluación</b> {lastEval ? agoText(lastEval) : 'sin evaluaciones'}</span>}
     {error && <p role="alert" className="status-bar-error">{error}</p>}
   </div>;
