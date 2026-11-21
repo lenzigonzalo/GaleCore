@@ -462,6 +462,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     return {deleted:true,archived:true,cancelled,removed:gone.map(x=>path.relative(kb,x).split(path.sep).join('/')),commit};
   }
+  // Carpeta de cada proyecto para el comando de retomar: el chat se consulta cada segundo y listProjects recorre el disco.
+  const resumeDirs=new Map();
   function project(id){const p=listProjects().find(p=>p.id===id);if(!p)throw fail('Proyecto desconocido.',404);return p;}
   function createProject(body){
     const label=String(body.label||'').trim(), type=body.type||'analysis';   // owner 19/10: se crea sólo con nombre; la estrategia llega por intención (mark_strategy.py)
@@ -809,7 +811,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,...(b.origin==='prueba'?{origin:'prueba'}:{}),title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
-      if(req.method==='GET'&&parts.length===2){refreshCodexUsage(c);refreshClaudeUsage(c);const dir=listProjects().find(x=>x.id===c.project)?.dir,command=resumeCommand({provider:c.provider,nativeId:c.nativeId,dir});json(res,200,command?{...c,resume:{command}}:c);return true;}
+      if(req.method==='GET'&&parts.length===2){refreshCodexUsage(c);refreshClaudeUsage(c);if(c.nativeId&&!resumeDirs.has(c.project))resumeDirs.set(c.project,listProjects().find(x=>x.id===c.project)?.dir);const dir=resumeDirs.get(c.project),command=resumeCommand({provider:c.provider,nativeId:c.nativeId,dir});json(res,200,command?{...c,resume:{command}}:c);return true;}
       if(req.method==='GET'&&parts[2]==='mapa'){
         // Mientras responde, el mapa que se escribió en este turno ya se muestra (no espera al final).
         // WS-0044: en un proyecto de estrategia (una idea), una conversación que todavía no tocó el mapa ve el último del proyecto.
