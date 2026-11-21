@@ -307,7 +307,7 @@ function AgentSettings({ a, busy, onSave }: { a: Agent; busy: boolean; onSave: (
     </form> : <><p className="agents-objective">{a.objective || 'Sin instrucciones publicadas.'}</p><p><Bot size={18} />{a.model_editable ? a.model || `Automático · ${a.model_default || 'según la tarea'}` : a.capability === 'supervisor' || a.model_editable === false ? 'Ejecución por código' : a.last_run?.model || 'Modelo no publicado'}</p>
       {a.tools_available && <p className="agents-secondary">Herramientas: {(a.tools ?? a.tools_available).filter(r => r !== 'Read').map(toolLabel).join(', ') || 'ninguna'}</p>}
       {a.skill_scripts && <div className="agents-secondary"><p>Método: {humanize(a.skill_scripts.skill)}</p>{a.skill_scripts.scripts.map(sc => <p key={sc.script}>{sc.script} · {sc.last_run ? `${sc.last_run.ok ? 'OK' : 'Falló'} · ${when(sc.last_run.at)}${sc.last_run.ok ? '' : sc.last_run.error ? ` · ${sc.last_run.error.split('\n').pop()?.slice(0, 120)}` : ''}` : 'Sin corridas'}</p>)}</div>}
-      {a.delivery?.includes('biblioteca') && <p className="agents-secondary">Deja un informe en la Biblioteca.</p>}</>}
+      {a.delivery?.includes('biblioteca') && <p className="agents-secondary">Deja un informe en el proyecto Biblioteca del chat.</p>}</>}
     {!a.editable && a.capability !== 'supervisor' && <small>La edición estará disponible cuando tu PC publique la configuración de esta tarea.</small>}
   </section>;
 }
