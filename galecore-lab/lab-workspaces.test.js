@@ -1,4 +1,4 @@
-const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('fs');const path=require('path');const os=require('os');const {createWorkspaces,safeFile,consumeEvent,codexLimits,resumeCommand}=require('./lab-workspaces');
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('fs');const path=require('path');const os=require('os');const {createWorkspaces,safeFile,consumeEvent,codexLimits}=require('./lab-workspaces');
 function setup(t){const base=fs.mkdtempSync(path.join(os.tmpdir(),'gc-lab-test-'));t.after(()=>{assert.ok(path.resolve(base).startsWith(path.resolve(os.tmpdir())+path.sep+'gc-lab-test-'));fs.rmSync(base,{recursive:true,force:true});});const kb=path.join(base,'knowledge'),local=path.join(base,'local');fs.mkdirSync(kb);fs.mkdirSync(local);const service=createWorkspaces({root:base,kb,local,binaries:{codex:null,claude:null},environment:()=>({}),instructions:()=>'',legacyProjects:()=>[],legacySessions:()=>[]});return{base,kb,local,service};}
 async function route(service,method,url,body){let answer;await service.route({method},{},new URL(url,'http://localhost'),(res,status,value)=>{answer={status,value};},async()=>body);return answer;}
 
@@ -565,15 +565,3 @@ test('permisos de Claude Code (WS-0083): reglas del producto fijas, las del usua
  assert.equal(JSON.stringify(merged).includes('bypassPermissions'),false);
 });
 
-test('resumeCommand: claude y codex, con y sin SSH, win32 y linux, path con comilla, id inválido',()=>{
- const id='0f8e7d6c-1234-4abc-9def-0123456789ab',quoted="/srv/ws/mi'carpeta";
- const c=o=>resumeCommand({nativeId:id,dir:'/srv/ws/personal',ssh:'',platform:'linux',...o});
- assert.equal(c({provider:'claude',ssh:'-p 5061 glenzi@host'}),`ssh -t -p 5061 glenzi@host "cd '/srv/ws/personal' && claude --resume ${id}"`);
- assert.equal(c({provider:'codex',ssh:'-p 5061 glenzi@host'}),`ssh -t -p 5061 glenzi@host "cd '/srv/ws/personal' && codex resume ${id}"`);
- assert.equal(c({provider:'claude',platform:'win32',dir:'C:\ws\personal'}),`Set-Location 'C:\ws\personal'; claude --resume ${id}`);
- assert.equal(c({provider:'codex'}),`cd '/srv/ws/personal' && codex resume ${id}`);
- assert.equal(c({provider:'claude',platform:'win32',dir:quoted}),`Set-Location '/srv/ws/mi''carpeta'; claude --resume ${id}`);
- assert.equal(c({provider:'claude',dir:quoted}),String.raw`cd '/srv/ws/mi'\''carpeta' && claude --resume `+id);
- assert.equal(c({provider:'claude',dir:quoted,ssh:'h'}),String.raw`ssh -t h "cd '/srv/ws/mi'\\''carpeta' && claude --resume `+id+'"');
- for(const bad of [null,'','a b','x;rm -rf /',"a'b"])assert.equal(c({provider:'claude',nativeId:bad}),null);
-});

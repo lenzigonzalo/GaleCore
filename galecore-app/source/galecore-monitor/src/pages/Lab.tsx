@@ -1,8 +1,8 @@
 import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, MessageSquare, Files, X, ArrowUp, Square, PanelLeftClose, PanelLeftOpen, Mic, Paperclip, Map as MapIcon, SquareTerminal, Pencil } from 'lucide-react';
+import { Plus, MessageSquare, Files, X, ArrowUp, Square, PanelLeftClose, PanelLeftOpen, Mic, Paperclip, Map as MapIcon, Pencil } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
-import { labRequest, LAB_IS_LOOPBACK, WorkspaceProject, WorkspaceState, WorkspaceChat, labUpload } from '../api/lab';
+import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, labUpload } from '../api/lab';
 import { LabShadow } from './LabShadow';
 import { LabMessageAttachments, messageContent } from '../components/lab/LabMessageAttachments';
 import { LabMarkdown } from '../components/lab/LabMarkdown';
@@ -19,7 +19,6 @@ import { saveNote } from '../components/lab/labNotes';
 import { LabTasks } from '../components/lab/LabTasks';
 import { LabUsage } from '../components/lab/LabUsage';
 import { LabFilePanel } from '../components/lab/LabFilePanel';
-import { LabShell } from '../components/lab/LabShell';
 import { LabShare, noticeText } from '../components/lab/LabShare';
 import { LabSharedProjects } from '../components/lab/LabSharedProjects';
 import { notifyChat, playChatSound, readChatPrefs, useChatModes } from '../components/lab/labChatPrefs';
@@ -36,18 +35,6 @@ const limitSidebarWidth = (width: number, available: number) => Math.max(200, Ma
 // Commit con el que Vercel compiló esta web (vacío en local). Una sola petición de actualización del Lab por carga de página.
 const WEB_COMMIT = process.env.REACT_APP_COMMIT || '';
 let updateAsked = false;
-// Vista Shell: seguir la conversación actual en una terminal propia (el comando retoma la misma sesión del motor).
-function LabResume({ command }: { command?: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => { if (!copied) return; const t = setTimeout(() => setCopied(false), 2000); return () => clearTimeout(t); }, [copied]);
-  if (!command) return <p className="lab-resume-empty">Elegí una conversación con respuestas para seguirla en la terminal.</p>;
-  return <div className="lab-resume">
-    <strong>Seguir en la terminal</strong>
-    <code>{command}</code>
-    <button type="button" onClick={() => { navigator.clipboard.writeText(command).then(() => setCopied(true), () => {}); }}>{copied ? 'Copiado' : 'Copiar'}</button>
-  </div>;
-}
-
 export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, onSidebarToggle, onLogout, embedded = false, active = false, projectRequest, onFollowStrategy }: { embedded?: boolean; active?: boolean; projectRequest?: { id: string; sequence: number }; onFollowStrategy?: (spec: string) => void; onMonitor: () => void; onNavigate?: (tab: Tab) => void; sidebarHidden?: boolean; onSidebarToggle?: () => void; onLogout?: () => void }) {
   const [projectHost, setProjectHost] = useState<HTMLElement | null>(null);
   const chatSize = useTextSize('chat');
@@ -68,8 +55,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [provider, setProvider] = useState<'codex' | 'claude'>(() => readChatPrefs().provider || 'codex');
   const [chatSettings, setChatSettings] = useState(() => { const p = readChatPrefs(); return { model: p.model, effort: p.effort }; });
   // Chat, Archivos (explorador) y Shell (terminal) del proyecto, en el mismo lugar (owner 17/10).
-  const [view, setView] = useState<'chat' | 'design' | 'shadow' | 'files' | 'shell'>('chat');
-  const [shellOpened, setShellOpened] = useState(false);
+  const [view, setView] = useState<'chat' | 'design' | 'shadow' | 'files'>('chat');
   const [fileToOpen, setFileToOpen] = useState<string | undefined>();
   // WS-0067: el archivo de una respuesta se lee a la derecha del chat (reemplaza al Mapa mientras está abierto).
   const [filePanel, setFilePanel] = useState<string | null>(null);
@@ -223,7 +209,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => { const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) escape.current(e); }; window.addEventListener('keydown', on); return () => window.removeEventListener('keydown', on); }, []);
 
   const [sharingOpen, setSharingOpen] = useState<WorkspaceProject | null>(null);
-  const selectProject = (p: WorkspaceProject) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(null); setChat(null); setView(v => v === 'files' || v === 'shell' ? v : 'chat'); setExpanded(v=>({...v,[p.id]:true})); setError(''); };
+  const selectProject = (p: WorkspaceProject) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(null); setChat(null); setView(v => v === 'files' ? v : 'chat'); setExpanded(v=>({...v,[p.id]:true})); setError(''); };
   useEffect(() => {
     if (!projectRequest || handledRequest.current === projectRequest.sequence || !state) return;
     const target = state.projects.find(item => item.id === projectRequest.id);
@@ -465,7 +451,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if((draft.trim()||attachments.length)&&!uploading&&!busy){if(chat?.state==='running')enqueue();else e.currentTarget.form?.requestSubmit();}}
   else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='s'){e.preventDefault();if(!busy)sendNow();}
   else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='x'&&queue.length&&e.currentTarget.selectionStart===e.currentTarget.selectionEnd){e.preventDefault();unqueueLast();}}}/>{listening&&<p className="lab-interim" aria-live="polite">{interim||'Escuchando…'}</p>}<div className="lab-composer-bar"><div className="lab-composer-side"><button type="button" className="lab-tool" aria-label="Adjuntar archivo" title="Adjuntar archivo" disabled={busy || uploading || !project} onClick={() => fileInput.current?.click()}><Plus size={18}/></button><input ref={fileInput} type="file" multiple hidden onChange={e => void attach(e.target.files)}/>{Speech && <button type="button" className={'lab-tool' + (listening ? ' active' : '')} aria-label={listening ? 'Detener dictado' : 'Dictar'} title={listening ? 'Detener dictado' : 'Dictar'} onClick={toggleDictation}><Mic size={17}/></button>}{uploading && <span className="lab-uploading" role="status">Adjuntando…</span>}</div><div className="lab-composer-side">{chat?.state==='running'&&(draft.trim()||attachments.length>0)&&<><button type="button" className="lab-queue-add" aria-label="Encolar mensaje" title="Sale solo cuando termine la respuesta (Enter)" disabled={busy} onClick={()=>enqueue()}>Encolar</button><button type="button" className="lab-send-now" aria-label="Mandar ya el mensaje escrito" title="Corta la respuesta y lo manda ya (Ctrl + S)" disabled={busy} onClick={()=>sendNow()}>Mandar ya</button></>}<LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><select className={'lab-mode ' + mode} aria-label="Permisos" title={PERMISSION_MODES[engine].find(m => m.id === mode)?.hint} value={mode} onChange={e => changeMode(e.target.value)}>{PERMISSION_MODES[engine].map(m => <option key={m.id} value={m.id}>{m.label}</option>)}</select>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={(!draft.trim()&&!attachments.length)||uploading||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div></div></form>;
-  const chatHeader = <header className={"lab-chat-header" + (headerHost ? " in-global-header" : "")}><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong></div><div className="lab-header-actions"><LabUsage usage={chat?.usage}/>{view==='chat' && mapaShown && <button className="lab-files-button" aria-pressed={side==='mapa'} onClick={()=>{ if (filePanel) { setFilePanel(null); setMapaOpen(true); } else setMapaOpen(v=>!v); }}><MapIcon size={17}/>Proyecto</button>}<div className="lab-view-switch" role="group" aria-label="Vista del proyecto"><button aria-pressed={view==='chat' || view==='design' || view==='shadow'} onClick={()=>setView('chat')}><MessageSquare size={16}/>Chat</button><button aria-pressed={view==='files'} onClick={()=>{setFileToOpen(undefined);setView('files');}}><Files size={16}/>Archivos</button><button aria-pressed={view==='shell'} onClick={()=>{setShellOpened(true);setView('shell');}}><SquareTerminal size={16}/>Shell</button></div></div></header>;
+  const chatHeader = <header className={"lab-chat-header" + (headerHost ? " in-global-header" : "")}><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong></div><div className="lab-header-actions"><LabUsage usage={chat?.usage}/>{view==='chat' && mapaShown && <button className="lab-files-button" aria-pressed={side==='mapa'} onClick={()=>{ if (filePanel) { setFilePanel(null); setMapaOpen(true); } else setMapaOpen(v=>!v); }}><MapIcon size={17}/>Proyecto</button>}<div className="lab-view-switch" role="group" aria-label="Vista del proyecto"><button aria-pressed={view==='chat' || view==='design' || view==='shadow'} onClick={()=>setView('chat')}><MessageSquare size={16}/>Chat</button><button aria-pressed={view==='files'} onClick={()=>{setFileToOpen(undefined);setView('files');}}><Files size={16}/>Archivos</button></div></div></header>;
   const projectSidebar = <aside className="lab-chat-sidebar" id="lab-project-sidebar">
       <div className="lab-sidebar-heading">{!embedded && !onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
       {!collapsed && <LabProjectList state={state} projectId={projectId} chatId={chatId} expanded={expanded}
@@ -492,9 +478,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
       {state?.update?.notice && <p className="lab-sync-notice" role="status"><span>{state.update.notice}</span></p>}
       {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><span className="lab-sync-actions">{noticeAction && <button className="lab-files-button" onClick={noticeAction.run}>{noticeAction.label}</button>}<button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></span></p>}
-      {view==='shell' && <LabResume command={chat?.resume?.command}/>}
-      {LAB_IS_LOOPBACK && shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
-      {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen} shared={!!project?.shared && project.following !== false} unsynced={project?.syncState === 'pending'} onSynced={refresh}/> : view==='shell' ? null : view!=='chat' ? <LabShadow key={project?.id + view + strategyOpen} mode={view} project={project} strategy={strategyOpen} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (side ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(Array.from(e.dataTransfer.files)); } }}>
+      {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen} shared={!!project?.shared && project.following !== false} unsynced={project?.syncState === 'pending'} onSynced={refresh}/> : view!=='chat' ? <LabShadow key={project?.id + view + strategyOpen} mode={view} project={project} strategy={strategyOpen} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (side ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(Array.from(e.dataTransfer.files)); } }}>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
         const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
