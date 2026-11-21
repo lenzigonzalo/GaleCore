@@ -5,6 +5,7 @@ import './Agentes.css';
 import { Markdown } from '../components/settings/Markdown';
 import { deleteSpaceItem, fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
 import { AgentRun, apiMessage, fetchRuns } from '../api/agents';
+import { setVisibleInterval } from '../utils/visibleInterval';
 
 /**
  * Agentes (GC-0009): lo que corre solo con las instrucciones del trader — si está prendido, si su último
@@ -504,8 +505,7 @@ function CloudDetail({ a, item, title, skills, onChange, onDelete, busy, onBack 
   }, [item.key]);
   useEffect(() => {
     void loadRuns();
-    const id = setInterval(loadRuns, REFRESH_MS);
-    return () => clearInterval(id);
+    return setVisibleInterval(loadRuns, REFRESH_MS);
   }, [loadRuns]);
   const run = async () => {
     setStarting(true); setNotice(null);
@@ -582,9 +582,9 @@ export function Agentes() {
 
   const load = useCallback(async () => {
     try {
-      const { items: own, shared } = await fetchSpace();
-      setItems(own.filter((i) => i.kind === 'agent'));
-      setSkills(skillOptions([...own, ...(shared ?? [])]));
+      const [agentsSpace, skillsSpace] = await Promise.all([fetchSpace('agent'), fetchSpace('skill')]);
+      setItems(agentsSpace.items.filter((i) => i.kind === 'agent'));
+      setSkills(skillOptions([...skillsSpace.items, ...(skillsSpace.shared ?? [])]));
       setError(null);
     } catch (e: any) {
       setError(e?.response?.status === 401 ? 'Tu sesión venció: volvé a entrar.' : 'No se pudo leer tus agentes de GaleCore.');
@@ -593,8 +593,7 @@ export function Agentes() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, REFRESH_MS);
-    return () => clearInterval(id);
+    return setVisibleInterval(load, REFRESH_MS);
   }, [load]);
 
   const agents = (items ?? [])

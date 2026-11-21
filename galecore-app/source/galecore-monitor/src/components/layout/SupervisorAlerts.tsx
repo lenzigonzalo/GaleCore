@@ -3,6 +3,7 @@ import { fetchSpace, SpaceItem } from '../../api/space';
 import { fetchStrikeAlerts, StrikeAlert } from '../../api/account';
 import { AgentAlert, fetchAgentAlerts } from '../../api/agents';
 import { allWatches, removeWatch, watchText, Watch } from '../../api/watches';
+import { setVisibleInterval } from '../../utils/visibleInterval';
 
 /**
  * Avisos del supervisor de SHADOW (WS-0007): está en todas las pestañas y suena cuando llega un aviso nuevo.
@@ -77,8 +78,8 @@ export function useStrikeAlerts(active: boolean, onNew?: () => void): { alerts: 
       }
     };
     load();
-    const id = setInterval(load, STRIKE_MS);
-    return () => { alive = false; clearInterval(id); };
+    const stop = setVisibleInterval(load, STRIKE_MS);
+    return () => { alive = false; stop(); };
   }, [active]);
   return { alerts, notice };
 }
@@ -110,8 +111,8 @@ export function useAgentAlerts(active: boolean, onNew?: () => void): AgentAlert[
       } catch { /* sin avisos de agentes: la campana sigue con lo demás */ }
     };
     load();
-    const id = setInterval(load, REFRESH_MS);
-    return () => { alive = false; clearInterval(id); };
+    const stop = setVisibleInterval(load, REFRESH_MS);
+    return () => { alive = false; stop(); };
   }, [active]);
   return alerts;
 }
@@ -202,7 +203,7 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
 
   const load = useCallback(async () => {
     try {
-      const { items } = await fetchSpace();
+      const { items } = await fetchSpace('agent');
       const it = items.find(i => i.kind === 'agent' && i.key === KEY) ?? null;
       let p: Piece = {};
       try { p = it ? JSON.parse(it.content) : {}; } catch { p = {}; }
@@ -219,8 +220,7 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
 
   useEffect(() => {
     load();
-    const id = setInterval(load, REFRESH_MS);
-    return () => clearInterval(id);
+    return setVisibleInterval(load, REFRESH_MS);
   }, [load]);
 
   // La campana es de la cartera real (owner 15/10): lo de SHADOW va por su camino (Estrategias), no acá.

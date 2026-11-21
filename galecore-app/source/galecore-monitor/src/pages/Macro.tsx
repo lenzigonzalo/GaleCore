@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BoardRow, MacroBoard, fetchMacroBoard } from '../api/macroData';
 import { MacroChart } from '../components/macro/MacroChart';
 import './Macro.css';
+import { setVisibleInterval } from '../utils/visibleInterval';
 
 /**
  * Macro como el panel de mercados de un bróker (WS-0036, ok del owner 15/10): seis números arriba y una tabla ordenada
@@ -69,8 +70,8 @@ export function Macro() {
   useEffect(() => {
     const controller = new AbortController();
     load(controller.signal);
-    const timer = setInterval(() => load(controller.signal), REFRESH_MS);
-    return () => { controller.abort(); clearInterval(timer); };
+    const stop = setVisibleInterval(() => load(controller.signal), REFRESH_MS);
+    return () => { controller.abort(); stop(); };
   }, [load]);
   useEffect(() => { if (detail) dialog.current?.focus(); else opener.current?.focus(); }, [detail]);
 

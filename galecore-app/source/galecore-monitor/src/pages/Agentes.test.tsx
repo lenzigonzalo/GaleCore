@@ -495,3 +495,10 @@ test('las tareas de la PC no ofrecen «Cada 1 h en rueda»; los agentes en la nu
   fireEvent.click(screen.getByRole('button', { name: 'Nuevo agente' }));
   expect(within(screen.getByRole('combobox', { name: 'Frecuencia' })).getByRole('option', { name: 'Cada 1 h en rueda' })).toBeInTheDocument();
 });
+
+test('pide del espacio sólo agentes y skills, nunca todo (WS-0106)', async () => {
+  render(<Agentes />);
+  await screen.findByRole('button', { name: /Mi vigilancia de SPY/ });
+  const kinds = (fetchSpace as jest.Mock).mock.calls.map(c => c[0]).sort();
+  expect(kinds).toEqual(['agent', 'skill']);
+});

@@ -53,3 +53,11 @@ test('apagadas no consultan la API ni muestran nada', async () => {
   expect(apiClient.get).not.toHaveBeenCalled();
   expect(container).toBeEmptyDOMElement();
 });
+
+test('lee del espacio sólo las preferencias (WS-0106)', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [pref(true)], shared: [] });
+  (apiClient.get as jest.Mock).mockResolvedValue({ data: { items: [spy] } });
+  render(<LabSuggestions onPick={jest.fn()}/>);
+  await screen.findByRole('button', { name: /SPY baja/ });
+  expect(fetchSpace).toHaveBeenCalledWith('preference');
+});

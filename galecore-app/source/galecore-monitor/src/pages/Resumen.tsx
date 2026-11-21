@@ -8,6 +8,7 @@ import { readStrikeSettings, saveStrikeSettings } from '../components/settings/S
 import { NetLiqChart } from '../components/account/NetLiqChart';
 import type { Tab } from '../components/layout/TabNav';
 import './Resumen.css';
+import { setVisibleInterval } from '../utils/visibleInterval';
 
 /** Cuenta del operador y calendario real de GaleCore. */
 
@@ -82,7 +83,7 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
   const [strike, setStrike] = useState<StrikeAlertSettings | null>(null);
   useEffect(() => {
     let active = true;   // una lectura atrasada no pisa lo que el usuario acaba de cambiar
-    fetchSpace().then(({ items }) => { if (active) setStrike(readStrikeSettings(items.find(i => i.kind === 'preference' && i.key === STRIKE_ALERT_KEY))); })
+    fetchSpace('preference').then(({ items }) => { if (active) setStrike(readStrikeSettings(items.find(i => i.kind === 'preference' && i.key === STRIKE_ALERT_KEY))); })
       .catch(() => { if (active) setStrike(null); });
     return () => { active = false; };
   }, []);
@@ -92,8 +93,8 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
       .then(o => { if (active) { setOverview(o); setError(null); } })
       .catch(err => { if (active) setError(describeAccountError(err).message); });
     load();
-    const timer = setInterval(load, 60_000);
-    return () => { active = false; clearInterval(timer); };
+    const stop = setVisibleInterval(load, 60_000);
+    return () => { active = false; stop(); };
   }, []);
   return <div className="rs">
     {error && !overview && <p className="rs-alert urgent" role="alert">{error}</p>}
