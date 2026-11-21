@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { deployShadowSpec, fetchShadowEvaluations, stopShadowInstance } from '../../api/shadow';
 import { ShadowInstance, SpecVersionMetrics, StrategyCard } from '../../types/shadow';
-import { agoText, num, usdAr } from './ficha';
+import { agoText, usdAr } from './ficha';
 
 function actionError(e: unknown): string {
   const any = e as { response?: { data?: { error?: string; reason?: string } }; message?: string };
@@ -11,13 +11,12 @@ function actionError(e: unknown): string {
   // Sin respuesta de la API no hay nada más que decir; con una respuesta sin texto, el código es lo único que hay.
   return status ? `GaleCore respondió con el error ${status} y no dio el motivo.` : 'no se pudo conectar con GaleCore.';
 }
-const shortHash = (h: string) => h.replace('sha256:', '').slice(0, 12);
 // Las lecturas auxiliares nunca rompen la ficha: si fallan (o la API no las tiene), el dato se omite.
 function safe<T>(read: () => Promise<T>): Promise<T | null> { return Promise.resolve().then(read).catch(() => null); }
 
-/** Estado de la estrategia bajo el encabezado: interruptor Prendida / Pausada, versión activa, capital y topes en USD, ventana y última evaluación. La tarjeta y las métricas las pide la ficha una vez y se pasan por props. */
-export function StrategyStatusBar({ spec, instance, card = null, metrics = [], canControl, openPositions, versionLabel, onInstanceChange }: {
-  spec: string; instance: ShadowInstance | null; card?: StrategyCard | null; metrics?: SpecVersionMetrics[]; canControl: boolean; openPositions?: number; versionLabel?: string | null; onInstanceChange?: () => Promise<void> | void;
+/** Estado de la estrategia bajo el encabezado, en una línea: interruptor Prendida / Pausada, capital, tope por operación, ventana y última evaluación. La tarjeta y las métricas las pide la ficha una vez y se pasan por props. */
+export function StrategyStatusBar({ spec, instance, card = null, metrics = [], canControl, onInstanceChange }: {
+  spec: string; instance: ShadowInstance | null; card?: StrategyCard | null; metrics?: SpecVersionMetrics[]; canControl: boolean; onInstanceChange?: () => Promise<void> | void;
 }) {
   const [lastEval, setLastEval] = useState<string | null | undefined>(undefined);
   const [confirm, setConfirm] = useState(false);
@@ -50,14 +49,12 @@ export function StrategyStatusBar({ spec, instance, card = null, metrics = [], c
       <button type="button" role="switch" aria-checked={running} className="status-switch" disabled={busy} onClick={() => setConfirm(c => !c)}>
         <span className="switch-track" aria-hidden="true"><span className="switch-thumb" /></span>{running ? 'Prendida' : 'Pausada'}
       </button>
-      {confirm && <span className="row-confirm">{running ? `¿Pausar? Deja de entrar${openPositions ? `; ${openPositions > 1 ? `las ${openPositions} abiertas se siguen valuando` : 'la abierta se sigue valuando'}` : ''}.` : `¿Prender de nuevo${version ? ` la v${version}` : ' la misma versión'}? Vuelve a evaluar entradas en SHADOW (simulado).`} <button type="button" className="row-action danger" disabled={busy}
+      {confirm && <span className="row-confirm">{running ? '¿Pausar?' : `¿Prender${version ? ` v${version}` : ''}?`} <button type="button" className="row-action danger" disabled={busy}
         onClick={() => void (running ? run(() => stopShadowInstance(instance!.instanceId), 'No se pudo pausar') : run(() => deployShadowSpec(spec, instance!.versionHash), 'No se pudo prender'))}>Sí</button> <button type="button" className="row-action" disabled={busy} onClick={() => setConfirm(false)}>No</button></span>}
     </span>}
-    {hash && <span><b>Versión activa</b> {version ? `v${version}` : shortHash(hash)}{versionLabel ? ` · ${versionLabel}` : ''}</span>}
-    {l && l.capital !== null && <span><b>Capital simulado</b> {usdAr(l.capital)}</span>}
-    {l && <span><b>Topes</b> por operación {usdAr(l.perTrade)} · riesgo abierto {usdAr(l.openRisk)} · por apuesta {usdAr(l.perBet)}</span>}
-    {card?.window && <span><b>Ventana de entrada</b> {card.window.start}–{card.window.end} {tz(card.window.timezone)}</span>}
-    {card && <span><b>Entradas por día</b> {card.maxEntriesPerDay === null ? '—' : num(card.maxEntriesPerDay)}</span>}
+    {l && l.capital !== null && <span><b>Capital</b> {usdAr(l.capital)}</span>}
+    {l && <span title={`Riesgo abierto ${usdAr(l.openRisk)} · por apuesta ${usdAr(l.perBet)}`}><b>Topes</b> {usdAr(l.perTrade)} por operación</span>}
+    {card?.window && <span><b>Ventana</b> {card.window.start}–{card.window.end} {tz(card.window.timezone)}</span>}
     {id && lastEval !== undefined && <span><b>Última evaluación</b> {lastEval ? agoText(lastEval) : 'sin evaluaciones'}</span>}
     {error && <p role="alert" className="status-bar-error">{error}</p>}
   </div>;

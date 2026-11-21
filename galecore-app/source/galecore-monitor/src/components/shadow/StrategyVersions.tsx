@@ -3,15 +3,14 @@ import { activateStrategyVersion, duplicateStrategy, EditableField, fetchEditabl
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 import { ShadowInstance, SpecVersionMetrics } from '../../types/shadow';
 import { num, usdAr } from './ficha';
-import { strategyName } from './panelPresentation';
 
 const NAME_RE = /^[a-z][a-z0-9_]{2,59}$/;
-const dateAr = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' }); };
+const dateShort = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit' }); };
 const show = (v: unknown) => v === null || v === undefined ? 'sin definir' : typeof v === 'boolean' ? (v ? 'sí' : 'no') : typeof v === 'number' ? num(v) : typeof v === 'string' ? v : JSON.stringify(v);
 const errText = (e: unknown) => {
   const m = e instanceof Error ? e.message : String(e);
   // fetch no da un mensaje legible cuando el Lab no responde o el pedido se corta.
-  return /failed to fetch|networkerror|aborted|abort/i.test(m) ? 'No se pudo conectar con el Lab de esta PC: ¿está abierto?' : m;
+  return /failed to fetch|networkerror|aborted|abort/i.test(m) ? 'No se pudo conectar con el Lab.' : m;
 };
 const verKey = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
 const newestFirst = (a: StrategyVersion, b: StrategyVersion) => {
@@ -82,17 +81,16 @@ const fieldProblem = (f: EditableField, text: string): string => {
   if (f.kind === 'integer') return /^\d+$/.test(t) ? '' : 'Tiene que ser un número entero, 0 o más.';
   return /^\d+(\.\d+)?$/.test(t) ? '' : 'Tiene que ser un número, 0 o más.';
 };
-const usdText = (n: number | null | undefined) => n === null || n === undefined ? '—' : usdAr(n);
 
-/** Versiones de la estrategia en el Lab: desplegable con la elegida (por defecto la activa) y su detalle; activar una, editar (= versión nueva), renombrar o duplicar. */
-export function StrategyVersions({ spec, instance, metrics = [], onChanged, onActiveLabel }: {
+/** Versiones de la estrategia en el Lab: botón con la versión activa; al elegir una (la activa u otra) aparece su panel con activar, editar (= versión nueva), renombrar o duplicar. */
+export function StrategyVersions({ spec, instance, metrics = [], onChanged }: {
   spec: string; instance: ShadowInstance | null; metrics?: SpecVersionMetrics[]; onChanged?: () => Promise<void> | void;
-  onActiveLabel?: (label: string | null) => void;   // el nombre de la versión activa, para la barra de estado
 }) {
   const [versions, setVersions] = useState<StrategyVersion[]>([]);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState('');
   const [menu, setMenu] = useState(false);
+  const [allChanges, setAllChanges] = useState(false);
   const [mode, setMode] = useState<'' | 'activate' | 'edit' | 'rename' | 'duplicate'>('');
   const [labelText, setLabelText] = useState('');
   const box = useRef<HTMLDivElement>(null);
@@ -113,8 +111,6 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged, onAc
   // Una sola lectura al abrir (cada una arranca el CLI del harness); se repite si la instancia cambió (otra versión activa, pausa).
   useEffect(() => { void load(); }, [instance?.versionHash, instance?.lifecycleState, load]);
 
-  const activeLabel = versions.find(v => instance?.versionHash && v.spec_hash === instance.versionHash)?.label ?? null;
-  useEffect(() => { onActiveLabel?.(activeLabel); }, [activeLabel, onActiveLabel]);
   // La lista flotante se cierra con Escape y con un clic afuera.
   useEffect(() => {
     if (!open) return;
@@ -132,14 +128,13 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged, onAc
   const current = sorted.find(v => v.version === selected) ?? active ?? sorted[0];
   const row = metrics.find(m => m.specName === spec && m.contentHash === current.spec_hash);
   const reset = () => { setMode(''); setMenu(false); setError(''); setDone(''); };
-  const pick = (v: string) => { setSelected(v); setOpen(false); reset(); };
-  const name = strategyName(spec);
+  const pick = (v: string) => { setSelected(v); setOpen(false); setAllChanges(false); reset(); };
 
   const activate = async () => {
     setBusy(true); setError('');
     try {
       await activateStrategyVersion(spec, current.version, who);
-      setMode(''); setDone(`Activada ${name} v${current.version} en SHADOW (simulado).`);
+      setMode(''); setDone(`Activada v${current.version}.`);
       await load(); await onChanged?.();
     } catch (e) { setError(errText(e)); await load(); } finally { setBusy(false); }
   };
@@ -158,7 +153,7 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged, onAc
       const changes = Object.fromEntries(changed.map(f => [f.path, f.kind === 'time' ? (values[f.path] ?? '').trim() : Number((values[f.path] ?? '').trim().replace(',', '.'))]));
       const r = await reviseStrategyVersion(spec, current.version, who, changes, reason.trim() || undefined);
       const made = r.ref.split('/').pop() ?? '';
-      setMode(''); setDone(`Guardada v${made} (borrador). Para usarla, activala.`);
+      setMode(''); setDone(`Guardada v${made} (borrador).`);
       await load(); setSelected(made); await onChanged?.();
     } catch (e) { setError(errText(e)); } finally { setBusy(false); }
   };
@@ -175,61 +170,56 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged, onAc
     setBusy(true); setError('');
     try {
       const r = await duplicateStrategy(spec, current.version, newName, who);
-      setDone(`Creada ${newName} en borrador, copiada de ${spec} ${current.version}. La original no cambió.${r?.projectId ? ` Proyecto: ${r.projectId}.` : ''}`);
+      setDone(`Creada ${newName} (borrador).${r?.projectId ? ` Proyecto: ${r.projectId}.` : ''}`);
       setMode(''); await onChanged?.();
     } catch (e) { setError(errText(e)); } finally { setBusy(false); }
   };
 
-  const vs = changesBetween(sorted, active ?? current, current);
-  const lim = current.factibilidad?.limites_usd;
+  const vs = active && current !== active ? changesBetween(sorted, active, current) : [];
   const critique = current.critique ? `Crítica del agente: ${current.critique}${current.critique_why_not?.length ? ` — ${current.critique_why_not.join('; ')}` : ''}.` : '';
   const isActive = current === active;
   const titled = (v: StrategyVersion) => v.label ? ` · ${v.label}` : '';
+  const results = row && (row.positionsOpened > 0 || row.positionsClosed > 0)
+    ? `${num(row.positionsOpened)} abiertas · ${num(row.positionsClosed)} cerradas · ${usdAr(row.realizedPnl)} realizado · ${row.winRate === null ? '—' : `${num(row.winRate * 100, 1)} %`} ganadoras`
+    : 'sin operaciones';
   return <section className="strategy-versions" aria-label="Versiones">
     <div className="version-select" ref={box}>
-      <button type="button" className="versions-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-        v{current.version}{titled(current)} · {stateOf(current)}
+      <button type="button" className="versions-toggle" aria-expanded={open} aria-haspopup="listbox" onClick={() => setOpen(o => !o)}>
+        {active ? `v${active.version}${titled(active)}` : 'Sin versión activa'} ▾
       </button>
       {open && <ul className="version-list" aria-label="Versiones de la estrategia">
-        {sorted.map(v => <li key={v.version} className={v === current ? 'selected' : undefined}>
-          <button type="button" aria-current={v === current ? 'true' : undefined} onClick={() => pick(v.version)}>
-            <b>v{v.version}</b>{' '}{v.label && <><span className="version-label">{v.label}</span>{' '}</>}<span className="version-date">{dateAr(v.recorded_at)}</span>{' '}<span className={`version-state ${stateOf(v)}`}>{stateOf(v)}</span>
+        {sorted.map(v => <li key={v.version} className={selected && v === current ? 'selected' : undefined}>
+          <button type="button" aria-current={v === active ? 'true' : undefined} onClick={() => pick(v.version)}>
+            <span className="version-dot" aria-hidden="true">{v === active ? '●' : ''}</span>
+            <span>v{v.version} · {dateShort(v.recorded_at)} · <span className={`version-state ${stateOf(v)}`}>{stateOf(v)}</span>{v.label ? ` · ${v.label}` : ''}</span>
           </button>
         </li>)}
       </ul>}
     </div>
-    <div className="version-card" role="group" aria-label={`Versión ${current.version}`}>
-      {current.label && <p className="version-title">{current.label}</p>}
-      <p><b>Fecha</b> {dateAr(current.recorded_at)} · <b>Estado</b> {stateOf(current)}</p>
-      {current.factibilidad?.texto && <p>{current.factibilidad.texto}</p>}
-      {current.change?.reason && <p><b>Motivo del cambio</b> {current.change.reason}</p>}
-      <p><b>Resultados propios de esta versión</b> {row && (row.positionsOpened > 0 || row.positionsClosed > 0)
-        ? `${num(row.positionsOpened)} abiertas · ${num(row.positionsClosed)} cerradas · ${usdAr(row.realizedPnl)} realizado · ${row.winRate === null ? '—' : `${num(row.winRate * 100, 1)} %`} ganadoras`
-        : 'sin operaciones'}</p>
+    {selected && <div className="version-card" role="group" aria-label={`Versión ${current.version}`}>
+      <p><b>v{current.version}</b> · {stateOf(current)} · {results}</p>
+      {vs.length > 0 && <p>Cambia: {vs[0]}{vs.length > 1 && !allChanges && <>{' '}<button type="button" className="version-more" onClick={() => setAllChanges(true)}>(+{vs.length - 1} más)</button></>}</p>}
+      {allChanges && vs.length > 1 && <ul>{vs.slice(1).map(c => <li key={c}>{c}</li>)}</ul>}
+      {critique && <p>{critique}</p>}
       <div className="version-actions">
-        {!isActive && current.check !== 'INVALID' && mode !== 'activate' && <button type="button" className="row-action primary" onClick={() => { reset(); setMode('activate'); }}>Activar esta versión</button>}
-        {!isActive && current.check === 'INVALID' && <span>No se puede activar: la versión no pasó la verificación (INVALID).</span>}
+        {!isActive && current.check !== 'INVALID' && mode !== 'activate' && <button type="button" className="row-action primary" onClick={() => { reset(); setMode('activate'); }}>Activar</button>}
+        {!isActive && current.check === 'INVALID' && <span>No se puede activar: no pasó la verificación (INVALID).</span>}
         {mode !== 'edit' && <button type="button" className="row-action" onClick={() => void startEdit()}>Editar</button>}
         <span className="version-menu">
           <button type="button" className="row-action" aria-label="Más acciones" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}>⋯</button>
           {menu && <div role="menu" className="menu-items">
+            <button type="button" role="menuitem" className="row-action" onClick={() => { reset(); setMode('duplicate'); setNewName(`${spec}_copia`); }}>Duplicar</button>
             <button type="button" role="menuitem" className="row-action" onClick={() => { reset(); setMode('rename'); setLabelText(current.label ?? ''); }}>Renombrar</button>
-            <button type="button" role="menuitem" className="row-action" onClick={() => { reset(); setMode('duplicate'); setNewName(`${spec}_copia`); }}>Duplicar como estrategia nueva</button>
           </div>}
         </span>
       </div>
       {mode === 'activate' && <div className="row-confirm" role="group" aria-label="Confirmar activación">
-        {!who ? <span role="alert">Iniciá sesión para activar</span> : <span>
-          Vas a dejar activa {name} v{current.version} en SHADOW (simulado, sin dinero real).{' '}
-          {active ? `Cambia frente a la activa (v${active.version}): ${vs.length ? vs.join('; ') : 'sin cambios en los parámetros'}.` : 'No hay una versión activa para comparar.'}{' '}
-          Topes: por operación {usdText(lim?.por_operacion)} · riesgo abierto {usdText(lim?.riesgo_abierto)} · por apuesta {usdText(lim?.por_apuesta)}.{' '}
-          {critique}
-        </span>}{' '}
-        {who && <button type="button" className="row-action danger" disabled={busy} onClick={() => void activate()}>Activar</button>}{' '}
-        <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>Cancelar</button>
+        {!who ? <span role="alert">Iniciá sesión para activar</span> : <span>¿Activar v{current.version} en SHADOW?</span>}{' '}
+        {who && <button type="button" className="row-action danger" disabled={busy} onClick={() => void activate()}>Sí</button>}{' '}
+        <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>No</button>
       </div>}
       {mode === 'edit' && <div className="row-confirm version-edit" role="group" aria-label="Editar parámetros">
-        <p>Se guarda como una versión nueva (borrador) a partir de v{current.version}; esta no cambia. Las patas y las reglas se cambian en el Lab.</p>
+        <span>Se guarda como versión nueva.</span>
         {!fields ? (!error && <p role="status">Leyendo parámetros…</p>) : <>
           {fields.map(f => <label key={f.path} className="edit-field">
             <span>{f.label}{f.unit ? ` (${f.unit})` : ''}</span>
@@ -257,7 +247,7 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged, onAc
         <button type="button" className="row-action danger" disabled={busy || !!nameError || !who} onClick={() => void duplicate()}>Sí</button>{' '}
         <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>No</button>
       </div>}
-    </div>
+    </div>}
     {done && <p role="status">{done}</p>}
     {error && <p role="alert" className="status-bar-error">{error}</p>}
   </section>;

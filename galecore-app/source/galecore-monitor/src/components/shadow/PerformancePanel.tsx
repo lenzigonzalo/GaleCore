@@ -70,7 +70,6 @@ export function PerformancePanel({ spec, instance = null, instances, onInstanceC
   const [panel, setPanel] = useState<PerformancePanelResponse | null>(null);
   const [versions, setVersions] = useState<string[]>([]);
   const [version, setVersion] = useState('');
-  const [activeLabel, setActiveLabel] = useState<string | null>(null);   // nombre de la versión activa (lo informa StrategyVersions)
   const [retry, setRetry] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -112,8 +111,8 @@ export function PerformancePanel({ spec, instance = null, instances, onInstanceC
       chips={<>{inDesign ? <span className="instance-state">En diseño</span> : <InstanceState instance={instance} />}<StageModeChip stage={inDesign ? undefined : stage} mode={mode} /></>}
       onOpenChat={design.projectId && onOpenChat ? () => onOpenChat(design.projectId!) : undefined}
       actions={<>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</>} />
-    {!inDesign && <StrategyStatusBar spec={spec} instance={instance} card={card} metrics={metrics} canControl={stage === 'SHADOW' && !!instance} openPositions={panel?.tradesOpen} versionLabel={activeLabel} onInstanceChange={changed} />}
-    {!inDesign && <StrategyVersions spec={spec} instance={instance} metrics={metrics} onChanged={changed} onActiveLabel={setActiveLabel} />}
+    {!inDesign && <StrategyVersions spec={spec} instance={instance} metrics={metrics} onChanged={changed} />}
+    {!inDesign && <StrategyStatusBar spec={spec} instance={instance} card={card} metrics={metrics} canControl={stage === 'SHADOW' && !!instance} onInstanceChange={changed} />}
     <StrategyOverview strategy={design.strategy} />
     <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Posiciones', 'Reglas', 'Registro'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
     {inDesign && (tab === 'Resumen' || tab === 'Posiciones') && <p>Esta estrategia está en diseño. Abrí su proyecto en el chat para prepararla para SHADOW.</p>}
