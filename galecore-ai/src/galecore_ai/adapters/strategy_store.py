@@ -93,6 +93,24 @@ class FileStrategyStore:
             raise StrategyIntegrityError(self.path_for(key, "critique"), [f"critique is for {doc.strategy_ref}"])
         return doc
 
+    def load_label(self, key: str) -> str | None:
+        """The version's own name (WS-0104): a loose, mutable datum beside the proposal; missing or unreadable → None."""
+        try:
+            label = json.loads(self.path_for(key, "label").read_text(encoding="utf-8")).get("label")
+        except (OSError, UnicodeDecodeError, ValueError, AttributeError):
+            return None
+        return label if isinstance(label, str) and label else None
+
+    def set_label(self, key: str, label: str) -> None:
+        """Overwrite the version's name; empty removes it. Does not touch the spec, its hash or the versions."""
+        path = self.path_for(key, "label")
+        if not label.strip():
+            path.unlink(missing_ok=True)
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps({"label": label}, ensure_ascii=False) + "\n")
+
     def _create(self, path: Path, doc: BaseModel, what: str) -> Path:
         if compute_document_hash(doc.hashable_content()) != doc.content_hash:
             raise StrategyStoreError(f"Refusing to write a {what} whose hash does not match its content")

@@ -255,8 +255,9 @@
 .strategy-list .strategy-project { display: block; font-size: 13px; color: var(--text-secondary); }
 
 /* Ficha de la estrategia: estado, titular «por qué no opera» y registro */
-.strategy-status-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin: 0 0 14px; font-size: 15px; }
+.strategy-status-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 14px; font-size: 15px; }
 .strategy-status-bar b { font-weight: 600; margin-right: 6px; }
+.strategy-status-bar > span + span::before { content: '·'; margin-right: 10px; color: var(--text-secondary); }
 .strategy-status-bar .status-bar-error { flex-basis: 100%; margin: 0; color: var(--red-gc); }
 .why-not { margin: 0 0 12px; padding: 6px 12px; border-left: 4px solid var(--yellow-gc); background: var(--bg-secondary); border-radius: 6px; font-size: 15px; }
 .why-not strong { font-weight: 600; }
@@ -269,7 +270,7 @@
 .registry li.bad { color: var(--red-gc); }
 .registry .registry-gates { margin: 2px 0 0 52px; }
 .registry .registry-gates li { padding: 1px 0; font-size: 14px; color: var(--text-secondary); }
-.strategy-versions { margin: 0 0 14px; font-size: 15px; }
+.strategy-versions { margin: -8px 0 10px; font-size: 15px; }
 .strategy-versions select { margin-left: 6px; font: 15px var(--font-sans); }
 .strategy-versions .version-card { margin-top: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .strategy-versions .version-card p { margin: 0; }
@@ -283,14 +284,14 @@
 .status-switch[aria-checked="true"] .switch-thumb { left: 18px; }
 .status-switch:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 6px; }
 .versions-toggle { padding: 4px 0; border: 0; background: transparent; color: var(--text-primary); font: 600 15px var(--font-sans); cursor: pointer; }
-.versions-toggle::before { content: '▸'; display: inline-block; width: 16px; }
-.versions-toggle[aria-expanded="true"]::before { content: '▾'; }
-.strategy-versions .version-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
-.strategy-versions .version-list > li { padding: 4px 10px; border-radius: 6px; }
-.strategy-versions .version-list > li.selected { background: var(--bg-secondary); }
-.strategy-versions .version-list > li > button { border: 0; background: transparent; color: var(--text-primary); font: 15px var(--font-sans); cursor: pointer; padding: 0; text-align: left; }
-.strategy-versions .version-change { margin: 2px 0 0 12px; padding-left: 16px; font-size: 14px; color: var(--text-secondary); }
-.strategy-versions p.version-change { padding-left: 0; }
+.strategy-versions .version-select { position: relative; display: inline-block; }
+.strategy-versions .version-list { position: absolute; z-index: 10; top: 100%; left: 0; margin: 4px 0 0; padding: 4px; list-style: none; min-width: 280px; max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary, var(--bg-secondary)); box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+.strategy-versions .version-list > li > button { width: 100%; display: flex; gap: 12px; align-items: baseline; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text-primary); font: 15px var(--font-sans); cursor: pointer; text-align: left; }
+.strategy-versions .version-list > li > button:hover, .strategy-versions .version-list > li.selected > button { background: var(--bg-secondary); }
+.strategy-versions .version-list b { margin: 0; }
+.strategy-versions .version-dot { width: 12px; color: var(--green); }
+.strategy-versions .version-more { border: 0; background: none; padding: 0; color: var(--text-secondary); font: inherit; cursor: pointer; }
+.strategy-versions .version-rename input { font: 15px var(--font-sans); padding: 2px 6px; min-width: 240px; }
 .strategy-versions .version-state.activa { color: var(--green); font-weight: 600; }
 .strategy-versions .version-card .row-confirm { font-size: 14px; color: var(--text-primary); }
 .strategy-versions .version-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

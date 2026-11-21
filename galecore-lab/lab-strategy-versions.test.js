@@ -122,3 +122,17 @@ test('el motivo que el harness repite en problems no se duplica en el mensaje',a
   const r=await call('POST','/strategies/spy_ic/versions/1.0.0/revise',{user:'g',changes:{'a/b':1}});
   assert.equal(r.v.error,'Para desplegar hace falta tu sesión de GaleCore: no credentials');
 });
+test('label: argv exacto (vacío incluido) y validación antes de ejecutar',async t=>{
+  const {calls,call}=setup(t,ok({ref:'strategy:spy_ic/1.3.2',label:'Base'}));
+  const u='/strategies/spy_ic/versions/1.3.2/label';
+  const r=await call('POST',u,{user:'gonza',label:'Base'});
+  assert.equal(r.status,200);assert.deepEqual(calls[0].args,[...PRE,'label','--ref','strategy:spy_ic/1.3.2','--label','Base']);
+  await call('POST',u,{user:'gonza',label:''});assert.deepEqual(calls[1].args,[...PRE,'label','--ref','strategy:spy_ic/1.3.2','--label','']);
+  const n=calls.length;
+  for(const b of [{user:'gonza'},{user:'gonza',label:5},{user:'gonza',label:'x'.repeat(61)},{user:'gonza',label:'a\nb'},{user:'a b',label:'x'},{label:'x'}]){
+    const q=await call('POST',u,b);assert.equal(q.status,400,JSON.stringify(b));
+  }
+  assert.equal((await call('POST','/strategies/spy_ic/versions/1.3/label',{user:'g',label:'x'})).status,400);
+  assert.equal((await call('POST','/strategies/..%2Fx/versions/1.3.2/label',{user:'g',label:'x'})).status,400);
+  assert.equal(calls.length,n);
+});
