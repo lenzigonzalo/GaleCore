@@ -8,7 +8,7 @@ export function StrategyOverview({ strategy }: { strategy: StrategyView | null }
   const spec = current.spec, constraints = spec?.candidate_construction?.constraints, operational = spec?.operational;
   const facts = [
     ['Subyacentes', spec?.universe?.symbols?.join(', ')],
-    ['Instrumentos', spec?.universe?.instrument_types?.map(type => type === 'EQUITY_OPTION' ? 'Opciones sobre acciones / ETF' : type).join(', ')],
+    ['Instrumentos', spec?.universe?.instrument_types?.map(type => type === 'EQUITY_OPTION' ? 'Opciones' : type).join(', ')],
     ['Estructura', structures[spec?.structure?.default_structure || ''] || spec?.structure?.default_structure],
     ['Vencimiento', constraints?.min_dte !== undefined && constraints?.max_dte !== undefined ? `${constraints.min_dte}–${constraints.max_dte} días` : undefined],
     ['Sesión', operational?.session_hours?.start && operational?.session_hours?.end ? `${operational.session_hours.start}–${operational.session_hours.end} · ${operational.timezone || '—'}` : undefined],

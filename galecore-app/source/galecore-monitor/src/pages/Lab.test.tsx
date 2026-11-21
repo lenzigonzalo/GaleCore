@@ -4,14 +4,12 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Lab } from './Lab';
 jest.mock('../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: [], shared: [] }), saveSpaceItem: () => Promise.resolve() }));
 import { labRequest } from '../api/lab';
-const mockLab={loopback:true};
-jest.mock('../api/lab',()=>({labRequest:jest.fn(),get LAB_IS_LOOPBACK(){return mockLab.loopback;}}));
+jest.mock('../api/lab',()=>({labRequest:jest.fn()}));
 jest.mock('./LabShadow',()=>({LabShadow:({strategy,mode}:{strategy?:string|null;mode?:string})=> <div data-strategy={strategy} data-mode={mode}>Seguimiento del proyecto</div>}));
-jest.mock('../components/lab/LabShell',()=>({LabShell:()=> <div>Terminal del proyecto</div>}));
 beforeEach(() => { global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver; });
 const projects=[{id:'personal',label:'Personal',relative:'workspaces/personal'},{id:'spy',label:'Estrategia SPY',relative:'strategies/spy',strategies: ['spy_spec']}];
 beforeEach(()=>{sessionStorage.clear();jest.clearAllMocks();Element.prototype.scrollIntoView=jest.fn();(labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>{if(path==='/workspaces')return {projects,chats:[],providers:[{id:'codex',label:'Codex',installed:true}]};if(path.endsWith('/files'))return {tree:[{name:'memory',path:'memory',kind:'folder',children:[{name:'nota.md',path:'memory/nota.md',kind:'file'}]}]};if(path.includes('/files?'))return {text:'Memoria del proyecto seleccionado'};if(path==='/chats')return {id:'chat-1',project:body.project,provider:body.provider,title:'Nueva',state:'idle',messages:[]};if(path.endsWith('/messages'))return {id:'chat-1',project:'spy',provider:'codex',state:'running',messages:[{id:'m',role:'user',text:body.text}]};return {id:'chat-1',project:'spy',provider:'codex',state:'idle',messages:[]};});});
-test('Archivos y Shell son vistas del proyecto seleccionado, al lado del chat; sin vistas duplicadas de Estrategias',async()=>{render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});expect(screen.queryByRole('navigation',{name:'Archivos del proyecto'})).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));fireEvent.click(screen.getByRole('button',{name:'Archivos'}));fireEvent.click(await screen.findByRole('button',{name:'memory'}));fireEvent.click(await screen.findByRole('button',{name:'nota.md'}));expect(await screen.findByText('Memoria del proyecto seleccionado')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Editar'}));expect(screen.getByDisplayValue('Memoria del proyecto seleccionado')).toBeInTheDocument();expect(labRequest).toHaveBeenCalledWith('/workspaces/spy/files?path=memory%2Fnota.md');fireEvent.click(screen.getByRole('button',{name:'Shell'}));expect(screen.getByText('Terminal del proyecto')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Chat'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Shadow'})).not.toBeInTheDocument();});
+test('Archivos es una vista del proyecto seleccionado, al lado del chat; sin vistas duplicadas de Estrategias',async()=>{render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});expect(screen.queryByRole('navigation',{name:'Archivos del proyecto'})).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));fireEvent.click(screen.getByRole('button',{name:'Archivos'}));fireEvent.click(await screen.findByRole('button',{name:'memory'}));fireEvent.click(await screen.findByRole('button',{name:'nota.md'}));expect(await screen.findByText('Memoria del proyecto seleccionado')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Editar'}));expect(screen.getByDisplayValue('Memoria del proyecto seleccionado')).toBeInTheDocument();expect(labRequest).toHaveBeenCalledWith('/workspaces/spy/files?path=memory%2Fnota.md');expect(screen.queryByRole('button',{name:'Shell'})).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Chat'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Shadow'})).not.toBeInTheDocument();});
 test('borradores separados por proyecto y envío usa el chat real con el proyecto exacto',async()=>{render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});fireEvent.change(screen.getByRole('textbox',{name:'Mensaje al proyecto'}),{target:{value:'Pedido personal'}});fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toHaveValue('');fireEvent.change(screen.getByRole('textbox',{name:'Mensaje al proyecto'}),{target:{value:'Trabajemos una estrategia en SPY'}});fireEvent.click(screen.getByRole('button',{name:'Personal'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toHaveValue('Pedido personal');fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));fireEvent.click(screen.getByRole('button',{name:'Enviar mensaje'}));await waitFor(()=>expect(labRequest).toHaveBeenCalledWith('/chats',{project:'spy',provider:'codex'}));expect(labRequest).toHaveBeenCalledWith('/chats/chat-1/messages',{text:'Trabajemos una estrategia en SPY',mode:'workspace-write',attachments:[]});});
 test('falla de conexión visible, sin historial ni respuestas inventadas',async()=>{(labRequest as jest.Mock).mockRejectedValue(new Error('offline'));render(<Lab onMonitor={()=>{}}/>);expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar');expect(screen.getByRole('button',{name:'Enviar mensaje'})).toBeDisabled();});
 
@@ -115,28 +113,3 @@ test('oculto (sin active ni embedded) carga una vez y no consulta /workspaces ca
  }finally{jest.useRealTimers();}
 });
 
-test('Shell: comando para seguir la conversación con Copiar; sin resume, la línea; Lab remoto sin terminal web',async()=>{
- const command=`ssh -t -p 5061 glenzi@host "cd '/srv/ws' && claude --resume abc"`,writeText=jest.fn().mockResolvedValue(undefined);
- Object.assign(navigator,{clipboard:{writeText}});
- sessionStorage.setItem('galecore:lab:chat','chat-1');
- const base=(labRequest as jest.Mock).getMockImplementation() as (p:string,b?:any)=>Promise<any>;
- (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>path==='/chats/chat-1'?{id:'chat-1',project:'spy',provider:'claude',state:'idle',messages:[],resume:{command}}:base(path,body));
- const {unmount}=render(<Lab onMonitor={()=>{}}/>);
- await screen.findByRole('button',{name:'Personal'});
- fireEvent.click(await screen.findByRole('button',{name:'Shell'}));
- expect(await screen.findByText(command)).toBeInTheDocument();expect(screen.getByText('Seguir en la terminal')).toBeInTheDocument();
- expect(screen.getByText('Terminal del proyecto')).toBeInTheDocument();                  // Lab en la PC: la terminal web sigue debajo
- fireEvent.click(screen.getByRole('button',{name:'Copiar'}));expect(writeText).toHaveBeenCalledWith(command);
- expect(await screen.findByRole('button',{name:'Copiado'})).toBeInTheDocument();
- unmount();
- mockLab.loopback=false;
- try{
-  render(<Lab onMonitor={()=>{}}/>);fireEvent.click(await screen.findByRole('button',{name:'Shell'}));
-  expect(await screen.findByText(command)).toBeInTheDocument();expect(screen.queryByText('Terminal del proyecto')).not.toBeInTheDocument();
- }finally{mockLab.loopback=true;}
-});
-
-test('Shell sin conversación con resume: una línea de ayuda',async()=>{
- render(<Lab onMonitor={()=>{}}/>);fireEvent.click(await screen.findByRole('button',{name:'Shell'}));
- expect(screen.getByText('Elegí una conversación con respuestas para seguirla en la terminal.')).toBeInTheDocument();
-});

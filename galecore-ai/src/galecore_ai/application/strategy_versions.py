@@ -43,7 +43,7 @@ def list_versions(kb: KnowledgeBase, name: str) -> dict:
     previous: str | None = None
     for version in _stored_versions(kb, name):
         key = f"{name}/{version}"
-        entry: dict = {"version": version, "ref": f"strategy:{key}"}
+        entry: dict = {"version": version, "ref": f"strategy:{key}", "label": kb.strategies.load_label(key)}
         try:
             doc = load_proposal(kb, key)
         except KnowledgeError as exc:
@@ -83,6 +83,18 @@ def list_versions(kb: KnowledgeBase, name: str) -> dict:
         out.append(entry)
         previous = version
     return {"strategy": name, "versions": out}
+
+
+def rename(kb: KnowledgeBase, key: str, label: str) -> dict:
+    """The ficha's «Renombrar»: the version's own name (≤60 characters, one line); empty removes it. No new version."""
+    load_proposal(kb, key)
+    label = label.strip()
+    if len(label) > 60:
+        raise KnowledgeError("el nombre de la versión admite hasta 60 caracteres")
+    if "\n" in label or "\r" in label:
+        raise KnowledgeError("el nombre de la versión no puede tener saltos de línea")
+    kb.strategies.set_label(key, label)
+    return {"ref": f"strategy:{key}", "label": label or None}
 
 
 def _dump(v, indent: int = 0) -> str:

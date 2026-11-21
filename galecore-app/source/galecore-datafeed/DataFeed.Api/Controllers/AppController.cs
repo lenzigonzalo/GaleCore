@@ -1789,7 +1789,7 @@ namespace DataFeed.Controllers
         [HttpGet("Runtime/Strategies/{name}/Card")]
         public IActionResult RuntimeStrategyCard(string name)
         {
-            var spec = _runtimeStore.GetSpec(name);
+            var spec = _runtimeStore.GetSpecOrInstanceSpec(name);
             if (spec == null) return NotFound($"Spec '{name}' not found");
             // «Por qué no opera»: un solo cálculo (StrategyStall) sobre los eventos de todas las instancias de esa spec.
             var events = _runtimeStore.AllInstances().Where(i => i.SpecName == name).SelectMany(i => _runtimeStore.GetEvents(i.InstanceId)).ToList();

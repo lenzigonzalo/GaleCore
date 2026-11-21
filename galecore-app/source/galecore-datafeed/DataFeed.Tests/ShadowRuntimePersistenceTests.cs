@@ -511,4 +511,21 @@ public class ShadowRuntimePersistenceTests
         Assert.Null(restarted.RunningInstances().FirstOrDefault());
         Assert.Contains(restarted.GetEvents(instance.InstanceId), e => e.EventType == "INSTANCE_STOPPED");
     }
+
+    [Fact]
+    public void Card_uses_instance_spec_when_only_registered_by_hash()
+    {
+        // Tras un reinicio la spec del Lab sólo está por hash: GetSpec(name) da null pero la tarjeta tiene que resolverse por la instancia.
+        var store = new ShadowRuntimeStore();
+        var spec = Spec() with { ContentHash = "hash-lab-1" };
+        store.RegisterSpecVersion(spec);
+        store.SetInstance("i-old", new StrategyInstance
+        {
+            InstanceId = "i-old", DeploymentId = "d-1", SpecName = spec.Identity.Name, VersionHash = "hash-lab-1",
+            LifecycleState = "STOPPED", SchedulerState = "IDLE", Mode = "SHADOW", CreatedAt = Now, UpdatedAt = Now,
+        });
+        Assert.Null(store.GetSpec(spec.Identity.Name));
+        Assert.Same(spec, store.GetSpecOrInstanceSpec(spec.Identity.Name));
+        Assert.Null(store.GetSpecOrInstanceSpec("otra"));
+    }
 }

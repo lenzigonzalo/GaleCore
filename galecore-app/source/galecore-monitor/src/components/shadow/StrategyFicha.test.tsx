@@ -48,39 +48,44 @@ beforeEach(() => {
   useCurrentUserStore.setState({ user: { userId: 'u-1', email: null, username: null, isAdmin: false, canManagePlatform: false, databaseConfigured: true }, loaded: true });
 });
 
-test('el encabezado muestra versión, ventana, última evaluación y límites desde la Card', async () => {
+test('la barra muestra capital, tope por operación, ventana y última evaluación desde la Card', async () => {
   const evaluatedAt = new Date(Date.now() - 3 * 60000).toISOString();
   (fetchShadowEvaluations as jest.Mock).mockResolvedValue([{ evaluationId: 'e', instanceId: 'i-1', symbol: 'SPX', overallPass: true, gateResults: [], evaluatedAt }]);
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
   const bar = await screen.findByLabelText('Estado de la estrategia');
   await waitFor(() => expect(bar).toHaveTextContent('Última evaluación hace 3 min'));
-  await waitFor(() => expect(bar).toHaveTextContent('Versión activa v1.3.0'));
-  expect(bar).toHaveTextContent('Ventana de entrada 09:45–15:00 hora NY');
-  expect(bar).toHaveTextContent('Capital simulado 10.000 USD');
-  expect(bar).toHaveTextContent('Entradas por día 1');
-  expect(bar).toHaveTextContent('Topes por operación 200 USD · riesgo abierto 400 USD · por apuesta 9 USD');
+  expect(bar).toHaveTextContent('Ventana 09:45–15:00 hora NY');
+  expect(bar).toHaveTextContent('Capital 10.000 USD');
+  expect(bar).toHaveTextContent('Topes 200 USD por operación');
+  expect(bar.querySelector('[title="Riesgo abierto 400 USD · por apuesta 9 USD"]')).not.toBeNull();
+  expect(bar).not.toHaveTextContent('Versión activa');
   expect(fetchShadowEvaluations).toHaveBeenCalledWith('i-1', 1);
 });
 
-test('un 404 en la Card no rompe la ficha: se omiten ventana y límites y la versión sale de las métricas', async () => {
+test('el selector de versiones muestra la activa con su nombre', async () => {
+  const v = (version: string, label: string | null) => ({ version, ref: `r${version}`, label, recorded_at: '2026-11-10T15:00:00Z', spec_hash: version === '1.3.0' ? 'sha256:bc1ec2d9952c8d5' : `sha256:${version}`, check: 'VALID', approved: true, approved_at: null, critique: null,
+    factibilidad: { veredicto: 'ok', texto: '', limites_usd: null }, change: null, diff_from_previous: null });
+  (labRequest as jest.Mock).mockResolvedValue({ strategy: SPEC, versions: [v('1.3.0', 'Base calmada'), v('1.3.1', null)] });
+  render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
+  expect(await screen.findByRole('button', { name: 'v1.3.0 · Base calmada ▾' })).toBeInTheDocument();
+});
+
+test('un 404 en la Card no rompe la ficha: se omiten ventana y límites', async () => {
   cardApi.mockRejectedValue({ response: { status: 404 } });
   (fetchShadowMetrics as jest.Mock).mockResolvedValue([{ specName: SPEC, contentHash: 'sha256:bc1ec2d9952c8d5', specVersion: '1.3.0' }]);
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
   expect(await screen.findByText('Ganancia total')).toBeInTheDocument();
   const bar = screen.getByLabelText('Estado de la estrategia');
-  await waitFor(() => expect(bar).toHaveTextContent('Versión activa v1.3.0'));
-  expect(bar).not.toHaveTextContent('Ventana de entrada');
+  expect(bar).not.toHaveTextContent('Ventana');
   expect(bar).not.toHaveTextContent('Topes');
   expect(bar.querySelector('[role=alert]')).toBeNull();
 });
 
-test('sin versión conocida se muestra el hash corto, y los límites sin dato van como guion', async () => {
+test('los límites sin dato van como guion', async () => {
   cardApi.mockResolvedValue({ ...card, version: null, contentHash: null, window: null, maxEntriesPerDay: null, limitsUsd: { capital: null, perTrade: null, openRisk: null, perBet: 9 } });
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
   const bar = await screen.findByLabelText('Estado de la estrategia');
-  await waitFor(() => expect(bar).toHaveTextContent('Topes por operación — · riesgo abierto — · por apuesta 9 USD'));
-  expect(bar).toHaveTextContent('Versión activa bc1ec2d9952c');
-  expect(bar).toHaveTextContent('Entradas por día —');
+  await waitFor(() => expect(bar).toHaveTextContent('Topes — por operación'));
 });
 
 const stall = { days: 4, since: '2026-11-03', until: '2026-11-10', cause: 'ENTRY_SKIPPED:max_bet', causeLabel: 'tope por apuesta',
@@ -116,7 +121,7 @@ test('Pausar pide confirmación, avisa de las abiertas, llama a stop y refresca'
   expect(toggle).toHaveAttribute('aria-checked', 'true');
   fireEvent.click(toggle);
   expect(stopShadowInstance).not.toHaveBeenCalled();
-  expect(screen.getByText(/¿Pausar\? Deja de entrar; las 2 abiertas se siguen valuando\./)).toBeInTheDocument();
+  expect(screen.getByText('¿Pausar?')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'No' }));
   expect(screen.queryByText(/¿Pausar\?/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('switch', { name: /Prendida/ }));
@@ -133,7 +138,7 @@ test('Prender vuelve a desplegar la misma versión con expectedHash y muestra el
   const toggle = await screen.findByRole('switch', { name: /Pausada/ });
   expect(toggle).toHaveAttribute('aria-checked', 'false');
   fireEvent.click(toggle);
-  expect(screen.getByText(/¿Prender de nuevo la v1\.3\.0\? Vuelve a evaluar entradas en SHADOW \(simulado\)\./)).toBeInTheDocument();
+  expect(screen.getByText('¿Prender v1.3.0?')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
   expect(await screen.findByText('No se pudo prender: La spec vigente ya no es esa versión.')).toBeInTheDocument();
   expect(deployShadowSpec).toHaveBeenCalledWith(SPEC, 'sha256:bc1ec2d9952c8d5');
@@ -227,11 +232,11 @@ test('después de activar otra versión la ficha recarga instancia, tarjeta y m�
   const changed = jest.fn().mockResolvedValue(undefined);
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" onInstanceChange={changed} />);
   await screen.findByText('Ganancia total');
-  fireEvent.click(await screen.findByRole('button', { name: /Versión activa v1\.3\.0/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'v1.3.0 ▾' }));
   fireEvent.click(screen.getByRole('button', { name: /^v1\.3\.1 / }));
-  fireEvent.click(screen.getByText('Activar esta versión'));
-  const cardCalls = cardApi.mock.calls.length, metricCalls = (fetchShadowMetrics as jest.Mock).mock.calls.length, panelCalls = (fetchPerformancePanel as jest.Mock).mock.calls.length;
   fireEvent.click(screen.getByRole('button', { name: 'Activar' }));
+  const cardCalls = cardApi.mock.calls.length, metricCalls = (fetchShadowMetrics as jest.Mock).mock.calls.length, panelCalls = (fetchPerformancePanel as jest.Mock).mock.calls.length;
+  fireEvent.click(screen.getByRole('button', { name: 'Sí' }));
   await waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(cardApi.mock.calls.length).toBe(cardCalls + 1));
   expect((fetchShadowMetrics as jest.Mock).mock.calls.length).toBe(metricCalls + 1);

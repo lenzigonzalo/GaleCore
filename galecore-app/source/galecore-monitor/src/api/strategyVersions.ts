@@ -8,7 +8,7 @@ export interface VersionDiff {
   management?: unknown[];
 }
 export interface StrategyVersion {
-  version: string; ref: string; recorded_at: string; spec_hash: string; check: string;
+  version: string; ref: string; label?: string | null; recorded_at: string; spec_hash: string; check: string;
   approved: boolean; approved_at: string | null; critique: string | null; critique_why_not?: string[];
   factibilidad: { veredicto: string; texto: string; limites_usd?: { capital: number | null; por_operacion: number | null; riesgo_abierto: number | null; por_apuesta: number | null } | null };
   change: { reason: string; from_version: string | null } | null;
@@ -27,6 +27,9 @@ export const fetchEditableFields = async (name: string, version: string): Promis
 /** «Editar»: guarda una versión nueva (borrador) con esos parámetros; devuelve la referencia `strategy:<n>/<v>`. */
 export const reviseStrategyVersion = (name: string, version: string, user: string, changes: Record<string, number | string>, reason?: string) =>
   labRequest<{ ref: string }>(`${base(name)}/${version}/revise`, { user, changes, ...(reason ? { reason } : {}) });
+/** «Renombrar»: el nombre de la versión es un dato aparte (no cambia la spec ni crea versión); vacío lo borra. */
+export const renameStrategyVersion = (name: string, version: string, user: string, label: string) =>
+  labRequest<{ ref: string; label: string | null }>(`${base(name)}/${version}/label`, { user, label });
 /** «Activar esta versión»: la aprueba (el clic confirmado es la aprobación) y la deja corriendo en SHADOW. */
 export const activateStrategyVersion = (name: string, version: string, user: string) =>
   labRequest<{ instance_id?: string; existing?: boolean; replaced_hash?: string | null }>(`${base(name)}/${version}/activate`, { user }, 90000);

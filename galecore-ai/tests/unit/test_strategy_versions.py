@@ -10,7 +10,7 @@ import pytest
 from galecore_ai.adapters.knowledge_base import KNOWLEDGE_DIR_ENV
 from galecore_ai.application.knowledge import KnowledgeError
 from galecore_ai.application.strategy import approve, galecore_spec_hash, save_proposal
-from galecore_ai.application.strategy_versions import duplicate, list_versions
+from galecore_ai.application.strategy_versions import duplicate, list_versions, rename
 from tests.unit.fake_galecore import fake_checker
 from tests.unit.test_knowledge import HOST, NOW, kb  # noqa: F401  (kb is a fixture)
 from tests.unit.test_strategy import (
@@ -311,3 +311,36 @@ def test_revise_capital_also_sets_the_proposals_simulated_amount(kb, research_re
     assert new.content.simulated_amount_usd == 25000.0 and new.content.limits == src.content.limits
     other, _ = revise(kb, f"{NAME}/1.2.0", {"risk_limits/max_loss_per_trade_usd": 240}, "", HOST, now=NOW, checker=fake_checker())
     assert kb.strategies.load(other.removeprefix("strategy:")).content.simulated_amount_usd == src.content.simulated_amount_usd
+
+
+# ── nombre de la versión (WS-0104): dato aparte, no toca la spec ──
+
+def test_label_is_saved_listed_and_does_not_change_the_spec_or_the_versions(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    before = list_versions(kb, NAME)["versions"]
+    assert before[0]["label"] is None
+    assert rename(kb, KEY, "  Sandwich base ") == {"ref": f"strategy:{KEY}", "label": "Sandwich base"}
+    after = list_versions(kb, NAME)["versions"]
+    assert after[0]["label"] == "Sandwich base"
+    assert len(after) == len(before) and after[0]["spec_hash"] == before[0]["spec_hash"]
+    assert rename(kb, KEY, "   ")["label"] is None
+    assert list_versions(kb, NAME)["versions"][0]["label"] is None
+
+
+def test_label_refuses_a_missing_version_and_a_bad_name(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    with pytest.raises(KnowledgeError):
+        rename(kb, f"{NAME}/9.9.9", "x")
+    with pytest.raises(KnowledgeError, match="60"):
+        rename(kb, KEY, "x" * 61)
+    with pytest.raises(KnowledgeError, match="saltos"):
+        rename(kb, KEY, "a\nb")
+
+
+def test_cli_label(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    env = {KNOWLEDGE_DIR_ENV: str(kb.base)}
+    code, out = _cli("strategy", "label", "--ref", f"strategy:{KEY}", "--label", "Mi nombre", env=env)
+    assert code == 0 and out["label"] == "Mi nombre"
+    code, out = _cli("strategy", "versions", "--name", NAME, env=env)
+    assert out["versions"][0]["label"] == "Mi nombre"
