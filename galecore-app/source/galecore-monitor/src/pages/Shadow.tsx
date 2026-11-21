@@ -89,9 +89,9 @@ function RpfStateSwitch({ endpoint }: { endpoint: string }) {
   const toggle = useStrategySwitchStore(s => s.toggle);
   const canManage = useCanManagePlatform() === true;
   if (!canManage) return <StageState active={enabled ?? null} />;
-  return <button type="button" className={'instance-state ' + (enabled ? 'running' : 'stopped')} disabled={busy || enabled == null}
+  return <button type="button" role="switch" aria-checked={!!enabled} className="status-switch" disabled={busy || enabled == null}
     onClick={() => toggle(endpoint)} title={enabled ? 'Apagar el motor de RPF para toda la plataforma' : 'Prender el motor de RPF para toda la plataforma'}>
-    <i aria-hidden="true" />{enabled == null ? '—' : enabled ? 'Activa' : 'Apagada'}</button>;
+    <span className="switch-track" aria-hidden="true"><span className="switch-thumb" /></span>{enabled == null ? '—' : enabled ? 'Activa' : 'Apagada'}</button>;
 }
 
 export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { selectedSpec?: string | null; onSelectSpec?: (spec: string | null) => void; onOpenChat?: (projectId: string) => void; rpf?: React.ReactNode }) {

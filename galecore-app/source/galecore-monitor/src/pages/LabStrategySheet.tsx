@@ -53,7 +53,7 @@ export function LabStrategySheet({strategy}:{strategy:StrategyView|null}) {
     <section className="lab-design-overview" aria-label="Definición de la estrategia">
       <div><span className="lab-eyebrow">HIPÓTESIS</span><p>{c.hypothesis?.mechanism || 'Sin definir'}</p><span className="lab-eyebrow">OBJETIVO</span><p>{c.hypothesis?.expected_result || 'Sin definir'}</p>{c.hypothesis?.capture&&<details><summary>Cómo las reglas capturan la hipótesis</summary><p>{c.hypothesis.capture}</p></details>}</div>
       <dl className="lab-design-facts">{[
-        ['Subyacentes',spec?.universe?.symbols?.join(', ')],['Instrumentos',spec?.universe?.instrument_types?.map(v=>v==='EQUITY_OPTION'?'Opciones sobre acciones / ETF':v).join(', ')],
+        ['Subyacentes',spec?.universe?.symbols?.join(', ')],['Instrumentos',spec?.universe?.instrument_types?.map(v=>v==='EQUITY_OPTION'?'Opciones':v).join(', ')],
         ['Estructura',structures[spec?.structure?.default_structure || ''] || spec?.structure?.default_structure],['Vencimiento',cons?.min_dte!==undefined&&cons?.max_dte!==undefined?cons.min_dte+'–'+cons.max_dte+' días':undefined],
         ['Sesión',op?.session_hours?.start&&op?.session_hours?.end?op.session_hours.start+'–'+op.session_hours.end+' · '+(op.timezone || 'Zona sin definir'):undefined],['Calendario declarado',op?.calendar],['Moneda',op?.currency],['Mercado / plaza',undefined],
       ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{defined(value)}</dd></div>)}</dl>

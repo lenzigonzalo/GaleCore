@@ -29,7 +29,7 @@ export function StrategyOffPanel({ detail }: Props) {
       icon={<Ban size={20} />}
       title="Estrategia apagada"
       detail={detail}
-      hint="Prendé el switch de arriba para volver a levantarla."
+      hint="Prendela con el interruptor de arriba."
     />
   );
 }
