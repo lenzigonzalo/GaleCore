@@ -143,6 +143,19 @@ namespace DataFeed.Application.App.Runtime
         public StrategySpec? GetSpec(string name)
             => _specs.TryGetValue(name, out var s) ? s : null;
 
+        /// <summary>
+        /// La spec vigente de ese nombre y, si tras un reinicio sólo está registrada por hash (vino del Lab, no de archivo),
+        /// la de su instancia: la RUNNING y si no la más reciente.
+        /// </summary>
+        public StrategySpec? GetSpecOrInstanceSpec(string name)
+        {
+            var spec = GetSpec(name);
+            if (spec != null) return spec;
+            return _instances.Values.Where(i => i.SpecName == name)
+                .OrderByDescending(i => i.LifecycleState == "RUNNING").ThenByDescending(i => i.CreatedAt)
+                .Select(SpecFor).FirstOrDefault(x => x != null);
+        }
+
         public IReadOnlyCollection<StrategySpec> AllSpecs()
             => _specs.Values.ToList().AsReadOnly();
 
