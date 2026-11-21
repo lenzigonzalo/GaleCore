@@ -215,7 +215,7 @@ function DeliveryFields({ value, onChange }: { value: string[]; onChange: (v: st
   const lib = value.includes('biblioteca');
   return <fieldset className="agents-fieldset"><legend>Dónde deja el resultado</legend>
     <label className="agents-check"><input type="checkbox" checked disabled />Historial de corridas</label>
-    <label className="agents-check"><input type="checkbox" checked={lib} onChange={() => onChange(lib ? ['historial'] : ['historial', 'biblioteca'])} />Informe en la Biblioteca</label>
+    <label className="agents-check"><input type="checkbox" checked={lib} onChange={() => onChange(lib ? ['historial'] : ['historial', 'biblioteca'])} />Informe en el proyecto Biblioteca del chat</label>
   </fieldset>;
 }
 

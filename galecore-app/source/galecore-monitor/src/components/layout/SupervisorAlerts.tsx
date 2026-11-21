@@ -19,6 +19,8 @@ interface Piece { watches?: Watch[]; alerts?: Alert[]; last_run?: { at: string; 
 
 const KEY = 'supervisor';
 const REFRESH_MS = 60_000;
+// BF-0017: la pieza agent/supervisor (~113 KB) la reescribe el supervisor cada 5 min; pedirla cada minuto no trae nada nuevo.
+const SUPERVISOR_PIECE_MS = 5 * 60_000;
 const SEEN = 'galecore.supervisor.seen';
 
 /** Color y rótulo por tipo, para leer el aviso en un segundo (WS-0036). */
@@ -220,7 +222,7 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
 
   useEffect(() => {
     load();
-    return setVisibleInterval(load, REFRESH_MS);
+    return setVisibleInterval(load, SUPERVISOR_PIECE_MS);
   }, [load]);
 
   // La campana es de la cartera real (owner 15/10): lo de SHADOW va por su camino (Estrategias), no acá.

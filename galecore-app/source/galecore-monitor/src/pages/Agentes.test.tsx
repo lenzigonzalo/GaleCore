@@ -168,7 +168,7 @@ test('volver a marcar todas las herramientas manda null (todas las de la skill)'
 test('pedir el informe en la Biblioteca manda la entrega, y el historial no se puede quitar', async () => {
   await openEditor();
   expect(screen.getByRole('checkbox', { name: 'Historial de corridas' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Informe en la Biblioteca' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Informe en el proyecto Biblioteca del chat' }));
   expect((await savedSettings()).delivery).toEqual(['historial', 'biblioteca']);
 });
 
