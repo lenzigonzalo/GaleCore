@@ -1,4 +1,4 @@
-import { LayoutDashboard, ChartNoAxesCombined, Globe, Layers, MessageSquare, Bot, BookOpen } from 'lucide-react';
+import { LayoutDashboard, ChartNoAxesCombined, Globe, Layers, MessageSquare, Bot } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Tab } from './TabNav';
 export interface NavChild { id: Tab; label: string }
@@ -6,7 +6,7 @@ export interface NavEntry { id: Tab; label: string; Icon: LucideIcon; children?:
 // Macro se despliega en dos hijos (WS-0095): Global (la página Macro de siempre) y Argentina. El click en «Macro» abre el último usado.
 export const MACRO_CHILDREN: NavChild[] = [{ id: 'macro', label: 'Global' }, { id: 'macro-ar', label: 'Argentina' }];
 export const NAVIGATION: Array<{ group: string; entries: NavEntry[] }> = [
-  { group: 'Mirar', entries: [{ id: 'inicio', label: 'Inicio', Icon: LayoutDashboard }, { id: 'gex', label: 'Mercado', Icon: ChartNoAxesCombined }, { id: 'macro', label: 'Macro', Icon: Globe, children: MACRO_CHILDREN }, { id: 'biblioteca', label: 'Biblioteca', Icon: BookOpen }] },
+  { group: 'Mirar', entries: [{ id: 'inicio', label: 'Inicio', Icon: LayoutDashboard }, { id: 'gex', label: 'Mercado', Icon: ChartNoAxesCombined }, { id: 'macro', label: 'Macro', Icon: Globe, children: MACRO_CHILDREN }] },
   { group: 'Operar', entries: [{ id: 'estrategias', label: 'Estrategias', Icon: Layers }] },
   { group: 'Trabajar', entries: [{ id: 'lab', label: 'Chat', Icon: MessageSquare }, { id: 'agentes', label: 'Agentes', Icon: Bot }] },
 ];
