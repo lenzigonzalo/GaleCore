@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { activateStrategyVersion, duplicateStrategy, EditableField, fetchEditableFields, fetchStrategyVersions, reviseStrategyVersion, StrategyVersion, VersionDiff } from '../../api/strategyVersions';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { activateStrategyVersion, duplicateStrategy, EditableField, fetchEditableFields, fetchStrategyVersions, renameStrategyVersion, reviseStrategyVersion, StrategyVersion, VersionDiff } from '../../api/strategyVersions';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 import { ShadowInstance, SpecVersionMetrics } from '../../types/shadow';
 import { num, usdAr } from './ficha';
@@ -84,15 +84,18 @@ const fieldProblem = (f: EditableField, text: string): string => {
 };
 const usdText = (n: number | null | undefined) => n === null || n === undefined ? '—' : usdAr(n);
 
-/** Versiones de la estrategia en el Lab (plegado): ver qué cambió y sus resultados, activar una, editar (= versión nueva) o duplicar. */
-export function StrategyVersions({ spec, instance, metrics = [], onChanged }: {
+/** Versiones de la estrategia en el Lab: desplegable con la elegida (por defecto la activa) y su detalle; activar una, editar (= versión nueva), renombrar o duplicar. */
+export function StrategyVersions({ spec, instance, metrics = [], onChanged, onActiveLabel }: {
   spec: string; instance: ShadowInstance | null; metrics?: SpecVersionMetrics[]; onChanged?: () => Promise<void> | void;
+  onActiveLabel?: (label: string | null) => void;   // el nombre de la versión activa, para la barra de estado
 }) {
   const [versions, setVersions] = useState<StrategyVersion[]>([]);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState('');
   const [menu, setMenu] = useState(false);
-  const [mode, setMode] = useState<'' | 'activate' | 'edit' | 'duplicate'>('');
+  const [mode, setMode] = useState<'' | 'activate' | 'edit' | 'rename' | 'duplicate'>('');
+  const [labelText, setLabelText] = useState('');
+  const box = useRef<HTMLDivElement>(null);
   const [newName, setNewName] = useState(`${spec}_copia`);
   const [fields, setFields] = useState<EditableField[] | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -110,6 +113,17 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged }: {
   // Una sola lectura al abrir (cada una arranca el CLI del harness); se repite si la instancia cambió (otra versión activa, pausa).
   useEffect(() => { void load(); }, [instance?.versionHash, instance?.lifecycleState, load]);
 
+  const activeLabel = versions.find(v => instance?.versionHash && v.spec_hash === instance.versionHash)?.label ?? null;
+  useEffect(() => { onActiveLabel?.(activeLabel); }, [activeLabel, onActiveLabel]);
+  // La lista flotante se cierra con Escape y con un clic afuera.
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', away); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+  }, [open]);
+
   if (!versions.length) return null;
   const sorted = [...versions].sort(newestFirst);
   const stateOf = (v: StrategyVersion) => instance?.versionHash && v.spec_hash === instance.versionHash ? 'activa' : v.approved ? 'aprobada' : 'borrador';
@@ -118,7 +132,7 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged }: {
   const current = sorted.find(v => v.version === selected) ?? active ?? sorted[0];
   const row = metrics.find(m => m.specName === spec && m.contentHash === current.spec_hash);
   const reset = () => { setMode(''); setMenu(false); setError(''); setDone(''); };
-  const pick = (v: string) => { setSelected(v); reset(); };
+  const pick = (v: string) => { setSelected(v); setOpen(false); reset(); };
   const name = strategyName(spec);
 
   const activate = async () => {
@@ -145,7 +159,15 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged }: {
       const r = await reviseStrategyVersion(spec, current.version, who, changes, reason.trim() || undefined);
       const made = r.ref.split('/').pop() ?? '';
       setMode(''); setDone(`Guardada v${made} (borrador). Para usarla, activala.`);
-      await load(); setSelected(made); setOpen(true); await onChanged?.();
+      await load(); setSelected(made); await onChanged?.();
+    } catch (e) { setError(errText(e)); } finally { setBusy(false); }
+  };
+  const rename = async () => {
+    setBusy(true); setError('');
+    try {
+      await renameStrategyVersion(spec, current.version, who, labelText.trim());
+      setMode(''); setDone(labelText.trim() ? `v${current.version} ahora se llama «${labelText.trim()}».` : `v${current.version} quedó sin nombre.`);
+      await load();
     } catch (e) { setError(errText(e)); } finally { setBusy(false); }
   };
   const nameError = NAME_RE.test(newName) ? '' : 'El nombre va en minúsculas, empieza con letra y usa solo letras, números y guion bajo (3 a 60 caracteres).';
@@ -162,75 +184,80 @@ export function StrategyVersions({ spec, instance, metrics = [], onChanged }: {
   const lim = current.factibilidad?.limites_usd;
   const critique = current.critique ? `Crítica del agente: ${current.critique}${current.critique_why_not?.length ? ` — ${current.critique_why_not.join('; ')}` : ''}.` : '';
   const isActive = current === active;
+  const titled = (v: StrategyVersion) => v.label ? ` · ${v.label}` : '';
   return <section className="strategy-versions" aria-label="Versiones">
-    <button type="button" className="versions-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-      {active ? `Versión activa v${active.version}` : 'Sin versión activa'} · {versions.length} {versions.length === 1 ? 'versión' : 'versiones'}
-    </button>
-    {open && <>
-      <ul className="version-list" aria-label="Versiones de la estrategia">
-        {sorted.map(v => {
-          const lines = linesOf(v.diff_from_previous);
-          return <li key={v.version} className={v === current ? 'selected' : undefined}>
-            <button type="button" aria-current={v === current ? 'true' : undefined} onClick={() => pick(v.version)}>
-              <b>v{v.version}</b> · {dateAr(v.recorded_at)} · <span className={`version-state ${stateOf(v)}`}>{stateOf(v)}</span>
-            </button>
-            {!v.diff_from_previous ? <p className="version-change">primera versión</p>
-              : lines.length ? <ul className="version-change">{lines.map((l, k) => <li key={k}>{l}</li>)}</ul> : <p className="version-change">sin cambios</p>}
-          </li>;
-        })}
-      </ul>
-      <div className="version-card" role="group" aria-label={`Versión ${current.version}`}>
-        <p><b>Fecha</b> {dateAr(current.recorded_at)} · <b>Estado</b> {stateOf(current)}</p>
-        {current.factibilidad?.texto && <p>{current.factibilidad.texto}</p>}
-        {current.change?.reason && <p><b>Motivo del cambio</b> {current.change.reason}</p>}
-        <p><b>Resultados propios de esta versión</b> {row && (row.positionsOpened > 0 || row.positionsClosed > 0)
-          ? `${num(row.positionsOpened)} abiertas · ${num(row.positionsClosed)} cerradas · ${usdAr(row.realizedPnl)} realizado · ${row.winRate === null ? '—' : `${num(row.winRate * 100, 1)} %`} ganadoras`
-          : 'sin operaciones'}</p>
-        <div className="version-actions">
-          {!isActive && current.check !== 'INVALID' && mode !== 'activate' && <button type="button" className="row-action primary" onClick={() => { reset(); setMode('activate'); }}>Activar esta versión</button>}
-          {!isActive && current.check === 'INVALID' && <span>No se puede activar: la versión no pasó la verificación (INVALID).</span>}
-          {mode !== 'edit' && <button type="button" className="row-action" onClick={() => void startEdit()}>Editar</button>}
-          <span className="version-menu">
-            <button type="button" className="row-action" aria-label="Más acciones" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}>⋯</button>
-            {menu && <div role="menu" className="menu-items">
-              <button type="button" role="menuitem" className="row-action" onClick={() => { reset(); setMode('duplicate'); setNewName(`${spec}_copia`); }}>Duplicar como estrategia nueva</button>
-            </div>}
-          </span>
-        </div>
-        {mode === 'activate' && <div className="row-confirm" role="group" aria-label="Confirmar activación">
-          {!who ? <span role="alert">Iniciá sesión para activar</span> : <span>
-            Vas a dejar activa {name} v{current.version} en SHADOW (simulado, sin dinero real).{' '}
-            {active ? `Cambia frente a la activa (v${active.version}): ${vs.length ? vs.join('; ') : 'sin cambios en los parámetros'}.` : 'No hay una versión activa para comparar.'}{' '}
-            Topes: por operación {usdText(lim?.por_operacion)} · riesgo abierto {usdText(lim?.riesgo_abierto)} · por apuesta {usdText(lim?.por_apuesta)}.{' '}
-            {critique}
-          </span>}{' '}
-          {who && <button type="button" className="row-action danger" disabled={busy} onClick={() => void activate()}>Activar</button>}{' '}
-          <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>Cancelar</button>
-        </div>}
-        {mode === 'edit' && <div className="row-confirm version-edit" role="group" aria-label="Editar parámetros">
-          <p>Se guarda como una versión nueva (borrador) a partir de v{current.version}; esta no cambia. Las patas y las reglas se cambian en el Lab.</p>
-          {!fields ? (!error && <p role="status">Leyendo parámetros…</p>) : <>
-            {fields.map(f => <label key={f.path} className="edit-field">
-              <span>{f.label}{f.unit ? ` (${f.unit})` : ''}</span>
-              <input value={values[f.path] ?? ''} aria-label={f.label} aria-invalid={!!problems[f.path]} inputMode={f.kind === 'time' ? 'text' : 'decimal'}
-                placeholder={f.value === null ? 'sin definir' : undefined} onChange={e => setValues(v => ({ ...v, [f.path]: e.target.value }))} />
-              {problems[f.path] && <span role="alert" className="status-bar-error">{problems[f.path]}</span>}
-            </label>)}
-            <label className="edit-field"><span>Motivo (opcional)</span><input value={reason} aria-label="Motivo" maxLength={500} onChange={e => setReason(e.target.value)} /></label>
-            {!who && <p role="alert" className="status-bar-error">Iniciá sesión para guardar</p>}
-            <button type="button" className="row-action danger" disabled={busy || !who || !changed.length || Object.values(problems).some(Boolean)} onClick={() => void save()}>Guardar como versión nueva</button>{' '}
-            <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>Cancelar</button>
-          </>}
-        </div>}
-        {mode === 'duplicate' && <div className="row-confirm">
-          <label>Nombre de la estrategia nueva <input value={newName} onChange={e => setNewName(e.target.value)} aria-label="Nombre de la estrategia nueva" /></label>
-          {nameError && <p role="alert" className="status-bar-error">{nameError}</p>}{' '}
-          {!who && <p role="alert" className="status-bar-error">Iniciá sesión para duplicar</p>}
-          <button type="button" className="row-action danger" disabled={busy || !!nameError || !who} onClick={() => void duplicate()}>Sí</button>{' '}
-          <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>No</button>
-        </div>}
+    <div className="version-select" ref={box}>
+      <button type="button" className="versions-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        v{current.version}{titled(current)} · {stateOf(current)}
+      </button>
+      {open && <ul className="version-list" aria-label="Versiones de la estrategia">
+        {sorted.map(v => <li key={v.version} className={v === current ? 'selected' : undefined}>
+          <button type="button" aria-current={v === current ? 'true' : undefined} onClick={() => pick(v.version)}>
+            <b>v{v.version}</b>{' '}{v.label && <><span className="version-label">{v.label}</span>{' '}</>}<span className="version-date">{dateAr(v.recorded_at)}</span>{' '}<span className={`version-state ${stateOf(v)}`}>{stateOf(v)}</span>
+          </button>
+        </li>)}
+      </ul>}
+    </div>
+    <div className="version-card" role="group" aria-label={`Versión ${current.version}`}>
+      {current.label && <p className="version-title">{current.label}</p>}
+      <p><b>Fecha</b> {dateAr(current.recorded_at)} · <b>Estado</b> {stateOf(current)}</p>
+      {current.factibilidad?.texto && <p>{current.factibilidad.texto}</p>}
+      {current.change?.reason && <p><b>Motivo del cambio</b> {current.change.reason}</p>}
+      <p><b>Resultados propios de esta versión</b> {row && (row.positionsOpened > 0 || row.positionsClosed > 0)
+        ? `${num(row.positionsOpened)} abiertas · ${num(row.positionsClosed)} cerradas · ${usdAr(row.realizedPnl)} realizado · ${row.winRate === null ? '—' : `${num(row.winRate * 100, 1)} %`} ganadoras`
+        : 'sin operaciones'}</p>
+      <div className="version-actions">
+        {!isActive && current.check !== 'INVALID' && mode !== 'activate' && <button type="button" className="row-action primary" onClick={() => { reset(); setMode('activate'); }}>Activar esta versión</button>}
+        {!isActive && current.check === 'INVALID' && <span>No se puede activar: la versión no pasó la verificación (INVALID).</span>}
+        {mode !== 'edit' && <button type="button" className="row-action" onClick={() => void startEdit()}>Editar</button>}
+        <span className="version-menu">
+          <button type="button" className="row-action" aria-label="Más acciones" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}>⋯</button>
+          {menu && <div role="menu" className="menu-items">
+            <button type="button" role="menuitem" className="row-action" onClick={() => { reset(); setMode('rename'); setLabelText(current.label ?? ''); }}>Renombrar</button>
+            <button type="button" role="menuitem" className="row-action" onClick={() => { reset(); setMode('duplicate'); setNewName(`${spec}_copia`); }}>Duplicar como estrategia nueva</button>
+          </div>}
+        </span>
       </div>
-    </>}
+      {mode === 'activate' && <div className="row-confirm" role="group" aria-label="Confirmar activación">
+        {!who ? <span role="alert">Iniciá sesión para activar</span> : <span>
+          Vas a dejar activa {name} v{current.version} en SHADOW (simulado, sin dinero real).{' '}
+          {active ? `Cambia frente a la activa (v${active.version}): ${vs.length ? vs.join('; ') : 'sin cambios en los parámetros'}.` : 'No hay una versión activa para comparar.'}{' '}
+          Topes: por operación {usdText(lim?.por_operacion)} · riesgo abierto {usdText(lim?.riesgo_abierto)} · por apuesta {usdText(lim?.por_apuesta)}.{' '}
+          {critique}
+        </span>}{' '}
+        {who && <button type="button" className="row-action danger" disabled={busy} onClick={() => void activate()}>Activar</button>}{' '}
+        <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>Cancelar</button>
+      </div>}
+      {mode === 'edit' && <div className="row-confirm version-edit" role="group" aria-label="Editar parámetros">
+        <p>Se guarda como una versión nueva (borrador) a partir de v{current.version}; esta no cambia. Las patas y las reglas se cambian en el Lab.</p>
+        {!fields ? (!error && <p role="status">Leyendo parámetros…</p>) : <>
+          {fields.map(f => <label key={f.path} className="edit-field">
+            <span>{f.label}{f.unit ? ` (${f.unit})` : ''}</span>
+            <input value={values[f.path] ?? ''} aria-label={f.label} aria-invalid={!!problems[f.path]} inputMode={f.kind === 'time' ? 'text' : 'decimal'}
+              placeholder={f.value === null ? 'sin definir' : undefined} onChange={e => setValues(v => ({ ...v, [f.path]: e.target.value }))} />
+            {problems[f.path] && <span role="alert" className="status-bar-error">{problems[f.path]}</span>}
+          </label>)}
+          <label className="edit-field"><span>Motivo (opcional)</span><input value={reason} aria-label="Motivo" maxLength={500} onChange={e => setReason(e.target.value)} /></label>
+          {!who && <p role="alert" className="status-bar-error">Iniciá sesión para guardar</p>}
+          <button type="button" className="row-action danger" disabled={busy || !who || !changed.length || Object.values(problems).some(Boolean)} onClick={() => void save()}>Guardar como versión nueva</button>{' '}
+          <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>Cancelar</button>
+        </>}
+      </div>}
+      {mode === 'rename' && <div className="row-confirm version-rename" role="group" aria-label="Renombrar versión">
+        <input value={labelText} aria-label="Nombre de la versión" maxLength={60} placeholder="Sin nombre" autoFocus onChange={e => setLabelText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && who && !busy) void rename(); else if (e.key === 'Escape') setMode(''); }} />{' '}
+        {!who && <span role="alert" className="status-bar-error">Iniciá sesión para renombrar</span>}{' '}
+        <button type="button" className="row-action danger" disabled={busy || !who} onClick={() => void rename()}>Guardar</button>{' '}
+        <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>Cancelar</button>
+      </div>}
+      {mode === 'duplicate' && <div className="row-confirm">
+        <label>Nombre de la estrategia nueva <input value={newName} onChange={e => setNewName(e.target.value)} aria-label="Nombre de la estrategia nueva" /></label>
+        {nameError && <p role="alert" className="status-bar-error">{nameError}</p>}{' '}
+        {!who && <p role="alert" className="status-bar-error">Iniciá sesión para duplicar</p>}
+        <button type="button" className="row-action danger" disabled={busy || !!nameError || !who} onClick={() => void duplicate()}>Sí</button>{' '}
+        <button type="button" className="row-action" disabled={busy} onClick={() => setMode('')}>No</button>
+      </div>}
+    </div>
     {done && <p role="status">{done}</p>}
     {error && <p role="alert" className="status-bar-error">{error}</p>}
   </section>;

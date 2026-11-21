@@ -41,49 +41,62 @@ beforeEach(() => {
 
 const renderIt = (props: Partial<React.ComponentProps<typeof StrategyVersions>> = {}) =>
   render(<StrategyVersions spec={SPEC} instance={instance} metrics={metrics} {...props} />);
+const toggleOf = () => screen.getByRole('button', { name: /^v\d+\.\d+\.\d+ · / });
 const open = async (props: Partial<React.ComponentProps<typeof StrategyVersions>> = {}) => {
   renderIt(props);
-  fireEvent.click(await screen.findByRole('button', { name: /Versión activa v1\.3\.2/ }));
+  await screen.findByRole('group', { name: 'Versión 1.3.2' });
+  fireEvent.click(toggleOf());
   return screen.getByRole('list', { name: 'Versiones de la estrategia' });
 };
-const pick = (version: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(`^v${version.replace(/\./g, '\\.')} `) }));
+const pick = (version: string) => {
+  if (!screen.queryByRole('list', { name: 'Versiones de la estrategia' })) fireEvent.click(toggleOf());
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^v${version.replace(/\./g, '\\.')} `) }));
+};
 
-test('viene plegado con una línea y la lista se abre con la activa marcada, la más nueva arriba', async () => {
+test('viene plegado con la activa elegida y su detalle; la lista flotante muestra una fila por versión sin diffs', async () => {
   renderIt();
-  const toggle = await screen.findByRole('button', { name: 'Versión activa v1.3.2 · 4 versiones' });
+  const toggle = await screen.findByRole('button', { name: 'v1.3.2 · activa' });
   expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByRole('list', { name: 'Versiones de la estrategia' })).toBeNull();
-  fireEvent.click(toggle);
-  const list = screen.getByRole('list', { name: 'Versiones de la estrategia' });
-  const rows = within(list).getAllByRole('button').map(b => b.textContent);
-  expect(rows).toEqual(['v1.4.0 · 10/11/2026 · borrador', 'v1.3.2 · 10/11/2026 · activa', 'v1.3.1 · 10/11/2026 · aprobada', 'v1.3.0 · 10/11/2026 · aprobada']);
-  expect(within(list).getByRole('button', { name: /^v1\.3\.2 / })).toHaveAttribute('aria-current', 'true');   // marcada la activa, no la más nueva
-  expect(screen.getByRole('group', { name: 'Versión 1.3.2' })).toBeInTheDocument();
-});
-
-test('cada versión lista sus cambios en renglones humanos frente a la anterior', async () => {
-  const list = await open();
-  expect(within(list).getAllByText('entry.delta: 0,1 → 0,15')).toHaveLength(2);
-  expect(within(list).getAllByText('Regla nueva: sin entradas los viernes')).toHaveLength(2);
-  expect(within(list).getByText('sin cambios')).toBeInTheDocument();
-  expect(within(list).getByText('primera versión')).toBeInTheDocument();
+  expect(screen.getByRole('group', { name: 'Versión 1.3.2' })).toBeInTheDocument();   // el detalle se ve aun con la lista cerrada
   expect(screen.getByText('Factible 1.3.2')).toBeInTheDocument();
   expect(screen.getByText('Más delta')).toBeInTheDocument();
   await waitFor(() => expect(screen.getByText(/3 abiertas · 2 cerradas · 1\.234,5 USD realizado · 50 % ganadoras/)).toBeInTheDocument());
-  pick('1.3.1');
-  expect(screen.getByText('sin operaciones')).toBeInTheDocument();
+  fireEvent.click(toggle);
+  const list = screen.getByRole('list', { name: 'Versiones de la estrategia' });
+  const rows = within(list).getAllByRole('button').map(b => b.textContent);
+  expect(rows).toEqual(['v1.4.0 10/11/2026 borrador', 'v1.3.2 10/11/2026 activa', 'v1.3.1 10/11/2026 aprobada', 'v1.3.0 10/11/2026 aprobada']);
+  expect(within(list).getByRole('button', { name: /^v1\.3\.2 / })).toHaveAttribute('aria-current', 'true');   // marcada la activa, no la más nueva
+  expect(within(list).queryByText(/entry\.delta|Regla nueva|sin cambios|primera versión/)).toBeNull();
 });
 
-test('el diff no lista lo que cambia en toda versión (identidad, notas) y nombra los topes en castellano', async () => {
-  versions[2] = ver('1.3.2', { approved: true, diff_from_previous: { from: '1.3.1', spec: [
+test('elegir una fila cierra la lista y muestra su detalle; Escape y un clic afuera la cierran', async () => {
+  const list = await open();
+  fireEvent.click(within(list).getByRole('button', { name: /^v1\.3\.1 / }));
+  expect(screen.queryByRole('list', { name: 'Versiones de la estrategia' })).toBeNull();
+  expect(screen.getByRole('group', { name: 'Versión 1.3.1' })).toBeInTheDocument();
+  expect(screen.getByText('sin operaciones')).toBeInTheDocument();
+  fireEvent.click(toggleOf());
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('list', { name: 'Versiones de la estrategia' })).toBeNull();
+  fireEvent.click(toggleOf());
+  fireEvent.mouseDown(document.body);
+  expect(screen.queryByRole('list', { name: 'Versiones de la estrategia' })).toBeNull();
+});
+
+test('la confirmación de activar nombra lo que cambia en castellano, sin lo que cambia en toda versión (identidad, notas)', async () => {
+  versions[3] = ver('1.4.0', { diff_from_previous: { from: '1.3.2', spec: [
     { path: 'identity.created_at', from: 'a', to: 'b' }, { path: 'identity.parent_version_hash', from: 'sha256:x', to: 'sha256:y' }, { path: 'metadata.notes', from: 'viejo', to: 'nuevo' },
     { path: 'risk_limits.max_bet_pct', from: 3, to: 100 }, { path: 'risk_limits.max_loss_per_trade_usd', from: null, to: 250 }],
     rules: [{ rule: 'S3', change: 'changed', text: '', fields: ['text', 'basis'] }], parameters: [] } });
-  const list = await open();
-  expect(within(list).getByText('Tope por apuesta (% del riesgo abierto permitido): 3 → 100')).toBeInTheDocument();
-  expect(within(list).getByText('Pérdida máxima por operación (USD): sin definir → 250')).toBeInTheDocument();
-  expect(within(list).getByText('Regla S3 modificada (texto, fundamento)')).toBeInTheDocument();
-  expect(screen.queryByText(/identity|metadata|sha256:y/)).toBeNull();
+  await open();
+  pick('1.4.0');
+  fireEvent.click(screen.getByText('Activar esta versión'));
+  const box = screen.getByRole('group', { name: 'Confirmar activación' });
+  expect(box).toHaveTextContent('Tope por apuesta (% del riesgo abierto permitido): 3 → 100');
+  expect(box).toHaveTextContent('Pérdida máxima por operación (USD): sin definir → 250');
+  expect(box).toHaveTextContent('Regla S3 modificada (texto, fundamento)');
+  expect(box).not.toHaveTextContent(/identity|metadata|sha256:y/);
 });
 
 test('Activar esta versión pide confirmación con lo que cambia y los topes; la crítica se muestra y no frena; recarga y avisa', async () => {
@@ -187,10 +200,50 @@ test('el menú ⋯ ofrece Duplicar: valida el nombre y confirma la creación', a
   expect(await screen.findByRole('status')).toHaveTextContent('Creada spx_nueva en borrador, copiada de spx_sandwich 1.3.2. La original no cambió. Proyecto: p-9.');
 });
 
-test('si no corre ninguna versión se dice y la más nueva queda marcada', async () => {
+test('si no corre ninguna versión la más nueva queda elegida y marcada', async () => {
   renderIt({ instance: null });
-  fireEvent.click(await screen.findByRole('button', { name: 'Sin versión activa · 4 versiones' }));
-  expect(screen.getByRole('button', { name: /^v1\.4\.0 / })).toHaveAttribute('aria-current', 'true');
+  fireEvent.click(await screen.findByRole('button', { name: 'v1.4.0 · borrador' }));
+  expect(screen.getByRole('button', { name: /^v1\.4\.0 \d/ })).toHaveAttribute('aria-current', 'true');
+});
+
+test('Renombrar guarda el nombre como dato de la versión, lo muestra en botón, lista y tarjeta, y avisa a la barra', async () => {
+  const onActiveLabel = jest.fn();
+  await open({ onActiveLabel });
+  fireEvent.click(screen.getByRole('button', { name: 'Más acciones' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Renombrar' }));
+  const input = screen.getByLabelText('Nombre de la versión') as HTMLInputElement;
+  expect(input.value).toBe('');
+  fireEvent.change(input, { target: { value: ' Base calmada ' } });
+  lab.mockClear();
+  versions[2] = ver('1.3.2', { approved: true, label: 'Base calmada', change: { reason: 'Más delta', from_version: '1.3.1' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(lab).toHaveBeenCalledWith(`/strategies/${SPEC}/versions/1.3.2/label`, { user: 'gonzalo', label: 'Base calmada' }));
+  expect(await screen.findByRole('button', { name: 'v1.3.2 · Base calmada · activa' })).toBeInTheDocument();
+  expect(screen.getByText('Base calmada', { selector: '.version-title' })).toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: 'Renombrar versión' })).toBeNull();
+  await waitFor(() => expect(onActiveLabel).toHaveBeenLastCalledWith('Base calmada'));
+  expect(within(screen.getByRole('list', { name: 'Versiones de la estrategia' })).getByRole('button', { name: /^v1\.3\.2 Base calmada / })).toBeInTheDocument();
+});
+
+test('Renombrar con el nombre vacío lo borra; Escape cancela sin llamar al Lab', async () => {
+  versions[2] = ver('1.3.2', { approved: true, label: 'Vieja' });
+  await open();
+  fireEvent.click(screen.getByRole('button', { name: 'Más acciones' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Renombrar' }));
+  let input = screen.getByLabelText('Nombre de la versión') as HTMLInputElement;
+  expect(input.value).toBe('Vieja');
+  lab.mockClear();
+  fireEvent.keyDown(input, { key: 'Escape' });
+  expect(screen.queryByRole('group', { name: 'Renombrar versión' })).toBeNull();
+  expect(lab).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Más acciones' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Renombrar' }));
+  input = screen.getByLabelText('Nombre de la versión') as HTMLInputElement;
+  fireEvent.change(input, { target: { value: '   ' } });
+  versions[2] = ver('1.3.2', { approved: true });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await waitFor(() => expect(lab).toHaveBeenCalledWith(`/strategies/${SPEC}/versions/1.3.2/label`, { user: 'gonzalo', label: '' }));
+  expect(await screen.findByRole('button', { name: 'v1.3.2 · activa' })).toBeInTheDocument();
 });
 
 test('si el Lab falla no renderiza nada', async () => {

@@ -285,12 +285,16 @@
 .versions-toggle { padding: 4px 0; border: 0; background: transparent; color: var(--text-primary); font: 600 15px var(--font-sans); cursor: pointer; }
 .versions-toggle::before { content: '▸'; display: inline-block; width: 16px; }
 .versions-toggle[aria-expanded="true"]::before { content: '▾'; }
-.strategy-versions .version-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; }
-.strategy-versions .version-list > li { padding: 4px 10px; border-radius: 6px; }
-.strategy-versions .version-list > li.selected { background: var(--bg-secondary); }
-.strategy-versions .version-list > li > button { border: 0; background: transparent; color: var(--text-primary); font: 15px var(--font-sans); cursor: pointer; padding: 0; text-align: left; }
-.strategy-versions .version-change { margin: 2px 0 0 12px; padding-left: 16px; font-size: 14px; color: var(--text-secondary); }
-.strategy-versions p.version-change { padding-left: 0; }
+.strategy-versions .version-select { position: relative; display: inline-block; }
+.strategy-versions .version-list { position: absolute; z-index: 10; top: 100%; left: 0; margin: 4px 0 0; padding: 4px; list-style: none; min-width: 360px; max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary, var(--bg-secondary)); box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+.strategy-versions .version-list > li > button { width: 100%; display: flex; gap: 12px; align-items: baseline; padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text-primary); font: 15px var(--font-sans); cursor: pointer; text-align: left; }
+.strategy-versions .version-list > li > button:hover, .strategy-versions .version-list > li.selected > button { background: var(--bg-secondary); }
+.strategy-versions .version-list b { margin: 0; }
+.strategy-versions .version-label { flex: 1; font-weight: 600; }
+.strategy-versions .version-date { margin-left: auto; font: 14px var(--font-mono); }
+.strategy-versions .version-list .version-state { min-width: 68px; text-align: right; }
+.strategy-versions .version-title { font-size: 17px; font-weight: 600; }
+.strategy-versions .version-rename input { font: 15px var(--font-sans); padding: 2px 6px; min-width: 240px; }
 .strategy-versions .version-state.activa { color: var(--green); font-weight: 600; }
 .strategy-versions .version-card .row-confirm { font-size: 14px; color: var(--text-primary); }
 .strategy-versions .version-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

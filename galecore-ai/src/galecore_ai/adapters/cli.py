@@ -1550,6 +1550,9 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                                   host=RecordHost(provider=args.host_provider, model=args.host_model))
             _json_out({"status": "RECORDED", "ref": ref, "duplicated_from": f"strategy:{src_key}",
                        "approved": False, "path": path})
+        if args.strategy_command == "label":
+            from galecore_ai.application.strategy_versions import rename
+            _json_out(rename(kb, strategy_key(args.ref), args.label))
         if args.strategy_command == "editable":
             from galecore_ai.application.strategy_versions import editable
             _json_out(editable(kb, strategy_key(args.ref)))
@@ -2209,6 +2212,9 @@ def build_parser() -> _JsonArgumentParser:
     p_st_rev.add_argument("--host-model", dest="host_model", required=True)
     p_st_edt = st_sub.add_parser("editable", help="The parameters of a version that the ficha can edit (label, unit, value)")
     p_st_edt.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_lbl = st_sub.add_parser("label", help="Name a version (the ficha's «Renombrar»); empty removes it; no new version")
+    p_st_lbl.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_lbl.add_argument("--label", required=True, help="the name, up to 60 characters (\"\" removes it)")
     p_st_stop = st_sub.add_parser("stop", help="Stop a SHADOW instance (it stops entering; what is open keeps being valued)")
     p_st_stop.add_argument("--instance", required=True, help="instance id (from `followup run` or `state`)")
 

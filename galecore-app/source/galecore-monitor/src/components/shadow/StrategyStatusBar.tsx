@@ -16,8 +16,8 @@ const shortHash = (h: string) => h.replace('sha256:', '').slice(0, 12);
 function safe<T>(read: () => Promise<T>): Promise<T | null> { return Promise.resolve().then(read).catch(() => null); }
 
 /** Estado de la estrategia bajo el encabezado: interruptor Prendida / Pausada, versión activa, capital y topes en USD, ventana y última evaluación. La tarjeta y las métricas las pide la ficha una vez y se pasan por props. */
-export function StrategyStatusBar({ spec, instance, card = null, metrics = [], canControl, openPositions, onInstanceChange }: {
-  spec: string; instance: ShadowInstance | null; card?: StrategyCard | null; metrics?: SpecVersionMetrics[]; canControl: boolean; openPositions?: number; onInstanceChange?: () => Promise<void> | void;
+export function StrategyStatusBar({ spec, instance, card = null, metrics = [], canControl, openPositions, versionLabel, onInstanceChange }: {
+  spec: string; instance: ShadowInstance | null; card?: StrategyCard | null; metrics?: SpecVersionMetrics[]; canControl: boolean; openPositions?: number; versionLabel?: string | null; onInstanceChange?: () => Promise<void> | void;
 }) {
   const [lastEval, setLastEval] = useState<string | null | undefined>(undefined);
   const [confirm, setConfirm] = useState(false);
@@ -53,7 +53,7 @@ export function StrategyStatusBar({ spec, instance, card = null, metrics = [], c
       {confirm && <span className="row-confirm">{running ? `¿Pausar? Deja de entrar${openPositions ? `; ${openPositions > 1 ? `las ${openPositions} abiertas se siguen valuando` : 'la abierta se sigue valuando'}` : ''}.` : `¿Prender de nuevo${version ? ` la v${version}` : ' la misma versión'}? Vuelve a evaluar entradas en SHADOW (simulado).`} <button type="button" className="row-action danger" disabled={busy}
         onClick={() => void (running ? run(() => stopShadowInstance(instance!.instanceId), 'No se pudo pausar') : run(() => deployShadowSpec(spec, instance!.versionHash), 'No se pudo prender'))}>Sí</button> <button type="button" className="row-action" disabled={busy} onClick={() => setConfirm(false)}>No</button></span>}
     </span>}
-    {hash && <span><b>Versión activa</b> {version ? `v${version}` : shortHash(hash)}</span>}
+    {hash && <span><b>Versión activa</b> {version ? `v${version}` : shortHash(hash)}{versionLabel ? ` · ${versionLabel}` : ''}</span>}
     {l && l.capital !== null && <span><b>Capital simulado</b> {usdAr(l.capital)}</span>}
     {l && <span><b>Topes</b> por operación {usdAr(l.perTrade)} · riesgo abierto {usdAr(l.openRisk)} · por apuesta {usdAr(l.perBet)}</span>}
     {card?.window && <span><b>Ventana de entrada</b> {card.window.start}–{card.window.end} {tz(card.window.timezone)}</span>}

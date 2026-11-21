@@ -636,6 +636,15 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         if(!VER.test(parts[3]))return bad('Versión no válida.');
         return reply(await cli(['editable','--ref','strategy:'+name+'/'+parts[3]]));
       }
+      // «Renombrar»: el nombre de la versión es un dato aparte (no toca la spec ni crea versión); vacío lo borra.
+      if(req.method==='POST'&&parts.length===5&&parts[2]==='versions'&&parts[4]==='label'){
+        const version=parts[3],b=await readBody(req)||{},{user,label}=b;
+        if(!NAME.test(name))return bad('Nombre de estrategia no válido.');
+        if(!VER.test(version))return bad('Versión no válida.');
+        if(typeof user!=='string'||!USER.test(user))return bad('Usuario no válido.');
+        if(typeof label!=='string'||label.length>60||/[\r\n]/.test(label))return bad('El nombre tiene hasta 60 caracteres, en una línea.');
+        return reply(await cli(['label','--ref','strategy:'+name+'/'+version,'--label',label]));
+      }
       // «Editar» = versión nueva con parámetros numéricos cambiados; nunca pisa una existente.
       if(req.method==='POST'&&parts.length===5&&parts[2]==='versions'&&parts[4]==='revise'){
         const version=parts[3],b=await readBody(req)||{},{user,changes,reason}=b;

@@ -62,6 +62,15 @@ test('el encabezado muestra versión, ventana, última evaluación y límites de
   expect(fetchShadowEvaluations).toHaveBeenCalledWith('i-1', 1);
 });
 
+test('«Versión activa» de la barra muestra el nombre de la versión cuando tiene uno', async () => {
+  const v = (version: string, label: string | null) => ({ version, ref: `r${version}`, label, recorded_at: '2026-11-10T15:00:00Z', spec_hash: version === '1.3.0' ? 'sha256:bc1ec2d9952c8d5' : `sha256:${version}`, check: 'VALID', approved: true, approved_at: null, critique: null,
+    factibilidad: { veredicto: 'ok', texto: '', limites_usd: null }, change: null, diff_from_previous: null });
+  (labRequest as jest.Mock).mockResolvedValue({ strategy: SPEC, versions: [v('1.3.0', 'Base calmada'), v('1.3.1', null)] });
+  render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" />);
+  const bar = await screen.findByLabelText('Estado de la estrategia');
+  await waitFor(() => expect(bar).toHaveTextContent('Versión activa v1.3.0 · Base calmada'));
+});
+
 test('un 404 en la Card no rompe la ficha: se omiten ventana y límites y la versión sale de las métricas', async () => {
   cardApi.mockRejectedValue({ response: { status: 404 } });
   (fetchShadowMetrics as jest.Mock).mockResolvedValue([{ specName: SPEC, contentHash: 'sha256:bc1ec2d9952c8d5', specVersion: '1.3.0' }]);
@@ -227,7 +236,7 @@ test('después de activar otra versión la ficha recarga instancia, tarjeta y m�
   const changed = jest.fn().mockResolvedValue(undefined);
   render(<PerformancePanel spec={SPEC} instance={instance()} stage="SHADOW" onInstanceChange={changed} />);
   await screen.findByText('Ganancia total');
-  fireEvent.click(await screen.findByRole('button', { name: /Versión activa v1\.3\.0/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /^v1\.3\.0 · activa/ }));
   fireEvent.click(screen.getByRole('button', { name: /^v1\.3\.1 / }));
   fireEvent.click(screen.getByText('Activar esta versión'));
   const cardCalls = cardApi.mock.calls.length, metricCalls = (fetchShadowMetrics as jest.Mock).mock.calls.length, panelCalls = (fetchPerformancePanel as jest.Mock).mock.calls.length;
