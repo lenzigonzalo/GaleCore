@@ -176,6 +176,17 @@ function sessionTail(file){
 }
 // Los chats anteriores al registro de uso no tienen `usage`. Recuperar sólo la última llamada real de Claude:
 // su fecha no cambia al abrir el chat, y no se deducen ventana de contexto ni cuotas del nombre del modelo.
+// Comando que retoma en una terminal la misma sesión del motor. Con GALECORE_LAB_SSH (Lab en el VPS) entra por ssh; si no, en la PC del Lab.
+// Pura: el id debe ser un UUID o [A-Za-z0-9_-]+; si no, no hay comando.
+function resumeCommand({provider,nativeId,dir,ssh=process.env.GALECORE_LAB_SSH,platform=process.platform}){
+  if(!ID.test(String(nativeId||''))&&!UUID.test(String(nativeId||''))||!dir)return null;
+  const engine=provider==='codex'?'codex resume '+nativeId:'claude --resume '+nativeId;
+  const posix=d=>"'"+String(d).replace(/'/g,String.raw`'\''`)+"'";
+  if(ssh&&String(ssh).trim())return 'ssh -t '+String(ssh).trim()+' "'+('cd '+posix(dir)+' && '+engine).replace(/[\\"$`]/g,'\\$&')+'"';
+  if(platform==='win32')return "Set-Location '"+String(dir).replace(/'/g,"''")+"'; "+engine;
+  return 'cd '+posix(dir)+' && '+engine;
+}
+
 function claudeLastUsage(nativeId,home=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude')){
   try{
     if(!UUID.test(String(nativeId||'')))return;
@@ -798,7 +809,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,...(b.origin==='prueba'?{origin:'prueba'}:{}),title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
-      if(req.method==='GET'&&parts.length===2){refreshCodexUsage(c);refreshClaudeUsage(c);json(res,200,c);return true;}
+      if(req.method==='GET'&&parts.length===2){refreshCodexUsage(c);refreshClaudeUsage(c);const dir=listProjects().find(x=>x.id===c.project)?.dir,command=resumeCommand({provider:c.provider,nativeId:c.nativeId,dir});json(res,200,command?{...c,resume:{command}}:c);return true;}
       if(req.method==='GET'&&parts[2]==='mapa'){
         // Mientras responde, el mapa que se escribió en este turno ya se muestra (no espera al final).
         // WS-0044: en un proyecto de estrategia (una idea), una conversación que todavía no tocó el mapa ve el último del proyecto.
@@ -849,4 +860,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   return {route,listProjects,reserveShell,isBusy:()=>jobs.size>0||listProjects().some(p=>sharing.isRunning(p)),shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={permissionMode,mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};
+module.exports={permissionMode,mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage,resumeCommand};
