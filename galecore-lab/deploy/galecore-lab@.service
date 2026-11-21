@@ -12,6 +12,7 @@ EnvironmentFile=/home/%i/.galecore-ai.env
 EnvironmentFile=/etc/galecore-lab/%i.env
 Environment=GALECORE_LAB_LOCAL=/home/%i/.galecore/lab-state
 Environment=GALECORE_LAB_ORIGINS=https://galecore.vercel.app
+Environment=GALECORE_LAB_SSH=-p 5061 %i@vps-6285555-x.dattaweb.com
 Environment=MAX_SESSIONS=2
 Environment=NODE_ENV=production
 Environment=PATH=/home/%i/.local/bin:/srv/galecore/ai/venv/bin:/usr/local/bin:/usr/bin:/bin

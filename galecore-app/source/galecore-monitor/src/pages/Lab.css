@@ -366,6 +366,12 @@ select.lab-mode { appearance:none; text-align:center; }
 .lab-view-switch button { display:flex; align-items:center; gap:6px; padding:6px 8px; border:0; border-radius:6px; background:transparent; color:var(--text-secondary); font:14px var(--font-sans); cursor:pointer; }
 .lab-view-switch button:hover { color:var(--text-primary); background:var(--bg-tertiary); }
 .lab-view-switch button[aria-pressed=true] { background:var(--bg-hover); color:var(--text-primary); }
+.lab-resume { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--border-dark); }
+.lab-resume strong { flex:none; font-size:13px; color:var(--text-primary); }
+.lab-resume code { flex:1; min-width:0; overflow-x:auto; white-space:nowrap; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-code); font-size:13px; }
+.lab-resume button { flex:none; padding:5px 12px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--text-secondary); font:inherit; font-size:13px; cursor:pointer; }
+.lab-resume button:hover { background:var(--bg-hover); color:var(--text-primary); }
+.lab-resume-empty { margin:0; padding:12px 16px; font-size:13px; color:var(--text-secondary); }
 .lab-shell { display:flex; flex-direction:column; flex:1; min-height:0; background:#0f0f0f; }
 .lab-shell[hidden] { display:none; }
 .lab-shell > header { display:flex; align-items:center; gap:14px; padding:8px 16px; border-bottom:1px solid var(--border-dark); color:var(--text-muted); font-size:13px; }
