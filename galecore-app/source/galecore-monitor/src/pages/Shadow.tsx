@@ -128,7 +128,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   const [confirmStop, setConfirmStop] = useState<string | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
-  useEffect(() => { let active = true; fetchSpace().then(({ items }) => { if (active) setArchived(readArchived(items.find(i => i.kind === 'preference' && i.key === ARCHIVED_KEY && i.isOwn)?.content)); }).catch(() => undefined); return () => { active = false; }; }, []);
+  useEffect(() => { let active = true; fetchSpace('preference').then(({ items }) => { if (active) setArchived(readArchived(items.find(i => i.kind === 'preference' && i.key === ARCHIVED_KEY && i.isOwn)?.content)); }).catch(() => undefined); return () => { active = false; }; }, []);
   const saveArchived = async (next: string[], spec: string) => {
     const before = archived; setActing(spec); setActionError(''); setArchived(next);
     try { await saveSpaceItem('preference', ARCHIVED_KEY, { title: 'Estrategias SHADOW archivadas', content: JSON.stringify(next), format: 'json', visibility: 'private' }); }

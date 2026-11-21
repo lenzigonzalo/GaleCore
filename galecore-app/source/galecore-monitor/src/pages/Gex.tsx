@@ -27,6 +27,7 @@ import {
   GexChartData, GexExpiryApi, GexScopeApi, GexStrikeApi, GLOBAL_SCOPE,
 } from '../types/gex';
 import { fmtPct, fmtPrice, fmtTime, isStale } from '../utils/formatters';
+import { setVisibleInterval } from '../utils/visibleInterval';
 
 // Fallback si el JSON no declara refresh_seconds. Los barridos se serializan en el backend, así que
 // lo que manda es recorrer el universo entero (~383s medidos con 4 símbolos), no un barrido suelto.
@@ -183,7 +184,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   const isAdHoc = !!active && adHocSymbols.includes(active);
 
   const ticker = useMarketStore((s) => (active ? s.tickers[active] : undefined));
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<(() => void) | null>(null);
   /**
    * El botón «Encuadrar»: ON fija el eje de precio en la zona gamma. Va prendido mientras la capa
    * «Barras por strike» está prendida. Vive acá y no en el gráfico porque éste se remonta por símbolo.
@@ -232,8 +233,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
     if (!cache[active]) fetchGex(active);
     if (!autoRefresh) return;
 
-    intervalRef.current = setInterval(() => fetchGex(active), refreshSeconds * 1000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    intervalRef.current = setVisibleInterval(() => fetchGex(active), refreshSeconds * 1000);
+    return () => { intervalRef.current?.(); };
   }, [active, refreshSeconds, switchEnabled, autoRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const entry = active ? cache[active] : undefined;
@@ -319,8 +320,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
     setSummary(null);
     const load = () => fetchMarketSummary(active).then(s => { if (alive) setSummary(s); }).catch(() => {});
     load();
-    const id = setInterval(load, 30_000);
-    return () => { alive = false; clearInterval(id); };
+    const stop = setVisibleInterval(load, 30_000);
+    return () => { alive = false; stop(); };
   }, [active]);
   const change = summary?.change != null && summary.changePct != null ? { abs: summary.change, pct: summary.changePct } : null;
   const volume = summary?.volume != null ? (summary.volume >= 1e6 ? `${(summary.volume / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })} M` : summary.volume.toLocaleString('es-AR')) : '—';

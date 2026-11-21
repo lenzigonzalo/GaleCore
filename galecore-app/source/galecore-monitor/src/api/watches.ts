@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchSpace, saveSpaceItem, SpaceItem } from './space';
+import { setVisibleInterval } from '../utils/visibleInterval';
 
 /** Avisos de precio (WS-0064): viven en la pieza `agent/supervisor`, campo `watches`; se borran con `unwatch`. */
 export interface Watch {
@@ -82,8 +83,8 @@ export function useWatches(symbol: string | null | undefined): { watches: Watch[
       } catch { if (alive) setAll([]); }
     };
     load();
-    const t = setInterval(load, REFRESH_MS);
-    return () => { alive = false; clearInterval(t); };
+    const stop = setVisibleInterval(load, REFRESH_MS);
+    return () => { alive = false; stop(); };
   }, [symbol]);
   const remove = useCallback((id: string) => {
     setRemoved(prev => new Set(prev).add(id));

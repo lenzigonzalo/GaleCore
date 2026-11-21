@@ -99,7 +99,7 @@ export function LabProjectList(props: Props) {
   const [syncReady, setSyncReady] = useState(false);
   useEffect(() => {
     let alive = true;
-    fetchSpace().then(({ items }) => {
+    fetchSpace('preference').then(({ items }) => {
       const item = items.find(i => i.kind === 'preference' && i.key === PREFERENCE_KEY && i.isOwn);
       if (!alive) return;
       if (item) {

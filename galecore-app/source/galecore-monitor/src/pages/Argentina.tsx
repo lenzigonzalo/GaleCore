@@ -7,6 +7,7 @@ import { MacroChart } from '../components/macro/MacroChart';
 import { ChartPoint, dayMs, SeriesChart } from '../components/macro/SeriesChart';
 import './Macro.css';
 import './Argentina.css';
+import { setVisibleInterval } from '../utils/visibleInterval';
 
 /**
  * Argentina (WS-0095): el país en una pantalla «para tradear». Todo viene armado de `GET /App/Macro/Argentina`
@@ -178,8 +179,8 @@ export function Argentina() {
   useEffect(() => {
     const controller = new AbortController();
     load(controller.signal);
-    const timer = setInterval(() => load(controller.signal), REFRESH_MS);
-    return () => { controller.abort(); clearInterval(timer); };
+    const stop = setVisibleInterval(() => load(controller.signal), REFRESH_MS);
+    return () => { controller.abort(); stop(); };
   }, [load]);
   useEffect(() => { if (detail) dialog.current?.focus(); else opener.current?.focus(); }, [detail]);
   const open: Open = d => { opener.current = document.activeElement as HTMLElement | null; setDPeriod(null); setDetail(d); };

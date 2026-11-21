@@ -376,7 +376,7 @@ test('tras un corte del Lab, recuperar el chat elimina el error de conexión', a
     if (path === '/chats/chat-1' && failRead) { failRead = false; throw new Error('Servicio reiniciando'); }
     return normal(path, body);
   });
-  render(<Lab onMonitor={() => {}} />);
+  render(<Lab active onMonitor={() => {}} />);
   expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo recuperar esta conversación.');
   expect(await screen.findByText('conversación conservada', {}, { timeout: 5000 })).toBeInTheDocument();
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());

@@ -29,7 +29,7 @@ export function useTextSize(kind: TextSizeKind): number | undefined {
     setSize('');
     const update = (event: Event) => { changed = true; setSize((event as CustomEvent<string>).detail); };
     window.addEventListener(eventName(kind), update);
-    fetchSpace().then(data => { if (active && !changed) setSize(readSize(data.items, kind)); }).catch(() => {});
+    fetchSpace('preference').then(data => { if (active && !changed) setSize(readSize(data.items, kind)); }).catch(() => {});
     return () => { active = false; window.removeEventListener(eventName(kind), update); };
   }, [user, kind]);
   return size ? Number(size) : undefined;

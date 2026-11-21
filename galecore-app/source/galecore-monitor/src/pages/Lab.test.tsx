@@ -1,6 +1,6 @@
 jest.mock('../api/client', () => ({ __esModule: true, default: { get: jest.fn().mockResolvedValue({ data: { items: [] } }) } }));
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Lab } from './Lab';
 jest.mock('../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: [], shared: [] }), saveSpaceItem: () => Promise.resolve() }));
 import { labRequest } from '../api/lab';
@@ -94,4 +94,22 @@ test('el selector de permisos del chat ofrece los modos del motor y arranca en l
   expect(Array.from(select.querySelectorAll('option')).map(o=>o.textContent)).toEqual(['Sólo lectura','Preguntar','Auto']);
   fireEvent.change(select,{target:{value:'auto'}});expect(select).toHaveValue('auto');
   localStorage.clear();
+});
+
+test('oculto (sin active ni embedded) carga una vez y no consulta /workspaces cada 4 s (WS-0106)',async()=>{
+ jest.useFakeTimers();
+ try{
+  const tick=async(ms:number)=>{await act(async()=>{jest.advanceTimersByTime(ms);});};
+  const {rerender}=render(<Lab onMonitor={()=>{}}/>);
+  await tick(0);
+  const calls=()=>(labRequest as jest.Mock).mock.calls.filter(c=>c[0]==='/workspaces').length;
+  expect(calls()).toBe(1);
+  await tick(12000);
+  expect(calls()).toBe(1);
+  rerender(<Lab active onMonitor={()=>{}}/>);
+  await tick(0);
+  expect(calls()).toBe(2);
+  await tick(4000);
+  expect(calls()).toBe(3);
+ }finally{jest.useRealTimers();}
 });

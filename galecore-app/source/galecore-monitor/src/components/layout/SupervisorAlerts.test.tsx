@@ -37,3 +37,9 @@ test('useAgentAlerts no consulta si no está activo', async () => {
   renderHook(() => useAgentAlerts(false));
   expect(fetchAgentAlerts).not.toHaveBeenCalled();
 });
+
+test('la campana pide del espacio sólo las piezas de agente (WS-0106)', async () => {
+  render(<SupervisorAlerts embedded />);
+  await waitFor(() => expect(fetchSpace).toHaveBeenCalled());
+  expect((fetchSpace as jest.Mock).mock.calls.every(c => c[0] === 'agent')).toBe(true);
+});
