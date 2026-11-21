@@ -230,7 +230,7 @@ test('RPF ocupa una fila en Producción y su monitor aparece en Hoy',async()=>{
 
 const preference = (hidden: string[], isOwn = true) => ({ kind: 'preference', key: 'estrategias', isOwn, content: JSON.stringify({ hidden }) });
 
-test('etapas Live | Paper | SHADOW: RPF en Live·Manual con Auto bloqueado; SHADOW siempre Auto', async () => {
+test('etapas Live | SHADOW: RPF en Live·Manual con Auto bloqueado; SHADOW sin selector de modo ni pestaña de Paper vacía', async () => {
   useAppConfigStore.setState({ strategies: [{ id: 'rpf', tab: 'rpf', label: 'RPF' } as any] });
   (api.saveStrategySetting as jest.Mock).mockResolvedValue({ name: instance.specName, stage: 'SHADOW', mode: 'MANUAL', isDefault: false, effect: '' });
   render(<Shadow rpf={<div>Monitor real RPF</div>} />);
@@ -241,10 +241,17 @@ test('etapas Live | Paper | SHADOW: RPF en Live·Manual con Auto bloqueado; SHAD
   expect(within(rpfRow).getByRole('radio', { name: 'Manual' })).toHaveAttribute('aria-checked', 'true');
   fireEvent.click(screen.getByRole('tab', { name: /SHADOW/ }));
   const row = (await screen.findByRole('button', { name: strategyName(instance.specName) })).closest('tr')!;
-  expect(within(row).getByRole('radio', { name: 'Manual' })).toBeDisabled();
-  expect(within(row).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
+  expect(within(row).queryByRole('radio')).toBeNull();   // SHADOW corre siempre en automático: sin selector
+  expect(screen.queryByRole('tab', { name: /Paper/ })).toBeNull();   // sin estrategias en Paper no hay pestaña
   expect(api.saveStrategySetting).not.toHaveBeenCalled();
   useAppConfigStore.setState({ strategies: [] });
+});
+
+test('Abiertas muestra 0 cuando hay instancia y no hay abiertas', async () => {
+  mocked.fetchPerformanceSummary.mockResolvedValue([{ ...summary(), tradesOpen: 0 }]);
+  render(<Shadow />);
+  const row = (await screen.findByRole('button', { name: strategyName(instance.specName) })).closest('tr')!;
+  expect(within(row).getAllByRole('cell')[3]).toHaveTextContent('0');
 });
 
 test('Detener pide confirmar, avisa de las posiciones abiertas y deja la estrategia apagada', async () => {
