@@ -4,7 +4,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Lab } from './Lab';
 jest.mock('../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: [], shared: [] }), saveSpaceItem: () => Promise.resolve() }));
 import { labRequest } from '../api/lab';
-jest.mock('../api/lab',()=>({labRequest:jest.fn()}));
+const mockLab={loopback:true};
+jest.mock('../api/lab',()=>({labRequest:jest.fn(),get LAB_IS_LOOPBACK(){return mockLab.loopback;}}));
 jest.mock('./LabShadow',()=>({LabShadow:({strategy,mode}:{strategy?:string|null;mode?:string})=> <div data-strategy={strategy} data-mode={mode}>Seguimiento del proyecto</div>}));
 jest.mock('../components/lab/LabShell',()=>({LabShell:()=> <div>Terminal del proyecto</div>}));
 beforeEach(() => { global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver; });
@@ -112,4 +113,30 @@ test('oculto (sin active ni embedded) carga una vez y no consulta /workspaces ca
   await tick(4000);
   expect(calls()).toBe(3);
  }finally{jest.useRealTimers();}
+});
+
+test('Shell: comando para seguir la conversación con Copiar; sin resume, la línea; Lab remoto sin terminal web',async()=>{
+ const command=`ssh -t -p 5061 glenzi@host "cd '/srv/ws' && claude --resume abc"`,writeText=jest.fn().mockResolvedValue(undefined);
+ Object.assign(navigator,{clipboard:{writeText}});
+ sessionStorage.setItem('galecore:lab:chat','chat-1');
+ const base=(labRequest as jest.Mock).getMockImplementation() as (p:string,b?:any)=>Promise<any>;
+ (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>path==='/chats/chat-1'?{id:'chat-1',project:'spy',provider:'claude',state:'idle',messages:[],resume:{command}}:base(path,body));
+ const {unmount}=render(<Lab onMonitor={()=>{}}/>);
+ await screen.findByRole('button',{name:'Personal'});
+ fireEvent.click(await screen.findByRole('button',{name:'Shell'}));
+ expect(await screen.findByText(command)).toBeInTheDocument();expect(screen.getByText('Seguir en la terminal')).toBeInTheDocument();
+ expect(screen.getByText('Terminal del proyecto')).toBeInTheDocument();                  // Lab en la PC: la terminal web sigue debajo
+ fireEvent.click(screen.getByRole('button',{name:'Copiar'}));expect(writeText).toHaveBeenCalledWith(command);
+ expect(await screen.findByRole('button',{name:'Copiado'})).toBeInTheDocument();
+ unmount();
+ mockLab.loopback=false;
+ try{
+  render(<Lab onMonitor={()=>{}}/>);fireEvent.click(await screen.findByRole('button',{name:'Shell'}));
+  expect(await screen.findByText(command)).toBeInTheDocument();expect(screen.queryByText('Terminal del proyecto')).not.toBeInTheDocument();
+ }finally{mockLab.loopback=true;}
+});
+
+test('Shell sin conversación con resume: una línea de ayuda',async()=>{
+ render(<Lab onMonitor={()=>{}}/>);fireEvent.click(await screen.findByRole('button',{name:'Shell'}));
+ expect(screen.getByText('Elegí una conversación con respuestas para seguirla en la terminal.')).toBeInTheDocument();
 });

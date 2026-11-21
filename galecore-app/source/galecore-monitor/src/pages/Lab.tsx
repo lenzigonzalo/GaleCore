@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, MessageSquare, Files, X, ArrowUp, Square, PanelLeftClose, PanelLeftOpen, Mic, Paperclip, Map as MapIcon, SquareTerminal, Pencil } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
-import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, labUpload } from '../api/lab';
+import { labRequest, LAB_IS_LOOPBACK, WorkspaceProject, WorkspaceState, WorkspaceChat, labUpload } from '../api/lab';
 import { LabShadow } from './LabShadow';
 import { LabMessageAttachments, messageContent } from '../components/lab/LabMessageAttachments';
 import { LabMarkdown } from '../components/lab/LabMarkdown';
@@ -36,6 +36,18 @@ const limitSidebarWidth = (width: number, available: number) => Math.max(200, Ma
 // Commit con el que Vercel compiló esta web (vacío en local). Una sola petición de actualización del Lab por carga de página.
 const WEB_COMMIT = process.env.REACT_APP_COMMIT || '';
 let updateAsked = false;
+// Vista Shell: seguir la conversación actual en una terminal propia (el comando retoma la misma sesión del motor).
+function LabResume({ command }: { command?: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { if (!copied) return; const t = setTimeout(() => setCopied(false), 2000); return () => clearTimeout(t); }, [copied]);
+  if (!command) return <p className="lab-resume-empty">Elegí una conversación con respuestas para seguirla en la terminal.</p>;
+  return <div className="lab-resume">
+    <strong>Seguir en la terminal</strong>
+    <code>{command}</code>
+    <button type="button" onClick={() => { navigator.clipboard.writeText(command).then(() => setCopied(true), () => {}); }}>{copied ? 'Copiado' : 'Copiar'}</button>
+  </div>;
+}
+
 export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, onSidebarToggle, onLogout, embedded = false, active = false, projectRequest, onFollowStrategy }: { embedded?: boolean; active?: boolean; projectRequest?: { id: string; sequence: number }; onFollowStrategy?: (spec: string) => void; onMonitor: () => void; onNavigate?: (tab: Tab) => void; sidebarHidden?: boolean; onSidebarToggle?: () => void; onLogout?: () => void }) {
   const [projectHost, setProjectHost] = useState<HTMLElement | null>(null);
   const chatSize = useTextSize('chat');
@@ -480,7 +492,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
       {state?.update?.notice && <p className="lab-sync-notice" role="status"><span>{state.update.notice}</span></p>}
       {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><span className="lab-sync-actions">{noticeAction && <button className="lab-files-button" onClick={noticeAction.run}>{noticeAction.label}</button>}<button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></span></p>}
-      {shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
+      {view==='shell' && <LabResume command={chat?.resume?.command}/>}
+      {LAB_IS_LOOPBACK && shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
       {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen} shared={!!project?.shared && project.following !== false} unsynced={project?.syncState === 'pending'} onSynced={refresh}/> : view==='shell' ? null : view!=='chat' ? <LabShadow key={project?.id + view + strategyOpen} mode={view} project={project} strategy={strategyOpen} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (side ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(Array.from(e.dataTransfer.files)); } }}>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
