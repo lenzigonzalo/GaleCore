@@ -29,7 +29,7 @@ export function useWatchlistColumns(): { hidden: WatchlistColumn[]; toggle: (id:
     let active = true, changed = false;
     const update = (event: Event) => { changed = true; setHidden((event as CustomEvent<WatchlistColumn[]>).detail); };
     window.addEventListener(EVENT, update);
-    fetchSpace().then(data => { if (active && !changed) setHidden(readHiddenColumns(data.items)); }).catch(() => {});
+    fetchSpace('preference').then(data => { if (active && !changed) setHidden(readHiddenColumns(data.items)); }).catch(() => {});
     return () => { active = false; window.removeEventListener(EVENT, update); };
   }, [user]);
   const toggle = (id: WatchlistColumn) => {

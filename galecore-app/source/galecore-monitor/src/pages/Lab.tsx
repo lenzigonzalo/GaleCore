@@ -27,6 +27,7 @@ import { Engine, normalizeMode, PERMISSION_MODES } from '../components/lab/chatP
 import './Lab.css';
 import { useTextSize } from '../components/settings/TextSizeSettings';
 import { cssPx, cssRect, cssViewport } from '../utils/appZoom';
+import { setVisibleInterval } from '../utils/visibleInterval';
 // Owner 18/10: el mapa se abre lo que se quiera; el chat conserva al menos 360 px.
 // El chat nunca queda por debajo de 420 px (revisión 19/10): el tope se mide sobre el contenedor del chat, no la ventana.
 const limitMapaWidth = (width: number, room = (typeof window !== 'undefined' ? cssPx(window.innerWidth) : 1600)) => Math.max(280, Math.min(width, room - 420));
@@ -131,7 +132,9 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       setError(old => old === 'No se pudo conectar con el Lab local.' ? '' : old);
     } catch { setError('No se pudo conectar con el Lab local.'); }
   }, []);
-  useEffect(() => { refresh(); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, [refresh]);
+  // WS-0106: la página queda montada (oculta) al salir del Chat; oculta no consulta cada 4 s y al volver carga al instante.
+  const live = active || embedded;
+  useEffect(() => { refresh(); if (!live) return; return setVisibleInterval(refresh, 4000); }, [refresh, live]);
   useEffect(() => {
     const element = workspace.current;
     // Embebido, la lista de proyectos vive en la barra lateral: ajustar su ancho acá cambia el tamaño del propio
@@ -173,9 +176,9 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       // genera 404 en loop; mejor olvidar el chat seleccionado que mostrar un error permanente.
       if ((e as { status?: number }).status === 404) { setChatId(null); setChat(null); setError(''); return; }
       setError('No se pudo recuperar esta conversación.'); } };
-    poll(); const timer = window.setInterval(poll, 1000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [chatId]);
+    poll(); const stop = live ? setVisibleInterval(poll, 1000) : () => {};
+    return () => { active = false; stop(); };
+  }, [chatId, live]);
   useEffect(() => { followBottom.current = true; setAwayFromBottom(false); }, [projectId, chatId]);
   useEffect(() => {
     const element = messages.current;
@@ -265,7 +268,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   // «/» skills y «@» agentes del espacio (propios y compartidos): menú filtrable bajo la caja.
   const [pieces, setPieces] = useState<Mention[]>([]);
   const [menu, setMenu] = useState<(Trigger & { index: number }) | null>(null);
-  useEffect(() => { let live = true; fetchSpace().then(d => { if (live) setPieces(mentionsFromSpace([...d.items, ...d.shared])); }).catch(() => { /* sin espacio: no hay menú */ }); return () => { live = false; }; }, []);
+  useEffect(() => { let live = true; Promise.all([fetchSpace('skill'), fetchSpace('agent')]).then(rs => { if (live) setPieces(mentionsFromSpace(rs.flatMap(d => [...d.items, ...d.shared]))); }).catch(() => { /* sin espacio: no hay menú */ }); return () => { live = false; }; }, []);
   const menuItems = menu ? filterMentions(pieces, menu) : [];
   useEffect(() => { setModeChoice(null); setAttachments([]); setReplacing(false); setInterim(''); setResume(null); }, [chatId, projectId]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- sólo al cambiar de conversación; seguir chat.mode pisaría el cambio local mientras responde

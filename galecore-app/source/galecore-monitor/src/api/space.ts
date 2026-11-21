@@ -73,7 +73,7 @@ export function keyFromTitle(title: string): string {
 /** Only numeric USD capital is available to the SHADOW panel; no risk-text parsing or defaults. */
 export async function fetchReferenceCapital(): Promise<number | undefined> {
   try {
-    const space = await fetchSpace();
+    const space = await fetchSpace('profile');
     const profile = space.items.find(i => i.kind === 'profile' && i.isOwn);
     if (!profile) return undefined;
     const capital = JSON.parse(profile.content)?.reference_capital;

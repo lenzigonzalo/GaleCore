@@ -19,7 +19,6 @@ jest.mock('./components/layout/WorkspaceNav', () => ({WorkspaceNav:({onChange}:a
 </nav>}));
 jest.mock('./pages/Resumen', () => ({Resumen:()=> <h1>Inicio del usuario</h1>}));
 jest.mock('./pages/Macro', () => ({Macro:()=>null}));
-jest.mock('./pages/Biblioteca', () => ({Biblioteca:()=>null}));
 jest.mock('./pages/Lab', () => ({Lab:()=> <h1>Chat del usuario</h1>}));
 jest.mock('./pages/Admin', () => ({Admin:()=>null}));
 jest.mock('./pages/Rpf', () => ({Rpf:()=>null}));

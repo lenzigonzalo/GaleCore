@@ -168,7 +168,7 @@ test('volver a marcar todas las herramientas manda null (todas las de la skill)'
 test('pedir el informe en la Biblioteca manda la entrega, y el historial no se puede quitar', async () => {
   await openEditor();
   expect(screen.getByRole('checkbox', { name: 'Historial de corridas' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Informe en la Biblioteca' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Informe en el proyecto Biblioteca del chat' }));
   expect((await savedSettings()).delivery).toEqual(['historial', 'biblioteca']);
 });
 
@@ -494,4 +494,11 @@ test('las tareas de la PC no ofrecen «Cada 1 h en rueda»; los agentes en la nu
   fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
   fireEvent.click(screen.getByRole('button', { name: 'Nuevo agente' }));
   expect(within(screen.getByRole('combobox', { name: 'Frecuencia' })).getByRole('option', { name: 'Cada 1 h en rueda' })).toBeInTheDocument();
+});
+
+test('pide del espacio sólo agentes y skills, nunca todo (WS-0106)', async () => {
+  render(<Agentes />);
+  await screen.findByRole('button', { name: /Mi vigilancia de SPY/ });
+  const kinds = (fetchSpace as jest.Mock).mock.calls.map(c => c[0]).sort();
+  expect(kinds).toEqual(['agent', 'skill']);
 });

@@ -5,6 +5,7 @@ import './Agentes.css';
 import { Markdown } from '../components/settings/Markdown';
 import { deleteSpaceItem, fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
 import { AgentRun, apiMessage, fetchRuns } from '../api/agents';
+import { setVisibleInterval } from '../utils/visibleInterval';
 
 /**
  * Agentes (GC-0009): lo que corre solo con las instrucciones del trader — si está prendido, si su último
@@ -214,7 +215,7 @@ function DeliveryFields({ value, onChange }: { value: string[]; onChange: (v: st
   const lib = value.includes('biblioteca');
   return <fieldset className="agents-fieldset"><legend>Dónde deja el resultado</legend>
     <label className="agents-check"><input type="checkbox" checked disabled />Historial de corridas</label>
-    <label className="agents-check"><input type="checkbox" checked={lib} onChange={() => onChange(lib ? ['historial'] : ['historial', 'biblioteca'])} />Informe en la Biblioteca</label>
+    <label className="agents-check"><input type="checkbox" checked={lib} onChange={() => onChange(lib ? ['historial'] : ['historial', 'biblioteca'])} />Informe en el proyecto Biblioteca del chat</label>
   </fieldset>;
 }
 
@@ -306,7 +307,7 @@ function AgentSettings({ a, busy, onSave }: { a: Agent; busy: boolean; onSave: (
     </form> : <><p className="agents-objective">{a.objective || 'Sin instrucciones publicadas.'}</p><p><Bot size={18} />{a.model_editable ? a.model || `Automático · ${a.model_default || 'según la tarea'}` : a.capability === 'supervisor' || a.model_editable === false ? 'Ejecución por código' : a.last_run?.model || 'Modelo no publicado'}</p>
       {a.tools_available && <p className="agents-secondary">Herramientas: {(a.tools ?? a.tools_available).filter(r => r !== 'Read').map(toolLabel).join(', ') || 'ninguna'}</p>}
       {a.skill_scripts && <div className="agents-secondary"><p>Método: {humanize(a.skill_scripts.skill)}</p>{a.skill_scripts.scripts.map(sc => <p key={sc.script}>{sc.script} · {sc.last_run ? `${sc.last_run.ok ? 'OK' : 'Falló'} · ${when(sc.last_run.at)}${sc.last_run.ok ? '' : sc.last_run.error ? ` · ${sc.last_run.error.split('\n').pop()?.slice(0, 120)}` : ''}` : 'Sin corridas'}</p>)}</div>}
-      {a.delivery?.includes('biblioteca') && <p className="agents-secondary">Deja un informe en la Biblioteca.</p>}</>}
+      {a.delivery?.includes('biblioteca') && <p className="agents-secondary">Deja un informe en el proyecto Biblioteca del chat.</p>}</>}
     {!a.editable && a.capability !== 'supervisor' && <small>La edición estará disponible cuando tu PC publique la configuración de esta tarea.</small>}
   </section>;
 }
@@ -504,8 +505,7 @@ function CloudDetail({ a, item, title, skills, onChange, onDelete, busy, onBack 
   }, [item.key]);
   useEffect(() => {
     void loadRuns();
-    const id = setInterval(loadRuns, REFRESH_MS);
-    return () => clearInterval(id);
+    return setVisibleInterval(loadRuns, REFRESH_MS);
   }, [loadRuns]);
   const run = async () => {
     setStarting(true); setNotice(null);
@@ -582,9 +582,9 @@ export function Agentes() {
 
   const load = useCallback(async () => {
     try {
-      const { items: own, shared } = await fetchSpace();
-      setItems(own.filter((i) => i.kind === 'agent'));
-      setSkills(skillOptions([...own, ...(shared ?? [])]));
+      const [agentsSpace, skillsSpace] = await Promise.all([fetchSpace('agent'), fetchSpace('skill')]);
+      setItems(agentsSpace.items.filter((i) => i.kind === 'agent'));
+      setSkills(skillOptions([...skillsSpace.items, ...(skillsSpace.shared ?? [])]));
       setError(null);
     } catch (e: any) {
       setError(e?.response?.status === 401 ? 'Tu sesión venció: volvé a entrar.' : 'No se pudo leer tus agentes de GaleCore.');
@@ -593,8 +593,7 @@ export function Agentes() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, REFRESH_MS);
-    return () => clearInterval(id);
+    return setVisibleInterval(load, REFRESH_MS);
   }, [load]);
 
   const agents = (items ?? [])

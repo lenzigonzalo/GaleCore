@@ -70,7 +70,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   useEffect(() => {
     if (!enabled || !open || accountRead) return;
     let alive = true;
-    fetchSpace().then(({ items }) => {
+    fetchSpace('preference').then(({ items }) => {
       if (!alive) return;
       const item = items.find(i => i.kind === 'preference' && i.key === WATCHLIST_KEY && i.isOwn);
       if (item && !changed.current) { try { const parsed = parseWatchlist(JSON.parse(item.content)); if (parsed) setSaved(parsed); } catch { /* ilegible: queda la local */ } }

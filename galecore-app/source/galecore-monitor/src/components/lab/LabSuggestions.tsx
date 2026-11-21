@@ -36,7 +36,7 @@ export function clearSuggestionsCache() { cached = null; }
 
 function loadSuggestions(): Promise<ChatSuggestion[]> {
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.items;
-  const items = fetchSpace()
+  const items = fetchSpace('preference')
     .then(space => suggestionsEnabled(space.items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY)))
     .catch(() => false)
     .then(enabled => enabled ? apiClient.get<{ items?: ChatSuggestion[] }>('/App/GaleCore/Lab/Suggestions', { timeout: 20_000 }) : null)

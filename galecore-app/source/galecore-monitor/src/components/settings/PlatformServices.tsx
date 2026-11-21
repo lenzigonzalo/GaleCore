@@ -57,7 +57,7 @@ function SupervisorState() {
   const [piece, setPiece] = useState<SupervisorPiece | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
-    fetchSpace().then(({ items }) => {
+    fetchSpace('agent').then(({ items }) => {
       const item = items.find((i) => i.kind === 'agent' && i.key === 'supervisor');
       let parsed: SupervisorPiece | null = null;
       try { parsed = item ? JSON.parse(item.content) : null; } catch { parsed = null; }
