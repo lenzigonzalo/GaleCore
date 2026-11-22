@@ -3,7 +3,8 @@
 The registry is the `agent` piece itself, marked ``runs_on: "cloud"``: the PC's ``publish_agents`` / ``apply_requests``
 never touch it (see ``space``). The monitor writes a ``request`` into the piece (create, settings, run); the Lab
 applies it with the `RemoteTrigger` tool and tells us the result with ``applied``. The ``status`` (active / paused) is
-written straight into the piece and the routine stays always enabled: its step 0 asks GaleCore and ends if paused (WS-0106). This module only builds what the
+also written straight into the piece (WS-0106): it counts at once (the routine's first step asks GaleCore and ends if
+paused) and the Lab disables the routine so a paused agent does not start at all. This module only builds what the
 Lab needs (``routine_body``) and keeps the piece; it never talks to claude.ai.
 """
 
@@ -206,7 +207,7 @@ def routine_body(piece: dict, environment_id: str, today: date | None = None,
     return {
         "name": f"GaleCore - {piece['id']}",
         "cron_expression": cron_utc(schedule, today),
-        "enabled": True,    # the pause is decided by step 0 against GaleCore, not by claude.ai (WS-0106)
+        "enabled": piece.get("status") != "paused",     # paused = not started at all (no cost); the check is a safety net
         "job_config": {"ccr": {
             "environment_id": environment_id,
             "events": [{"data": {"type": "user", "role": "user", "message": {"role": "user", "content": instruction(piece, variables)}}}],
