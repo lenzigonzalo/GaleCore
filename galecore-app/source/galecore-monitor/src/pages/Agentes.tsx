@@ -96,7 +96,8 @@ function Toggle({ a, onRequest, busy }: { a: Agent; onRequest: (status: 'active'
   if (a.status === 'cancelled') return <span style={muted}>Cancelado</span>;
   // El supervisor (WS-0007) corre con la publicación de cada 5 minutos: no es una tarea que se prenda o apague.
   if (a.capability === 'supervisor') return <span style={muted}>Siempre activo</span>;
-  const pending = a.request && a.request.status !== a.status ? a.request.status : null;
+  // WS-0106: en la nube el estado se escribe directo (sin pedido); un pedido viejo de estado no muestra «Pausando…».
+  const pending = a.runs_on !== 'cloud' && a.request && a.request.status !== a.status ? a.request.status : null;
   if (a.request?.create) return <span style={{ ...muted, color: 'var(--text-secondary)' }}>Creando…</span>;
   if (pending || a.request?.settings) {
     return (
@@ -520,7 +521,7 @@ function CloudDetail({ a, item, title, skills, onChange, onDelete, busy, onBack 
     <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Agentes</button><span>/</span><span>{title}</span></div>
     <header className="agents-detail-heading"><div><h1>{title}</h1><p>{scheduleText(a.schedule)}</p>{!!a.skills?.length && <p>Skills: {a.skills.map(k => skills.find(o => o.key === k)?.title ?? k).join(', ')}</p>}</div>
       <div className="agents-actions"><button className="agents-primary" onClick={run} disabled={!ready || starting || busy}><Play size={14} />Ejecutar</button><Toggle a={a} busy={busy} onRequest={status => { void onChange({ status }); }} />{!a.request?.delete && <button className="agents-text-button" disabled={busy} onClick={() => setConfirming(true)}><Trash2 size={14} />Borrar</button>}</div></header>
-    {a.request?.delete ? <p className="agents-notice" role="status">Borrando… (se aplica con el Lab abierto)</p> : a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
+    {a.request?.delete ? <p className="agents-notice" role="status">Borrando… (se aplica con el Lab abierto)</p> : a.request && Object.keys(a.request).some(k => k !== 'status' && k !== 'at') && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
     {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
     {notice && <p className={notice.error ? 'agents-error' : 'agents-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
     <div className="agents-detail-grid"><div>{!!a.skills?.length && runs && <CloudResult runs={runs} titles={Object.fromEntries(skills.map(o => [o.key, o.title]))} />}<CloudRuns runs={runs} error={runsError} /></div><aside className="agents-settings">
@@ -625,9 +626,16 @@ export function Agentes() {
     setBusy(item.key);
     try {
       const { request_error: _drop, ...rest } = a;
+      let content: Record<string, unknown> = { ...rest, request: { ...change, at: new Date().toISOString() } };
+      if (isCloud(a) && change.status && !change.settings && !change.run && !change.create && !change.delete) {
+        // WS-0106: la rutina lee el estado antes de correr; vale al instante, sin el Lab.
+        const { request: old, ...piece } = rest;
+        const { status: _s, at, ...others } = old ?? {};
+        content = { ...piece, status: change.status, ...(Object.keys(others).length ? { request: { ...others, at } } : {}) };
+      }
       await saveSpaceItem('agent', item.key, {
         title: item.title, format: 'json', visibility: item.visibility,
-        content: JSON.stringify({ ...rest, request: { ...change, at: new Date().toISOString() } }),
+        content: JSON.stringify(content),
       });
       await load();
       return true;

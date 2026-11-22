@@ -1,8 +1,9 @@
 """WS-0079: agents that run in the cloud (a claude.ai routine), registered in the trader's space.
 
 The registry is the `agent` piece itself, marked ``runs_on: "cloud"``: the PC's ``publish_agents`` / ``apply_requests``
-never touch it (see ``space``). The monitor writes a ``request`` into the piece (create, settings, status, run); the
-Lab applies it with the `RemoteTrigger` tool and tells us the result with ``applied``. This module only builds what the
+never touch it (see ``space``). The monitor writes a ``request`` into the piece (create, settings, run); the Lab
+applies it with the `RemoteTrigger` tool and tells us the result with ``applied``. The ``status`` (active / paused) is
+written straight into the piece and the routine stays always enabled: its step 0 asks GaleCore and ends if paused (WS-0106). This module only builds what the
 Lab needs (``routine_body``) and keeps the piece; it never talks to claude.ai.
 """
 
@@ -160,30 +161,39 @@ def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
     install = "cd galecore-ai && python3 -m pip install -q -e . && cd .."
     if variables:
         lines = "\n".join(f"export {n}={shlex.quote(v)}" for n, v in {**variables, **({RESULTS_VAR: RESULTS_DIR} if skills else {})}.items())
-        step1 = ("1. Guardá las variables en un archivo (cada comando que use GaleCore lo carga con `source`) e instalá el "
-                 f"harness, desde la raíz del repo:\n```\ncat > ~/.galecore.env <<'EOF'\n{lines}\nEOF\n"
-                 f"chmod 600 ~/.galecore.env\n{install}\n```")
+        step1 = ("1. Guardá las variables en un archivo (cada comando que use GaleCore lo carga con `source`):\n"
+                 f"```\ncat > ~/.galecore.env <<'EOF'\n{lines}\nEOF\nchmod 600 ~/.galecore.env\n```")
+        first = 2
     else:
-        step1 = f"1. Instalá el harness: `{install}` (desde la raíz del repo)."
+        step1 = ""
+        first = 1
+    check = (f"{first}. Antes de nada más, fijate si el agente está en pausa:\n```\n{src}curl -s -m 20 "
+             '-H "X-API-KEY: $GALECORE_API_KEY" -H "X-GaleCore-Agent-Key: $GALECORE_AGENT_KEY" '
+             f'"$GALECORE_BASE_URL/App/GaleCore/Agents/{shlex.quote(key)}/Status"\n```\n'
+             'Si la respuesta dice `"status":"paused"`, terminá acá: no instales nada, no corras nada y no reportes. '
+             "Si dice `active` o el control falla, seguí.")
+    step_install = f"{first + 1}. Instalá el harness: `{install}` (desde la raíz del repo)."
     if skills:
         pulls = "\n".join(f"   - `{src}python3 -m galecore_ai.adapters.cli skill pull {shlex.quote(k)} /tmp/skills/{shlex.quote(k)}`"
                           for k in skills)
-        step2 = ("2. Traé cada skill, leé su `SKILL.md` y seguilo: los cálculos se corren con `skill run <clave> <script> …` "
+        step2 = (f"{first + 2}. Traé cada skill, leé su `SKILL.md` y seguilo: los cálculos se corren con `skill run <clave> <script> …` "
                  "como diga la skill (el comando imprime un JSON con `ok`); no escribas ni muevas archivos fuera de /tmp.\n"
                  f"{pulls}\n   Con eso hacé la tarea. Si un comando falla, `ok` es false o no hay JSON: reportá `--status error`; "
                  "el resumen empieza con \"Sin evaluar:\" y dice el error en una línea; no repitas ni deduzcas conclusiones "
                  "de corridas anteriores.")
     else:
-        step2 = f"2. Hacé esta tarea del usuario, {data}"
+        step2 = f"{first + 2}. Hacé esta tarea del usuario, {data}"
     return "\n".join([
         "Sos un agente de GaleCore que corre solo en la nube. Seguí estos pasos en orden.",
         "",
-        step1,
+        *([step1] if step1 else []),
+        check,
+        step_install,
         step2,
         "",
         f"Tarea: {str(piece.get('objective', '')).strip()}",
         "",
-        f"3. {write}",
+        f"{first + 3}. {write}",
         f"`{src}python3 -m galecore_ai.adapters.cli agent report {key} --status ok|error|skipped --summary-file /tmp/resumen.md`",
         status,
     ])
@@ -196,7 +206,7 @@ def routine_body(piece: dict, environment_id: str, today: date | None = None,
     return {
         "name": f"GaleCore - {piece['id']}",
         "cron_expression": cron_utc(schedule, today),
-        "enabled": piece.get("status") != "paused",
+        "enabled": True,    # the pause is decided by step 0 against GaleCore, not by claude.ai (WS-0106)
         "job_config": {"ccr": {
             "environment_id": environment_id,
             "events": [{"data": {"type": "user", "role": "user", "message": {"role": "user", "content": instruction(piece, variables)}}}],
