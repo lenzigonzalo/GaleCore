@@ -277,11 +277,14 @@ test('editar instrucciones y horario escribe request.settings con sólo esos cam
   expect(saved.status).toBe('active');
 });
 
-test('pausar un agente en la nube escribe request.status', async () => {
-  await openCloud();
+test('pausar un agente en la nube escribe el status directo, sin request', async () => {
+  await openCloud({ ...cloud, request: { status: 'active', at: '2026-11-09T13:00:00Z' } });
+  expect(screen.queryByText('Pausando…')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('switch', { name: 'Pausar tarea' }));
   await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
-  expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content).request).toMatchObject({ status: 'paused' });
+  const saved = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
+  expect(saved.status).toBe('paused');
+  expect(saved.request).toBeUndefined();
 });
 
 test('el detalle muestra el link a la rutina y ya no ofrece token de disparo', async () => {

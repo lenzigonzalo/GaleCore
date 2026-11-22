@@ -65,7 +65,19 @@ def test_the_routine_body_has_the_test_routine_format_and_always_reports():
     assert "cd galecore-ai && python3 -m pip install -q -e ." in text and "Tarea: Resumí SPY y VIX" in text
     assert "agent report resumen-diario --status ok|error|skipped --summary-file /tmp/resumen.md" in text
     assert text.index("Tarea:") < text.index("agent report")
-    assert ac.routine_body({**piece, "status": "paused", "model": "claude-haiku"}, "env_x1", NOV)["enabled"] is False
+    assert ac.routine_body({**piece, "status": "paused", "model": "claude-haiku"}, "env_x1", NOV)["enabled"] is True
+
+
+def test_the_pause_check_comes_before_the_install_and_the_routine_stays_enabled_when_paused():
+    piece = {"id": "Resumen diario", "objective": "Resumí SPY", "status": "paused", "schedule_spec": DAILY}
+    vars_ = {"GALECORE_BASE_URL": "https://api.galecore.test", "GALECORE_API_KEY": "svc", "GALECORE_AGENT_KEY": "gca_k"}
+    body = ac.routine_body(piece, "env_x1", NOV, vars_)
+    assert body["enabled"] is True
+    text = body["job_config"]["ccr"]["events"][0]["data"]["message"]["content"]
+    assert text.index("~/.galecore.env <<") < text.index("/Agents/resumen-diario/Status") < text.index("pip install") < text.index("Tarea:")
+    assert '"status":"paused"' in text and "terminá acá" in text
+    plain = ac.instruction(piece)
+    assert "source ~/.galecore.env" not in plain and plain.index("/Status") < plain.index("pip install")
 
 
 def test_the_pc_never_touches_a_cloud_piece(env, galecore):  # noqa: F811
@@ -140,7 +152,7 @@ def test_settings_pause_and_run_requests(galecore, lab):  # noqa: F811
     p = piece_of(fake)
     assert p["objective"] == "Resumí QQQ" and p["schedule_spec"] == later and "lunes" in p["schedule"] and p["trigger_id"] == "trig_1"
     ask(status="paused")
-    assert ac.body(client, "resumen-diario", NOV)["body"]["enabled"] is False
+    assert ac.body(client, "resumen-diario", NOV)["body"]["enabled"] is True    # WS-0106: the pause is decided by step 0, not by claude.ai
     ac.applied(client, "resumen-diario")
     assert piece_of(fake)["status"] == "paused"
     ask(run=True)
@@ -362,7 +374,7 @@ def test_an_agent_with_skills_pulls_them_follows_their_skill_md_and_reports_with
 
 def test_without_skills_the_instruction_is_the_same_as_before():
     text = ac.instruction({"id": "Resumen", "objective": "Resumí SPY"})
-    assert "2. Hacé esta tarea del usuario, con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` " in text
+    assert "3. Hacé esta tarea del usuario, con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` " in text
     assert "skill pull" not in text and "Sin evaluar" not in text
     assert ac.instruction({"id": "Resumen", "objective": "Resumí SPY", "skills": None}) == text
 

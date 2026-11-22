@@ -26,6 +26,9 @@ namespace DataFeed.Application.App.Agents
         /// <summary>¿El usuario tiene un ítem <c>agent</c> con esa clave en su espacio?</summary>
         Task<bool> AgentExistsAsync(Guid ownerId, string agentKey, CancellationToken ct);
 
+        /// <summary>Contenido (JSON) del ítem <c>agent</c> del usuario con esa clave; null si no existe (WS-0106).</summary>
+        Task<string?> GetAgentContentAsync(Guid ownerId, string agentKey, CancellationToken ct);
+
         /// <summary>Piezas <c>skill</c> con esa clave que el usuario puede leer: las suyas y las compartidas por otros.</summary>
         Task<IReadOnlyList<AgentSkillRow>> GetSkillsAsync(Guid ownerId, string skillKey, CancellationToken ct);
 
@@ -98,6 +101,15 @@ namespace DataFeed.Application.App.Agents
             await using var db = _newContext();
             return await db.TraderSpaceItems.AsNoTracking()
                 .AnyAsync(i => i.OwnerId == ownerId && i.Kind == "agent" && i.Key == agentKey, ct);
+        }
+
+        public async Task<string?> GetAgentContentAsync(Guid ownerId, string agentKey, CancellationToken ct)
+        {
+            await using var db = _newContext();
+            return await db.TraderSpaceItems.AsNoTracking()
+                .Where(i => i.OwnerId == ownerId && i.Kind == "agent" && i.Key == agentKey)
+                .Select(i => i.Content)
+                .FirstOrDefaultAsync(ct);
         }
 
         public async Task<IReadOnlyList<AgentSkillRow>> GetSkillsAsync(Guid ownerId, string skillKey, CancellationToken ct)
