@@ -628,10 +628,9 @@ export function Agentes() {
       const { request_error: _drop, ...rest } = a;
       let content: Record<string, unknown> = { ...rest, request: { ...change, at: new Date().toISOString() } };
       if (isCloud(a) && change.status && !change.settings && !change.run && !change.create && !change.delete) {
-        // WS-0106: la rutina lee el estado antes de correr; vale al instante, sin el Lab.
-        const { request: old, ...piece } = rest;
-        const { status: _s, at, ...others } = old ?? {};
-        content = { ...piece, status: change.status, ...(Object.keys(others).length ? { request: { ...others, at } } : {}) };
+        // WS-0106: el estado vale al instante (la rutina lo consulta antes de correr) y el pedido queda para que el Lab
+        // apague o prenda la rutina en claude.ai: en pausa no arranca ni consume.
+        content = { ...rest, status: change.status, request: { ...(rest.request ?? {}), status: change.status, at: new Date().toISOString() } };
       }
       await saveSpaceItem('agent', item.key, {
         title: item.title, format: 'json', visibility: item.visibility,
