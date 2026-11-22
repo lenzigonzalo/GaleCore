@@ -111,6 +111,26 @@ namespace DataFeed.Application.App.Agents
             return skill == null ? new(AgentOutcome.NotFound, Error: "No existe esa skill, o no es tuya ni compartida.") : new(AgentOutcome.Ok, skill);
         }
 
+        /// <summary>
+        /// Estado del agente para la rutina que está por correr (WS-0106): <c>paused</c> sólo si la pieza dice exactamente eso;
+        /// cualquier otra cosa (incluido un JSON ilegible) es <c>active</c>, para que un contenido roto no frene la rutina.
+        /// </summary>
+        public async Task<AgentResult<string>> GetAgentStatusAsync(Guid ownerId, string agentKey, CancellationToken ct)
+        {
+            var content = await _store.GetAgentContentAsync(ownerId, agentKey, ct);
+            if (content == null) return new(AgentOutcome.NotFound, Error: "No existe ese agente.");
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(content);
+                if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("status", out var st)
+                    && st.ValueKind == System.Text.Json.JsonValueKind.String && st.GetString() == "paused")
+                    return new(AgentOutcome.Ok, "paused");
+            }
+            catch (System.Text.Json.JsonException) { }
+            return new(AgentOutcome.Ok, "active");
+        }
+
         // ── Reporte de corridas ────────────────────────────────────────────────────────────────────────────────
 
         public async Task<AgentResult<AgentRunView>> ReportAsync(Guid ownerId, string agentKey, ReportInput input, CancellationToken ct)

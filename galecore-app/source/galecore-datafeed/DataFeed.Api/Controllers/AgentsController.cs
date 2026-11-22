@@ -186,6 +186,22 @@ namespace DataFeed.Controllers
                             visibility = s.Visibility, version = s.Version, updatedAt = s.UpdatedAt, owner = s.Owner });
         }
 
+        /// <summary>
+        /// Una rutina pregunta, antes de correr, si su agente está en pausa (WS-0106). Misma autenticación que el reporte;
+        /// sólo lee el estado.
+        /// </summary>
+        [HttpGet("GaleCore/Agents/{key}/Status")]
+        public async Task<IActionResult> GetStatus(string key, CancellationToken ct)
+        {
+            var svc = Service;
+            if (svc == null) return Unavailable();
+            var owner = await svc.ResolveKeyAsync(Request.Headers[AgentKeyHeader].ToString(), ct);
+            if (owner == null)
+                return Unauthorized(new ApiErrorResponse { Error = "Clave de agentes inválida.", Code = "invalid_agent_key" });
+            var r = await svc.GetAgentStatusAsync(owner.Value, key, ct);
+            return r.Outcome == AgentOutcome.Ok ? Ok(new { key, status = r.Value }) : Failure(r);
+        }
+
         // ── Ejecución remota de comandos CLI (clave de agentes, sin login) ────────────────────────────────────
 
         /// <summary>

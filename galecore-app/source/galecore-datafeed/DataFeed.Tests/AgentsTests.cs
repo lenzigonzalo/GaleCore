@@ -59,6 +59,8 @@ public class AgentsTests
         public Task UpsertKeyAsync(Guid o, string h, string hint, DateTime now, CancellationToken ct) { Keys[o] = new(o, h, hint, now); return Task.CompletedTask; }
         public Task<bool> DeleteKeyAsync(Guid o, CancellationToken ct) => Task.FromResult(Keys.Remove(o));
         public Task<bool> AgentExistsAsync(Guid o, string a, CancellationToken ct) => Task.FromResult(Agents.Contains((o, a)));
+        public Dictionary<(Guid, string), string> AgentContents { get; } = new();
+        public Task<string?> GetAgentContentAsync(Guid o, string a, CancellationToken ct) => Task.FromResult(AgentContents.GetValueOrDefault((o, a)));
         public Task<AgentFireTokenRow?> GetFireTokenAsync(Guid o, string a, CancellationToken ct) => Task.FromResult(Tokens.GetValueOrDefault((o, a)));
         public Task UpsertFireTokenAsync(Guid o, string a, string t, string c, string h, DateTime now, CancellationToken ct)
         { Tokens[(o, a)] = new(o, a, t, c, h, now, null); return Task.CompletedTask; }
@@ -141,6 +143,31 @@ public class AgentsTests
 
         Assert.Equal(AgentOutcome.NotFound, (await r.Svc.GetSkillAsync(Ana, "cierre", default)).Outcome);
         Assert.Equal(AgentOutcome.NotFound, (await r.Svc.GetSkillAsync(Ana, "otra", default)).Outcome);
+    }
+
+    [Theory]
+    [InlineData("{\"status\":\"active\"}", "active")]
+    [InlineData("{\"status\":\"paused\"}", "paused")]
+    [InlineData("{\"title\":\"x\"}", "active")]
+    [InlineData("esto no es json", "active")]
+    public async Task ElEstadoDelAgenteEsPausedSoloSiLaPiezaLoDiceYSinoActive(string content, string expected)
+    {
+        var r = NewRig();
+        r.Store.AgentContents[(Ana, "mi-agente")] = content;
+
+        var res = await r.Svc.GetAgentStatusAsync(Ana, "mi-agente", default);
+
+        Assert.Equal(AgentOutcome.Ok, res.Outcome);
+        Assert.Equal(expected, res.Value);
+    }
+
+    [Fact]
+    public async Task ElEstadoDeUnAgenteInexistenteOAjenoEsNotFound()
+    {
+        var r = NewRig();
+        r.Store.AgentContents[(Beto, "mi-agente")] = "{\"status\":\"paused\"}";
+
+        Assert.Equal(AgentOutcome.NotFound, (await r.Svc.GetAgentStatusAsync(Ana, "mi-agente", default)).Outcome);
     }
 
     [Fact]
