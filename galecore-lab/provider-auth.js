@@ -65,23 +65,41 @@ async function authStatus(provider, binary, execute = execFile) {
 const ANSI = /\u001b\[[0-9;?]*[ -\/]*[@-~]/g;
 function parseDeviceLogin(text) {
   const clean = String(text || '').replace(ANSI, '');
-  const url = (clean.match(/https:\/\/[^\s]+(?=\s)/) || [])[0];
+  const urls = clean.match(/https:\/\/[^\s]+(?=\s)/g) || [];
+  const url = urls.find(u => /^https:\/\/auth\.openai\.com[\/:?#]/.test(u)) || urls[0];
   const code = (clean.match(/\b[A-Z0-9]{4,}-[A-Z0-9]{4,}(?=\s)/) || [])[0];
   return url && code ? { url, code } : null;
 }
-function createCodexLogin({ binary, spawnProcess = spawn, environment = authEnvironment, timeoutMs = 15 * 60 * 1000, waitMs = 20000 }) {
+// Cierra el login; en no-Windows mata el grupo entero (el wrapper de node deja un binario nativo hijo).
+function killTree(proc, { platform = process.platform, killProcess = process.kill.bind(process) } = {}) {
+  if (platform !== 'win32' && proc.pid) { try { killProcess(-proc.pid, 'SIGTERM'); return; } catch { /* sin grupo: cae al kill directo */ } }
+  try { proc.kill(); } catch { /* ya terminó */ }
+}
+// Re-resuelve los motores que faltan, sin repetir la búsqueda (bloqueante) más de una vez por ventana.
+function createBinaryRefresher({ binaries, resolve, now = Date.now, retryMs = 60000, exists = fs.existsSync, ids = ['codex', 'claude'] }) {
+  const failedAt = {};
+  return () => {
+    for (const id of ids) {
+      if (binaries[id] && exists(binaries[id])) continue;
+      if (failedAt[id] !== undefined && now() - failedAt[id] < retryMs) continue;
+      binaries[id] = resolve(id);
+      if (binaries[id]) delete failedAt[id]; else failedAt[id] = now();
+    }
+  };
+}
+function createCodexLogin({ binary, spawnProcess = spawn, platform = process.platform, killProcess, environment = authEnvironment, timeoutMs = 15 * 60 * 1000, waitMs = 20000 }) {
   let current = null;
-  const stop = () => { if (!current) return; const c = current; current = null; clearTimeout(c.timer); try { c.proc.kill(); } catch { /* ya terminó */ } };
+  const stop = () => { if (!current) return; const c = current; current = null; clearTimeout(c.timer); killTree(c.proc, { platform, killProcess }); };
   function start() {
     if (current) return current.ready;
     const exe = binary();
     if (!exe) return Promise.reject(Object.assign(new Error('Codex no está instalado en el Lab.'), { status: 409 }));
-    const proc = spawnProcess(exe, ['login', '--device-auth'], { env: environment(), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawnProcess(exe, ['login', '--device-auth'], { env: environment(), windowsHide: true, detached: platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
     const c = current = { proc, text: '', info: null };
     c.ready = new Promise((resolve, reject) => {
-      const fail = message => { if (current === c) { current = null; clearTimeout(c.timer); } clearTimeout(waiter); try { proc.kill(); } catch { /* ya terminó */ } reject(Object.assign(new Error(message), { status: 502 })); };
+      const fail = message => { if (current === c) { current = null; clearTimeout(c.timer); } clearTimeout(waiter); killTree(proc, { platform, killProcess }); reject(Object.assign(new Error(message), { status: 502 })); };
       const waiter = setTimeout(() => fail('Codex no devolvió el código a tiempo.'), waitMs);
-      const feed = chunk => { c.text += chunk; if (!c.info) { c.info = parseDeviceLogin(c.text); if (c.info) { clearTimeout(waiter); resolve(c.info); } } };
+      const feed = chunk => { if (c.info || c.text.length > 65536) return; c.text += chunk; { c.info = parseDeviceLogin(c.text); if (c.info) { clearTimeout(waiter); resolve(c.info); } } };
       proc.stdout.on('data', feed); proc.stderr.on('data', feed);
       proc.on('error', () => fail('No se pudo iniciar Codex.'));
       proc.on('close', () => { if (current === c) { current = null; clearTimeout(c.timer); } if (!c.info) { clearTimeout(waiter); reject(Object.assign(new Error('Codex terminó sin dar el código.'), { status: 502 })); } });
@@ -92,4 +110,4 @@ function createCodexLogin({ binary, spawnProcess = spawn, environment = authEnvi
   }
   return { start, cancel: stop, pending: () => !!current };
 }
-module.exports = { parseDeviceLogin, createCodexLogin, PROVIDERS, providerBinary, nativeCodexFromWrapper, authCommand, authEnvironment, parseAuthStatus, authStatus };
+module.exports = { createBinaryRefresher, killTree, parseDeviceLogin, createCodexLogin, PROVIDERS, providerBinary, nativeCodexFromWrapper, authCommand, authEnvironment, parseAuthStatus, authStatus };

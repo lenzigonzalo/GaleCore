@@ -24,6 +24,7 @@ const TOKEN = crypto.randomBytes(32).toString('hex');
 const sessions = new Map();
 const UUID = /^[0-9a-f-]{36}$/i;
 const { createWorkspaces } = require('./lab-workspaces');
+const { createBinaryRefresher } = require('./provider-auth');
 fs.mkdirSync(LOCAL, { recursive: true });
 try {
   for (const s of JSON.parse(fs.readFileSync(STORE, 'utf8'))) {
@@ -204,7 +205,7 @@ const updater = createUpdater({
   git: gitIn(ROOT), busy: () => workspaces.isBusy(),
   restart: () => { relaunch(__dirname); shutdown(); },
 });
-const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true, refreshBinaries:() => { for (const id of ['codex', 'claude']) if (!binaries[id] || !fs.existsSync(binaries[id])) binaries[id] = binary(id); }, update:() => updater.info() });
+const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true, refreshBinaries:createBinaryRefresher({ binaries, resolve: binary }), update:() => updater.info() });
 const agents = createAgents({ root: ROOT, environment, binary: binaries.claude });   // WS-0079: rutinas en la nube al instante
 const server = http.createServer(async (req, res) => {
   if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite GaleCore: la plataforma o el monitor local de esta PC.' });

@@ -66,3 +66,38 @@ test('login de Codex: termina solo al completar, falla sin binario o sin código
   const r3 = dead.start(); procs[2].emit('close', 1);
   await assert.rejects(() => r3, /sin dar el código/);
 });
+const { createBinaryRefresher, killTree } = require('./provider-auth');
+test('refresco de binarios: no repite la búsqueda fallida dentro de la ventana y toma el motor instalado después', () => {
+  const binaries = { codex: null, claude: '/bin/claude' }; let t = 0; const calls = [];
+  const refresh = createBinaryRefresher({ binaries, now: () => t, exists: () => true, resolve: id => { calls.push(id); return null; } });
+  refresh(); refresh(); refresh();
+  assert.deepEqual(calls, ['codex']);
+  t = 61000; refresh(); assert.deepEqual(calls, ['codex', 'codex']);
+  const found = createBinaryRefresher({ binaries, now: () => t, exists: () => true, resolve: () => '/bin/codex' });
+  t = 200000; found(); assert.equal(binaries.codex, '/bin/codex');
+});
+test('login de Codex: en Linux corre desacoplado y se corta el grupo; en Windows, kill directo', async () => {
+  const opts = []; const killed = [];
+  const proc = fakeProc(); proc.pid = 4321;
+  const login = createCodexLogin({ binary: () => 'codex', platform: 'linux', spawnProcess: (b, a, o) => { opts.push(o); return proc; }, killProcess: (pid, sig) => killed.push([pid, sig]) });
+  const ready = login.start(); proc.stdout.emit('data', SALIDA); await ready;
+  assert.equal(opts[0].detached, true);
+  login.cancel(); assert.deepEqual(killed, [[-4321, 'SIGTERM']]);
+  const direct = fakeProc(); direct.pid = 9;
+  killTree(direct, { platform: 'win32', killProcess: () => assert.fail('no debe matar grupo') }); assert.equal(direct.killed, true);
+  const fallback = fakeProc(); fallback.pid = 8;
+  killTree(fallback, { platform: 'linux', killProcess: () => { throw new Error('ESRCH'); } }); assert.equal(fallback.killed, true);
+});
+test('parseDeviceLogin prefiere el enlace de auth.openai.com aunque venga otro antes', () => {
+  const out = 'Docs: https://developers.openai.com/codex\n1. Open\n  https://auth.openai.com/codex/device\n2. code\n  AB12-CD34EF\n';
+  assert.deepEqual(parseDeviceLogin(out), { url: 'https://auth.openai.com/codex/device', code: 'AB12-CD34EF' });
+  assert.equal(parseDeviceLogin('https://example.com/x\nAB12-CD34EF\n').url, 'https://example.com/x');
+});
+test('login de Codex: un segundo pedido concurrente devuelve lo mismo sin lanzar otro proceso', async () => {
+  let spawned = 0; const proc = fakeProc();
+  const login = createCodexLogin({ binary: () => 'codex', spawnProcess: () => { spawned++; return proc; } });
+  const a = login.start(); const b = login.start();
+  proc.stdout.emit('data', SALIDA);
+  assert.deepEqual(await a, await b); assert.equal(spawned, 1);
+  login.cancel();
+});
