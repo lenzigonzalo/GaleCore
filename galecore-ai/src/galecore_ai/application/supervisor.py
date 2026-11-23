@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
-from galecore_ai.application import project
+from galecore_ai.application import market_clock, project
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.project import PORTFOLIO, DecisionContext
 from galecore_ai.contracts.strategy import compute_document_hash
@@ -126,9 +126,7 @@ def _ts(value: str | None) -> datetime | None:
 
 
 def _in_session(now: datetime) -> bool:
-    # NYSE holidays are not known here: on one, a position without price may alert (declared limitation).
-    et = now.astimezone(NEW_YORK)
-    return et.weekday() < 5 and SESSION[0] <= (et.hour, et.minute) < SESSION[1]
+    return market_clock.status(now).state == "open"
 
 
 def _spec(kb: KnowledgeBase, version_hash: str) -> tuple[str | None, dict]:
@@ -152,11 +150,11 @@ def _event_matches(query: str, name: str) -> bool:
 
 
 def _business_days(start: date, end: date) -> int:
-    """Weekdays after ``start`` up to and including ``end`` (NYSE holidays not known)."""
+    """NYSE trading sessions after ``start`` up to and including ``end`` (weekends and market holidays do not count)."""
     n, d = 0, start
     while d < end:
         d += timedelta(days=1)
-        n += d.weekday() < 5
+        n += market_clock.session(d) is not None
     return n
 
 

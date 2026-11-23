@@ -432,3 +432,17 @@ def test_a_release_announced_yesterday_still_counts_all_its_positions_today(kb, 
                     IN_SESSION)
     [event] = supervisor.view(kb, today=date(2026, 9, 24), today_only=True)
     assert event["title"] == "Precios mayoristas de EE. UU. (PPI) hoy · 2 posiciones de SHADOW vencen después"
+
+
+def test_the_session_knows_nyse_holidays_and_early_closes():     # WS-0107
+    from datetime import UTC, datetime
+    assert not supervisor._in_session(datetime(2026, 11, 26, 15, 0, tzinfo=UTC))   # Thanksgiving 10:00 NY
+    assert supervisor._in_session(datetime(2026, 11, 27, 17, 0, tzinfo=UTC))       # early close day, 12:00 NY
+    assert not supervisor._in_session(datetime(2026, 11, 27, 18, 30, tzinfo=UTC))  # 13:30 NY, after the 13:00 close
+    assert not supervisor._in_session(datetime(2026, 11, 28, 15, 0, tzinfo=UTC))   # Saturday
+    assert supervisor._in_session(IN_SESSION)
+
+
+def test_business_days_do_not_count_market_holidays():          # WS-0107
+    assert supervisor._business_days(date(2026, 11, 25), date(2026, 11, 27)) == 1   # Thursday is Thanksgiving
+    assert supervisor._business_days(date(2026, 11, 25), date(2026, 11, 30)) == 2

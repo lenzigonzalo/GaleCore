@@ -423,3 +423,17 @@ def test_cli_agent_new_takes_skill_repeated(galecore, monkeypatch, capsys, tmp_p
     code, out = run("--skill", "cierre", "--skill", "notas")
     assert code == 0 and out["agent"] == "cierre-spy"
     assert piece_of(fake, "cierre-spy")["skills"] == ["cierre", "notas"]
+
+
+def test_weekdays_and_market_hours_routines_check_the_market_clock_after_installing_and_daily_does_not():   # WS-0107
+    def piece(spec):
+        return {"id": "Resumen", "objective": "Resumí SPY", "schedule_spec": spec}
+    weekdays = ac.instruction(piece({"frequency": "weekdays", "time": "09:00", "timezone": "America/New_York"}))
+    assert weekdays.index("pip install") < weekdays.index("galecore_ai.adapters.cli clock") < weekdays.index("Tarea:")
+    assert "--status skipped --reason-code market_closed" in weekdays and "empieza con «feriado»" in weekdays
+    assert "3. Fijate si el mercado" in weekdays and "4. Hacé esta tarea" in weekdays and "5. Al final" in weekdays
+    hourly = ac.instruction(piece({"frequency": "market_hours", "minutes": 60, "timezone": "America/New_York"}))
+    assert "cualquier `closed`" in hourly and "empieza con «feriado»" not in hourly
+    for spec in (DAILY, {"frequency": "days", "days": ["mon"], "time": "09:00", "timezone": "America/New_York"}):
+        text = ac.instruction(piece(spec))
+        assert "adapters.cli clock" not in text and "3. Hacé esta tarea" in text
