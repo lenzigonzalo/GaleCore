@@ -36,7 +36,7 @@ def main() -> int:
         records=FileRecordStore(default_records_dir()),
         research=FileResearchStore(base),
     )
-    publish_agents(SpaceClient(), kb, VpsScheduler(), supervise=api_reader())
+    publish_agents(SpaceClient(), kb, VpsScheduler(), supervise=api_reader(), side="vps")
     return 0
 
 

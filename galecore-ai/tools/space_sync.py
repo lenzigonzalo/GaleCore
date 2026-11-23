@@ -72,7 +72,7 @@ def main() -> int:
         logging.getLogger("galecore_ai.application.space").addHandler(handler)
         base = knowledge_dir()
         kb = KnowledgeBase(base=base, records=FileRecordStore(default_records_dir()), research=FileResearchStore(base))
-        publish_agents(SpaceClient(), kb, WindowsScheduler(), supervise=api_reader())
+        publish_agents(SpaceClient(), kb, WindowsScheduler(), supervise=api_reader(), side="pc")
         return 0
     except Exception:  # noqa: BLE001 - last resort: never fail silently
         log = Path(os.environ.get("LOCALAPPDATA", str(REPO))) / "GaleCore-AI" / "space_sync.log"

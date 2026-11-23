@@ -130,6 +130,7 @@ class ModelReply:
     error: str | None = None
     tokens: dict | None = None     # input, output, cache_read, cache_write (GC-AI-0024: consumption per capability)
     denied: list[str] | None = None  # commands the engine refused (outside the allowed prefixes)
+    cost_usd: float | None = None  # what the engine reports it cost (`total_cost_usd`); None when it reports none
 
 
 def denials_of(out: dict) -> list[str] | None:
@@ -148,6 +149,16 @@ def usage_of(out: dict) -> dict | None:
              "cache_write": "cache_creation_input_tokens"}
     got = {k: u[v] for k, v in names.items() if isinstance(u.get(v), int)}
     return got or None
+
+
+def cost_of(out: dict) -> float | None:
+    """The cost in USD a print-mode run reports (`total_cost_usd`); None when it reports none."""
+    c = out.get("total_cost_usd")
+    return float(c) if isinstance(c, (int, float)) and not isinstance(c, bool) else None
+
+
+def add_costs(a: float | None, b: float | None) -> float | None:
+    return a if b is None else b if a is None else a + b
 
 
 def add_tokens(a: dict | None, b: dict | None) -> dict | None:
@@ -242,15 +253,15 @@ class ClaudeCodeClient:
         if not isinstance(out, dict):
             return ModelReply(ok=False, duration_s=wall, error=f"exit {proc.returncode}, output is not a JSON object")
         turns, model, tokens = out.get("num_turns"), next(iter(out.get("modelUsage") or {}), None), usage_of(out)
-        denied = denials_of(out)
+        denied, cost = denials_of(out), cost_of(out)
         if proc.returncode != 0 or out.get("is_error") or not isinstance(out.get("structured_output"), dict):
             why = out.get("subtype") or "error"
             if why == "error_max_turns":
                 why = f"turn cap reached ({max_turns})"
             return ModelReply(ok=False, turns=turns, duration_s=wall, model=model, tokens=tokens, denied=denied,
-                              error=f"{why}: {str(out.get('result') or '')[:300]}".rstrip(": "))
+                              cost_usd=cost, error=f"{why}: {str(out.get('result') or '')[:300]}".rstrip(": "))
         return ModelReply(ok=True, structured=out["structured_output"], turns=turns, duration_s=wall, model=model,
-                          tokens=tokens, denied=denied)
+                          tokens=tokens, denied=denied, cost_usd=cost)
 
 
 def allowed_tools(entry: CatalogEntry, commands: dict[str, set[str]]) -> list[str]:

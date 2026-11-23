@@ -582,3 +582,15 @@ test('WS-0106: /providers/auth re-resuelve binarios y login de Codex desde el La
  assert.equal((await route(cs,'POST','/providers/claude/login/code',{code:'abcDEF123#xyz'})).status,200);assert.deepEqual(wrote,['abcDEF123#xyz\n']);
  await route(cs,'POST','/providers/claude/login/cancel');assert.equal((await route(cs,'GET','/providers/auth')).value.claudeLoginPending,false);
  const ws=await route(service,'GET','/workspaces');assert.equal(ws.value.providers.find(p=>p.id==='codex').installed,true);});
+
+test('WS-0106: abrir el Lab lanza la curaduría una vez por hora, sólo en el servidor y nunca al arrancar',async t=>{
+ const {base,kb,local}=setup(t);let clock=1e12;const calls=[];
+ const make=curation=>createWorkspaces({root:base,kb,local,binaries:{},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],autoSync:true,curation,now:()=>clock,execute:(bin,args,o,cb)=>{calls.push(args.slice(-3));cb(null,'{"status":"SERVED"}');}});
+ const served=()=>calls.filter(a=>a.join(' ')==='task serve --on-use').length;
+ const service=make(true);
+ assert.equal(served(),0);                                   // el arranque no es uso
+ await route(service,'GET','/workspaces');assert.equal(served(),1);
+ clock+=30*60*1000;await route(service,'GET','/workspaces');assert.equal(served(),1);   // antes de 1 h: no relanza
+ clock+=31*60*1000;await route(service,'GET','/workspaces');assert.equal(served(),2);
+ const pc=make(false);await route(pc,'GET','/workspaces');assert.equal(served(),2);      // en la PC no corre
+});
