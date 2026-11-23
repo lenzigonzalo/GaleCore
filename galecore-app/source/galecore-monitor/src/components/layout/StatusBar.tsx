@@ -29,9 +29,9 @@ export function StatusBar({ connectionStatus, lastUpdate }: {
     {isAuthUnverified() && <span className="gc-status-warning" title="La autenticación todavía no pudo validarse.">Sin validar</span>}
     <span className={'gc-connection ' + (connected ? 'connected' : '')} title={session + ' · ' + (symbol || 'Cotizaciones') + ': ' + (available ? (recent ? 'datos recibidos ' : 'última lectura ') + fmtTime(ticker!.lastUpdate!) : 'sin datos disponibles') + (lastUpdate ? ' · Cuenta ' + fmtTime(lastUpdate) : '')}><i/>{connected ? 'Online' : connectionStatus === 'connecting' ? 'Conectando' : 'Offline'}</span>
     <div className="gc-clock-box">
-      <div className={'gc-session-line open' + (cd.open ? ' live' : '')} title="Apertura de la rueda regular de NYSE (09:30 ET), hora de Argentina. No contempla feriados."><b>Abre {argHm(cd.opensAt)}</b>{!cd.open && <span>abre en {rem}</span>}</div>
+      <div className={'gc-session-line open' + (cd.open ? ' live' : '')} title="Apertura de la rueda regular de NYSE (09:30 ET), hora de Argentina. No contempla feriados."><b>Abre</b><time>{argHm(cd.opensAt)}</time><span>{!cd.open && '(−' + rem + ')'}</span></div>
       <div className="gc-clock" title="Hora de Argentina (UTC−3)"><time dateTime={now.toISOString()}>{now.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><span>ARG</span></div>
-      <div className={'gc-session-line close' + (cd.open ? ' live' : '')} title="Cierre de la rueda regular de NYSE (16:00 ET), hora de Argentina. No contempla feriados."><b>Cierra {argHm(cd.closesAt)}</b>{cd.open && <span>cierra en {rem}</span>}</div>
+      <div className={'gc-session-line close' + (cd.open ? ' live' : '')} title="Cierre de la rueda regular de NYSE (16:00 ET), hora de Argentina. No contempla feriados."><b>Cierra</b><time>{argHm(cd.closesAt)}</time><span>{cd.open && '(−' + rem + ')'}</span></div>
     </div>
   </div>;
 }
