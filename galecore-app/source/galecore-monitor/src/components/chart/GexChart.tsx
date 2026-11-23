@@ -14,6 +14,8 @@ import {
 import { GexChartData } from '../../types/gex';
 import { fetchEquityCandles } from '../../api/marketdata';
 import { etDateParts, etOffsetMinutes } from '../../utils/formatters';
+import { formatAxisTick, formatCrosshairTime } from '../../utils/chartTime';
+import type { Time } from 'lightweight-charts';
 import { appZoom } from '../../utils/appZoom';
 import { gammaZoneRange } from './gammaZone';
 import { GEX_BARS_W } from '../gex/graphLayout';
@@ -365,7 +367,7 @@ export function GexChart({
         fontSize: (readable ? 15 : 13) * appZoom(),
         attributionLogo: false,
       },
-      localization: { priceFormatter: priceFmt },
+      localization: { priceFormatter: priceFmt, timeFormatter: (t: Time) => formatCrosshairTime(t, bucketRef.current) },
       grid: {
         vertLines: { color: 'rgba(30,48,74,0.5)', style: LineStyle.Dotted },
         horzLines: { color: 'rgba(30,48,74,0.5)', style: LineStyle.Dotted },
@@ -383,6 +385,7 @@ export function GexChart({
       // encuadre inicial. Sin los dos, el padding se pierde en cuanto el chart se reajusta.
       timeScale: {
         borderColor: '#333333', timeVisible: true, secondsVisible: false, fixLeftEdge: true,
+        tickMarkFormatter: (t: Time, type: number) => formatAxisTick(t, type, bucketRef.current),
         rightOffset: rightPadBars,
         // Tope de alejamiento: con la ruedita las velas se aplastaban en una tira contra el borde y no había cómo volver.
         minBarSpacing: 2,

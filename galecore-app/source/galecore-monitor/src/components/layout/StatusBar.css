@@ -8,3 +8,11 @@
 .gc-status-warning { color:var(--yellow-gc); }
 .workspace-account-tools { display:flex; align-items:center; justify-content:flex-end; gap:18px; }
 @media(max-width:600px) { .gc-inline-status { gap:8px; } .gc-clock time { font-size:16px; } .workspace-account-tools { gap:8px; } }
+.gc-clock-box { display:flex; flex-direction:column; align-items:flex-end; line-height:1.15; }
+.gc-session-line { display:flex; gap:6px; font-size:11px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.gc-session-line b { font-weight:600; }
+.gc-session-line.open b { color:var(--green); }
+.gc-session-line.close b { color:var(--yellow-gc); }
+.gc-session-line span { color:var(--text-primary); }
+.gc-session-line.live b { text-shadow:none; }
+@media(max-width:600px) { .gc-session-line { font-size:10px; gap:4px; } }
