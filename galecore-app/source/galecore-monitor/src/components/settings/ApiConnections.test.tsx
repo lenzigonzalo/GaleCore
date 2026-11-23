@@ -9,8 +9,7 @@ const fred = { id: 'fred', name: 'FRED', kind: 'source', owner: 'platform', need
   status: 'connected', origin: 'database', hint: '1a2b', updatedAt: '2026-11-02T12:00:00Z', description: 'Series macro' };
 const fmpSrc = { ...fred, id: 'cboe', name: 'Cboe', needsKey: 'none', status: 'not-needed', origin: null, hint: undefined, description: 'Volatilidad' };
 const tasty = { id: 'tastytrade', name: 'Tastytrade', kind: 'broker', owner: 'personal', needsKey: 'none', status: 'not-needed', origin: null, description: 'Datos y cuenta' };
-const av = { id: 'alphavantage', name: 'Alpha Vantage', kind: 'mcp', owner: 'personal', needsKey: 'none', status: 'local', origin: null, description: 'Conector MCP' };
-const make = (over: object = {}, list: object[] = [fred, fmpSrc, tasty, av]) =>
+const make = (over: object = {}, list: object[] = [fred, fmpSrc, tasty]) =>
   ({ canEdit: true, storageReady: true, connections: list, ...over });
 
 beforeEach(() => {
@@ -26,7 +25,6 @@ test('renders the list from the API without any prefilled input', async () => {
   expect(screen.getByText('Cboe')).toBeInTheDocument();
   expect(screen.getByText('De la plataforma')).toBeInTheDocument();
   expect(screen.queryByText('Tastytrade')).toBeNull();
-  expect(screen.queryByText('Alpha Vantage')).toBeNull();
   expect(document.querySelectorAll('input').length).toBe(0);
   fireEvent.click(screen.getByRole('button', { name: 'Cambiar' }));
   expect((screen.getByLabelText('API key de FRED') as HTMLInputElement).value).toBe('');

@@ -37,6 +37,7 @@ namespace DataFeed.Repositories
         public DbSet<SharedProjectMember> SharedProjectMembers => Set<SharedProjectMember>();
         public DbSet<SharedProjectChange> SharedProjectChanges => Set<SharedProjectChange>();
         public DbSet<PlatformConnection> PlatformConnections => Set<PlatformConnection>();
+        public DbSet<UserBroker> UserBrokers => Set<UserBroker>();
         public DbSet<AgentKey> AgentKeys => Set<AgentKey>();
         public DbSet<AgentFireToken> AgentFireTokens => Set<AgentFireToken>();
         public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
@@ -116,6 +117,18 @@ namespace DataFeed.Repositories
                 e.Property(x => x.SecretCipher);
                 e.Property(x => x.SecretHint).HasMaxLength(16);
                 e.Property(x => x.LastTestMessage).HasMaxLength(500);
+            });
+
+            // Brokers del usuario en la cartera consolidada (WS-0108). Sin FK: el usuario es un uuid informativo.
+            b.Entity<UserBroker>(e =>
+            {
+                e.ToTable("user_brokers");
+                e.HasKey(x => new { x.UserId, x.Broker });
+                e.Property(x => x.Broker).HasMaxLength(20);
+                e.Property(x => x.IncludeInPortfolio).HasDefaultValue(true);
+                e.Property(x => x.SecretCipher);
+                e.Property(x => x.SecretHint).HasMaxLength(16);
+                e.Property(x => x.LastCheckMessage).HasMaxLength(500);
             });
 
             // Agentes que corren solos (WS-0079): clave de identidad por usuario, token de disparo y corridas.

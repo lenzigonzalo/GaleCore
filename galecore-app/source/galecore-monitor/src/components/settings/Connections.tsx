@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { cancelClaudeLogin, cancelCodexLogin, fetchLabProviderAuth, LabProviderAuth, sendClaudeLoginCode, startClaudeLogin, startCodexLogin } from '../../api/lab';
 import { Permissions } from './Permissions';
+import { MyConnectors } from './MyConnectors';
 
 const labels: Record<LabProviderAuth['status'], string> = {
   authenticated: 'Cuenta conectada', 'signed-out': 'Sin autenticar',
@@ -59,7 +60,7 @@ export function Connections() {
   };
   return <div className="settings-connections">
     <div className="settings-agent-providers" role="tablist" aria-label="Proveedor de IA">{(['claude', 'codex'] as const).map(id => <button key={id} role="tab" aria-selected={selected === id} disabled={!!login} onClick={() => setSelected(id)}><img src={'/providers/' + id + '.png'} alt=""/>{id === 'claude' ? 'Claude Code' : 'Codex'}</button>)}</div>
-    <nav className="settings-agent-tabs" aria-label="Opciones del proveedor">{[['cuenta', 'Cuenta'], ['permisos', 'Permisos']].map(([id, label]) => <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{label}</button>)}</nav>
+    <nav className="settings-agent-tabs" aria-label="Opciones del proveedor">{[['cuenta', 'Cuenta'], ['permisos', 'Permisos'], ['conectores', 'Conectores']].map(([id, label]) => <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{label}</button>)}</nav>
     {tab === 'cuenta' && (() => {
       const provider = providers.find(p => p.id === selected);
       const name = selected === 'claude' ? 'Claude Code' : 'Codex';
@@ -77,6 +78,7 @@ export function Connections() {
       </section>;
     })()}
     {tab === 'permisos' && <Permissions engine={selected}/>}
+    {tab === 'conectores' && <MyConnectors engine={selected}/>}
     {error && <p className="settings-error" role="alert">No se pudo consultar el Lab.</p>}
   </div>;
 }

@@ -5,15 +5,13 @@ import { Switch } from './Switch';
 type Engine = 'claude' | 'codex';
 interface Connector { id: string; name: string; status: 'connected' | 'needs-auth' | 'failed' | 'pending'; enabled: boolean }
 interface Connectors { galecore: { enabled: boolean }; claude: Connector[]; codex: Connector[] }
-const ENGINES: [Engine, string][] = [['claude', 'Claude Code'], ['codex', 'Codex']];
 const STATE: Record<Connector['status'], [string, string]> = {
   connected: ['Conectado', 'is-good'], 'needs-auth': ['Falta autorizar', ''], failed: ['Falla', 'is-bad'], pending: ['Conectando', ''],
 };
 
-/** Configuración → Mis conectores (WS-0091): una pestaña por motor con los conectores que ese motor ve, cada uno con su interruptor. */
-export function MyConnectors() {
+/** Proveedores de IA → <motor> → Conectores (WS-0091, WS-0108): los MCP que ve ese motor, cada uno con su interruptor. */
+export function MyConnectors({ engine }: { engine: Engine }) {
   const [data, setData] = useState<Connectors | null>(null);
-  const [engine, setEngine] = useState<Engine>('claude');
   const [offline, setOffline] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -34,8 +32,6 @@ export function MyConnectors() {
   };
   if (offline) return <div className="prefs-block"><small role="status">No encuentro el Lab en esta PC: abrí GaleCore desde tu PC con el Lab encendido para ver tus conectores.</small></div>;
   return <div className="prefs-block">
-    <div className="settings-agent-providers" role="tablist" aria-label="Motor">{ENGINES.map(([id, label]) =>
-      <button key={id} role="tab" aria-selected={engine === id} onClick={() => setEngine(id)}><img src={'/providers/' + id + '.png'} alt=""/>{label}</button>)}</div>
     {data && <table className="connector-table" aria-label="Conectores">
       <thead><tr><th>Conector</th><th>Estado</th><th>Activo</th></tr></thead>
       <tbody>
