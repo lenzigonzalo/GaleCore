@@ -51,11 +51,10 @@ export function regularSessionCountdown(now: Date): SessionCountdown {
   return { open, opensAt, closesAt, remainingMs: (open ? closesAt : opensAt).getTime() - now.getTime() };
 }
 
-/** «5h», «75m» o «2d» (lo que falta para abrir o cerrar, corto para el reloj). */
+/** «3h 12m», «42m» o «2d 3h»: lo que falta para abrir o cerrar. */
 export function fmtRemaining(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 60000));
-  const d = Math.floor(total / 1440);
-  if (d > 0) return `${d}d`;
-  // Corto para el reloj: horas redondeadas; en la última hora y media, minutos.
-  return total < 90 ? `${total}m` : `${Math.round(total / 60)}h`;
+  const d = Math.floor(total / 1440), h = Math.floor((total % 1440) / 60), m = total % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
 }
