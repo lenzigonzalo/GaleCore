@@ -51,6 +51,12 @@ export async function labRequest<T>(url: string, body?: object, timeout = 12000)
   return value;
 }
 
+/** WS-0106: estado de los motores en el Lab que se está usando, y login de Codex con código de dispositivo. */
+export interface LabProviderAuth { id: 'claude' | 'codex'; status: 'authenticated' | 'signed-out' | 'not-installed' | 'unknown' }
+export const fetchLabProviderAuth = () => labRequest<{ providers: LabProviderAuth[]; codexLoginPending?: boolean }>('/providers/auth', undefined, 20000);
+export const startCodexLogin = () => labRequest<{ url: string; code: string }>('/providers/codex/login', {}, 30000);
+export const cancelCodexLogin = () => labRequest<{ ok: boolean }>('/providers/codex/login/cancel', {});
+
 export type SyncState = 'ok' | 'syncing' | 'conflict' | 'error' | 'pending';   // pending = hay cambios locales sin subir
 export type SyncAction = 'retry' | 'reshare' | 'remove' | 'sync';
 /** Aviso de una sincronización de proyecto compartido: archivos que se editaron en las dos PCs (quedaron las dos versiones). */

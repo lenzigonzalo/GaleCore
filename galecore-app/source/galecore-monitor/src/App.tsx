@@ -17,7 +17,7 @@ import { useGexStore } from './store/useGexStore';
 import { SettingsModal, needsSetup } from './components/settings/SettingsModal';
 import { fetchSpace } from './api/space';
 import { useApplyTextSizes } from './components/settings/TextSizeSettings';
-import { fetchProviderAuth } from './api/terminal';
+import { fetchLabProviderAuth } from './api/lab';
 import { Admin } from './pages/Admin';
 import { Rpf } from './pages/Rpf';
 import { Gex, MarketIndicator } from './pages/Gex';
@@ -119,7 +119,7 @@ function Dashboard({ onLogout, userId }: DashboardProps) {
 
   useEffect(() => {
     let active = true;
-    Promise.all([fetchSpace('profile'), fetchProviderAuth()]).then(([space, auth]) => {
+    Promise.all([fetchSpace('profile'), fetchLabProviderAuth()]).then(([space, auth]) => {
       if (active && needsSetup(space.items, auth.providers)) { setSetup(true); setSettingsOpen(true); }
     }).catch(() => { /* Una lectura fallida no equivale a una cuenta sin configurar. */ });
     return () => { active = false; };

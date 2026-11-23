@@ -7,7 +7,7 @@ jest.mock('./auth/supabase', () => ({getSession:async()=>({user:{id:'test'}}),su
 jest.mock('./api/rules', () => ({fetchAppConfig:async()=>({})}));
 jest.mock('./api/account', () => ({fetchBalances:async()=>[],fetchPositions:async()=>[],describeAccountError:()=>''}));
 jest.mock('./api/space', () => ({fetchSpace:async()=>({items:[]})}));
-jest.mock('./api/terminal', () => ({fetchProviderAuth:async()=>({providers:[]})}));
+jest.mock('./api/lab', () => ({...jest.requireActual('./api/lab'),fetchLabProviderAuth:async()=>({providers:[]})}));
 jest.mock('./store/useCurrentUserStore', () => ({useCurrentUserStore:(select:any)=>select({reload:()=>{}})}));
 jest.mock('./store/useAppConfigStore', () => ({useAppConfigStore:()=>({setConfig:()=>{},setLoading:()=>{},setError:()=>{},tickers:[]})}));
 jest.mock('./socket/useMarketSocket', () => ({useMarketSocket:()=>({status:'disconnected'})}));
