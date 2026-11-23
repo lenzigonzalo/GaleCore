@@ -209,3 +209,100 @@ def test_the_reason_shows_in_freshness_status_and_the_published_state(env):
     pub = agent_state(kb, "seguimiento-spy", now=at)
     assert pub["state_detail"] == t.REASON_TEXT["auth"] and pub["last_run"]["reason_text"] == t.REASON_TEXT["auth"]
     assert pub["history"][0]["reason_code"] == "auth"
+
+
+# ── on_use: the memory curation that runs when someone opens the Lab (WS-0106) ─────────────────────
+
+
+def _curation(kb, sch, now=T0):
+    return t.create(kb=kb, scheduler=sch, task_id="curaduria-memoria", strategy=None, objective="Poner al día la memoria",
+                    expected_result="informe", sources=["memoria"], prompt="curaduría", now=now, runs_on="vps",
+                    capability="knowledge_curator", result_slug="curaduria",
+                    schedule=t.Schedule(frequency="on_use", minutes=720, timezone="UTC"))
+
+
+def test_on_use_schedule_validates_and_describes():
+    ok = t.Schedule(frequency="on_use", minutes=720, timezone="UTC")
+    assert ok.describe() == "al entrar al Lab, si pasaron 12 h desde la última"
+    assert "1.5 h" in t.Schedule(frequency="on_use", minutes=90, timezone="UTC").describe()
+    for bad in ({"minutes": 30}, {"minutes": 1500}, {}, {"minutes": 720, "time": "09:00"}):
+        with pytest.raises(ValueError, match="on_use"):
+            t.Schedule(frequency="on_use", timezone="UTC", **bad)
+
+
+def test_on_use_only_runs_on_the_vps(env):
+    kb, sch, _ = env
+    with pytest.raises(t.TaskError, match="sólo corre en el VPS"):
+        make(kb, sch, now=T0, schedule=t.Schedule(frequency="on_use", minutes=720, timezone="UTC"))
+    _curation(kb, sch)
+    assert sch.calls == []                                            # no Windows entry for the VPS
+    with pytest.raises(t.TaskError, match="sólo corre en el VPS"):
+        t.move(kb=kb, scheduler=sch, task_id="curaduria-memoria", to="pc", prompt="No", now=T0)
+    pc = make(kb, sch, now=T0)
+    with pytest.raises(t.TaskError, match="sólo corre en el VPS"):
+        t.set_frequency(kb=kb, scheduler=sch, task_id=pc.id, prompt="No", now=T0,
+                        schedule=t.Schedule(frequency="on_use", minutes=720, timezone="UTC"))
+
+
+def test_tick_on_use_runs_the_first_time_and_not_before_the_period(env, tmp_path):
+    kb, sch, _ = env
+    _curation(kb, sch)
+    calls = []
+
+    def runner(**kw):
+        calls.append(kw["now"])
+        t._event(kb, kw["task_id"], "run_started", kw["now"], invoked_by="vps", slot=kw["slot"])
+        return {"status": "OK"}
+    first = T0 + timedelta(minutes=5)
+    assert svc.tick(kb, first, directory=tmp_path, places=1, runner=runner) == []              # the normal pass ignores it
+    assert [d["status"] for d in svc.tick(kb, first, directory=tmp_path, places=1, runner=runner, on_use=True)] == ["OK"]
+    assert svc.tick(kb, first + timedelta(hours=11, minutes=59), directory=tmp_path, places=1, runner=runner,
+                    on_use=True) == []
+    assert len(svc.tick(kb, first + timedelta(hours=12), directory=tmp_path, places=1, runner=runner, on_use=True)) == 1
+    assert len(calls) == 2
+
+
+def test_tick_on_use_ignores_the_other_tasks_and_a_paused_one(env, tmp_path):
+    kb, sch, _ = env
+    _to_vps(kb, sch)                                                   # a daily task of the VPS
+    _curation(kb, sch)
+    ran = []
+    svc.tick(kb, _ny(2026, 9, 28, 17, 6), directory=tmp_path, places=1, on_use=True,
+             runner=lambda **kw: ran.append(kw["task_id"]) or {"status": "OK"})
+    assert ran == ["curaduria-memoria"]
+    t.pause(kb=kb, scheduler=sch, task_id="curaduria-memoria", prompt="Pausa", now=T0)
+    assert svc.tick(kb, T0 + timedelta(days=3), directory=tmp_path, places=1, on_use=True) == []
+
+
+def test_on_use_is_never_missed_for_lack_of_use(env):
+    kb, sch, _ = env
+    task = _curation(kb, sch)
+    fresh = t.freshness(task, t.events(kb, task.id), T0 + timedelta(days=30))
+    assert fresh["state"] == "NOT_DUE_YET" and fresh["next_expected_at"] is None and fresh["expected_at"] is None
+    assert "todavía no hubo uso" in fresh["detail"]
+    t.run(kb=kb, task_id=task.id, commit=False, now=T0, invoked_by="vps", followup=lambda **kw: None,
+          client=None)  # no material: ends without the model
+    later = t.freshness(task, t.events(kb, task.id), T0 + timedelta(days=30))
+    assert later["state"] == "CURRENT" and later["next_expected_at"] is None
+
+
+def test_ensure_curation_creates_once_and_respects_the_owner(env):
+    kb, sch, _ = env
+    assert svc.ensure_curation(kb, T0) is True
+    task = t.load(kb, svc.CURATION_TASK)
+    assert (task.runs_on, task.kind, task.schedule.frequency, task.schedule.minutes) == ("vps", "knowledge_curator", "on_use", 720)
+    assert svc.ensure_curation(kb, T0) is False
+    t.cancel(kb=kb, scheduler=sch, task_id=svc.CURATION_TASK, prompt="Fuera", now=T0)
+    assert svc.ensure_curation(kb, T0) is False                        # a cancelled one is not recreated
+    assert t.load(kb, svc.CURATION_TASK).status == "cancelled"
+
+
+def test_serve_on_use_ensures_and_reports_errors_without_raising(env, monkeypatch, tmp_path):
+    kb, _, _ = env
+    monkeypatch.setenv(svc.SLOTS_DIR_ENV, str(tmp_path))
+    monkeypatch.setattr(t, "run", lambda **kw: {"status": "OK"})
+    monkeypatch.setattr(svc, "tick", lambda kb_, **kw: [{"on_use": kw["on_use"]}])
+    assert svc.serve(kb, on_use=True) == [{"on_use": True}]
+    assert (kb.base / "tasks" / svc.CURATION_TASK / "task.json").is_file()
+    monkeypatch.setattr(svc, "ensure_curation", lambda *a, **k: 1 / 0)
+    assert svc.serve(kb, on_use=True)[0]["status"] == "ERROR"

@@ -76,7 +76,7 @@
  .workspace-navigation .workspace-nav-entry span,.workspace-navigation .workspace-group-label,#workspace-projects{display:none}
  .workspace-navigation .workspace-nav-group{margin-bottom:17px;padding-bottom:12px;border-bottom:1px solid var(--border-dark)}
  .workspace-global-status{display:none}
- .workspace-global-header{height:64px;min-height:64px;padding:0 14px;flex-wrap:nowrap;gap:8px}
+ .workspace-global-header{height:48px;min-height:48px;padding:0 14px;flex-wrap:nowrap;gap:8px}
  .workspace-chat-toggle span{display:none}
  .workspace-body{flex-direction:row}
  .workspace-terminal{min-width:260px}

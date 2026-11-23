@@ -5,6 +5,10 @@ through `tasks.run(invoked_by="vps", slot=...)`, one at a time. The slot (the du
 run_started/run_skipped event, so a slot already served is never run twice. There is no second scheduler: the due
 times are `tasks.last_due` and the period of `every_minutes`.
 
+`on_use` tasks (the memory curation) have no hour: the normal tick ignores them, and `tick(on_use=True)` (what the Lab
+launches when someone opens it, `task serve --on-use`) runs those whose last start is at least `minutes` old, or that
+never ran. Nobody opening the Lab, nothing runs.
+
 The VPS has little memory, so the runs of all the users share a few places (`GALECORE_TASKS_MAX_PARALLEL`, default 1):
 each is a file created with O_EXCL in `GALECORE_TASKS_SLOTS_DIR`, broken when older than LOCK_STALE_MINUTES like
 run.lock. A slot that waited VPS_BUSY_MINUTES for a place is not run late: it is recorded as «VPS ocupado». If the
@@ -22,10 +26,13 @@ from pathlib import Path
 
 from galecore_ai.application import tasks as t
 from galecore_ai.application.knowledge import KnowledgeBase
+from galecore_ai.contracts.task import Schedule
 
 MAX_PARALLEL_ENV = "GALECORE_TASKS_MAX_PARALLEL"
 SLOTS_DIR_ENV = "GALECORE_TASKS_SLOTS_DIR"
 TICK_SECONDS = 60
+CURATION_TASK = "curaduria-memoria"
+CURATION_OBJECTIVE = "Poner al día la memoria y proponer qué quedó viejo; no aplica nada sin tu ok"
 
 
 def slots_dir() -> Path:
@@ -69,6 +76,12 @@ def pending_slot(task: t.TaskDefinition, log: list[dict], now: datetime) -> date
     """The due time this task owes and nobody served yet (a run started or skipped for it), or None."""
     since = _anchor(task, log)
     served = {e["slot"] for e in log if e["event"] in ("run_started", "run_skipped") and e.get("slot")}
+    if task.schedule.frequency == "on_use":
+        # Not anchored on the creation: a task that never ran is owed now. The slot is `now` itself, so it is never late.
+        starts = [datetime.fromisoformat(e["at"]) for e in log if e["event"] == "run_started"]
+        if starts and now < max(starts) + timedelta(minutes=task.schedule.minutes):
+            return None
+        return now
     if task.schedule.frequency == "every_minutes":
         period = timedelta(minutes=task.schedule.minutes)
         last = max([since, *(datetime.fromisoformat(s) for s in served)])
@@ -85,9 +98,25 @@ def _wait_marker(kb: KnowledgeBase, task_id: str) -> Path:
     return t._dir(kb, task_id) / "slot-wait.txt"
 
 
+def ensure_curation(kb: KnowledgeBase, now: datetime | None = None) -> bool:
+    """Creates the memory curation task when it does not exist; one that exists in any state (paused, cancelled by the
+    owner) is never touched. Returns whether it was created."""
+    if (t._dir(kb, CURATION_TASK) / "task.json").exists():
+        return False
+    t.create(kb=kb, scheduler=t.VpsScheduler(), task_id=CURATION_TASK, strategy=None, objective=CURATION_OBJECTIVE,
+             expected_result="Un informe de qué se puso al día y qué quedó viejo, para que decidas",
+             sources=["memoria del trader (knowledge)"], schedule=Schedule(frequency="on_use", minutes=720,
+                                                                              timezone="America/Argentina/Buenos_Aires"),
+             prompt="curaduría automática al entrar al Lab (WS-0106)", now=now, capability="knowledge_curator",
+             result_slug="curaduria", runs_on="vps")
+    return True
+
+
 def tick(kb: KnowledgeBase, now: datetime | None = None, *, directory: Path | None = None, places: int | None = None,
-         runner: Callable[..., dict] = t.run) -> list[dict]:
-    """One pass: runs what is owed, one task at a time, and records what could not wait. Returns what it did."""
+         runner: Callable[..., dict] = t.run, on_use: bool = False) -> list[dict]:
+    """One pass: runs what is owed, one task at a time, and records what could not wait. Returns what it did.
+
+    The normal pass ignores the `on_use` tasks; `on_use=True` looks at those only."""
     fixed, now = now, now or datetime.now(UTC)
     directory = directory or slots_dir()
     places = places or max_parallel()
@@ -96,7 +125,7 @@ def tick(kb: KnowledgeBase, now: datetime | None = None, *, directory: Path | No
     owed = []
     for task_id in ids:
         task = t.load(kb, task_id)
-        if task.runs_on != "vps" or task.status != "active":
+        if task.runs_on != "vps" or task.status != "active" or (task.schedule.frequency == "on_use") != on_use:
             continue
         slot = pending_slot(task, t.events(kb, task_id), now)
         if slot is not None:
@@ -126,9 +155,17 @@ def tick(kb: KnowledgeBase, now: datetime | None = None, *, directory: Path | No
     return done
 
 
-def serve(kb: KnowledgeBase, *, once: bool = False, interval: int = TICK_SECONDS) -> list[dict]:
-    """The runner's loop: `tick` every minute until stopped (or once). A failing pass is reported and the loop goes on."""
+def serve(kb: KnowledgeBase, *, once: bool = False, interval: int = TICK_SECONDS, on_use: bool = False) -> list[dict]:
+    """The runner's loop: `tick` every minute until stopped (or once). A failing pass is reported and the loop goes on.
+
+    `on_use` is a single pass of the on_use tasks (creating the memory curation first if it never existed)."""
     out: list[dict] = []
+    if on_use:
+        try:
+            ensure_curation(kb)
+            return tick(kb, on_use=True)
+        except Exception as exc:  # noqa: BLE001 - reported, never raised: the Lab launches this in the background
+            return [{"status": "ERROR", "error": f"{type(exc).__name__}: {exc}"[:300]}]
     while True:
         try:
             out += tick(kb)

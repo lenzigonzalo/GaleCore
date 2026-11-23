@@ -17,7 +17,7 @@ import { setVisibleInterval } from '../utils/visibleInterval';
  */
 
 interface LastRun {
-  at: string; result: string; invoked_by?: string; duration_s?: number; model?: string;
+  at: string; result: string; invoked_by?: string; duration_s?: number; model?: string; cost_usd?: number;
   reason?: string; error?: string; failed: boolean; findings?: string | null; truncated?: boolean;
 }
 interface Agent {
@@ -59,6 +59,14 @@ function scheduleText(schedule?: string): string {
     .replace(/^de lunes a viernes/i, 'lun a vie').replace(/ a las /, ', ')
     .replace(/\s*\(America\/New_York\)/, ' NY').replace(/\s*\(America\/Argentina\/Buenos_Aires\)/, ' ARG').replace(/ Nueva York\)/, ' NY)');
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Lo que costó una corrida: «US$ 0,12», «< US$ 0,01», «Sin costo» (0, sin modelo) o nada si no se informó. */
+function costText(usd?: number | null): string | null {
+  if (usd == null) return null;
+  if (usd === 0) return 'Sin costo';
+  if (usd < 0.01) return '< US$ 0,01';
+  return `US$ ${usd.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const muted: React.CSSProperties = { fontSize: 13, color: 'var(--text-muted)' };
@@ -267,7 +275,7 @@ function RunHistory({ a }: { a: Agent }) {
         {run.findings ? <Markdown text={run.findings} fontSize={15} /> : <p className="agents-secondary">{run.result === 'INCOMPLETE' ? 'Se guardaron los datos de la corrida, pero no se pudo generar un análisis válido.' : 'Esta corrida no tiene un informe disponible.'}</p>}
         {run.truncated && <p className="agents-secondary">Vista resumida. El informe completo queda guardado en GaleCore-AI.</p>}
         {(run.error || run.reason) && <details className="agents-technical"><summary>Detalles de la corrida</summary><p>{run.error || run.reason}</p></details>}
-        <div className="agents-run-meta"><span>{run.invoked_by === 'scheduler' ? 'Programada' : run.invoked_by ? 'Manual' : 'Origen no informado'}</span>{run.duration_s != null && <span>{Math.round(run.duration_s)} s</span>}</div>
+        <div className="agents-run-meta"><span>{run.invoked_by === 'scheduler' || run.invoked_by === 'vps' ? 'Automática' : run.invoked_by ? 'Manual' : 'Origen no informado'}</span>{run.duration_s != null && <span>{Math.round(run.duration_s)} s</span>}{costText(run.cost_usd) && <span>{costText(run.cost_usd)}</span>}</div>
       </div>
     </details>)}</section>)}
     <p className="agents-history-note">{a.history_total ?? a.runs} corridas registradas.{a.history && (a.history_total ?? a.runs) > rows.length ? ` Mostrando las últimas ${rows.length}.` : ''}{!a.history && a.runs > 1 ? ' El historial anterior todavía no se publicó desde tu PC.' : ''}</p>

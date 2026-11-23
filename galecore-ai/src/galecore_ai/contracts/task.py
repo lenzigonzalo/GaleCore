@@ -22,7 +22,7 @@ TASK_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){0,7}$")
 KIND_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")  # a catalog id; that it is schedulable is checked when creating and running
 STATUSES = ("active", "paused", "cancelled")
 DELIVERIES = ("historial", "biblioteca")   # where a run leaves its result; mail by Gmail comes later
-FREQUENCIES = ("daily", "weekdays", "days", "every_minutes", "market_hours")
+FREQUENCIES = ("daily", "weekdays", "days", "every_minutes", "market_hours", "on_use")
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 DAY_NAMES = {"mon": "lunes", "tue": "martes", "wed": "miércoles", "thu": "jueves", "fri": "viernes", "sat": "sábado",
              "sun": "domingo"}
@@ -33,10 +33,10 @@ MARKET_TZ, MARKET_OPEN, MARKET_CLOSE = "America/New_York", "09:30", "16:00"
 class Schedule(BaseModel):
     model_config = {"extra": "forbid"}
 
-    frequency: str                         # daily | weekdays | days | every_minutes | market_hours
+    frequency: str                         # daily | weekdays | days | every_minutes | market_hours | on_use
     time: str | None = None                # HH:MM in `timezone` (daily, weekdays, days)
     days: list[str] | None = None          # days: the chosen weekdays (mon..sun), in week order
-    minutes: int | None = None             # period (every_minutes): for short supervised trials, 15..1440
+    minutes: int | None = None             # period (every_minutes): for short supervised trials, 15..1440; on_use: 60..1440
     timezone: str
 
     @field_validator("timezone")
@@ -66,11 +66,17 @@ class Schedule(BaseModel):
         elif self.frequency == "every_minutes":
             if self.minutes is None or not 15 <= self.minutes <= 1440 or self.time is not None:
                 raise ValueError("every_minutes needs minutes between 15 and 1440 and no time")
+        elif self.frequency == "on_use":
+            if self.minutes is None or not 60 <= self.minutes <= 1440 or self.time is not None:
+                raise ValueError("on_use needs minutes between 60 and 1440 and no time")
         elif self.time is None or not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", self.time) or self.minutes is not None:
             raise ValueError(f"{self.frequency} needs time as HH:MM and no minutes")
         return self
 
     def describe(self) -> str:
+        if self.frequency == "on_use":
+            hours = self.minutes / 60
+            return f"al entrar al Lab, si pasaron {int(hours) if hours == int(hours) else round(hours, 1)} h desde la última"
         if self.frequency == "every_minutes":
             return f"cada {self.minutes} minutos"
         if self.frequency == "market_hours":

@@ -325,8 +325,8 @@ def _fires_on(schedule: Schedule, day) -> bool:
 
 
 def _slots(schedule: Schedule, day) -> list[datetime]:
-    """When the schedule fires on `day`: one time, or every N minutes of the session (market_hours)."""
-    if not _fires_on(schedule, day):
+    """When the schedule fires on `day`: one time, or every N minutes of the session (market_hours); none for on_use."""
+    if schedule.frequency == "on_use" or not _fires_on(schedule, day):
         return []
     if schedule.frequency != "market_hours":
         return [_occurrence(schedule, day)]
@@ -352,8 +352,8 @@ def _occurrence(schedule: Schedule, day) -> datetime:
 
 
 def last_due(schedule: Schedule, now: datetime) -> datetime | None:
-    """The most recent time the schedule should have fired at or before `now` (UTC); None for every_minutes."""
-    if schedule.frequency == "every_minutes":
+    """The most recent time the schedule should have fired at or before `now` (UTC); None for every_minutes and on_use."""
+    if schedule.frequency in ("every_minutes", "on_use"):
         return None
     day = now.astimezone(ZoneInfo(schedule.timezone)).date()
     for back in range(8):
@@ -364,7 +364,9 @@ def last_due(schedule: Schedule, now: datetime) -> datetime | None:
 
 
 def next_due(schedule: Schedule, now: datetime) -> datetime | None:
-    """The next time the schedule should fire after `now` (UTC)."""
+    """The next time the schedule should fire after `now` (UTC); None for on_use (it has no hour: it waits for use)."""
+    if schedule.frequency == "on_use":
+        return None
     if schedule.frequency == "every_minutes":
         return (now + timedelta(minutes=schedule.minutes)).astimezone(UTC)
     day = now.astimezone(ZoneInfo(schedule.timezone)).date()
@@ -385,6 +387,9 @@ def freshness(task: TaskDefinition, log: list[dict], now: datetime) -> dict:
         return {"state": task.status.upper(), "detail": f"task is {task.status}: no run is expected"}
     since = max((datetime.fromisoformat(e["at"]) for e in log
                  if e["event"] in ("created", "resumed", "frequency_changed", "moved")), default=task.created_at)
+    if task.schedule.frequency == "on_use":
+        # Nobody opening the Lab owes nothing: it is never MISSED, only waiting (or running/failed/current by its last run).
+        return {"expected_at": None, "next_expected_at": None, **_on_use_state(log)}
     if task.schedule.frequency == "every_minutes":
         # No wall-clock anchor: the last scheduler start (or when the schedule was set) plus one period is when the
         # next run was due (Codex C4 recheck: `now - period` never let an omission turn into MISSED).
@@ -425,6 +430,23 @@ def freshness(task: TaskDefinition, log: list[dict], now: datetime) -> dict:
     return {**out, "state": "CURRENT", "detail": f"result {after[0].get('result')} of {what}"}
 
 
+def _on_use_state(log: list[dict]) -> dict:
+    """The state of an on_use task from its last automatic run: it never owes a run, so there is no MISSED."""
+    starts = [i for i, e in enumerate(log) if e.get("invoked_by") in AUTOMATIC and e["event"] == "run_started"]
+    if not starts:
+        return {"state": "NOT_DUE_YET", "detail": "en espera: corre al entrar al Lab y todavía no hubo uso"}
+    last = starts[-1]
+    after = [e for e in log[last + 1:] if e["event"] in ("run_finished", "run_failed")]
+    if not after:
+        return {"state": "RUNNING", "detail": f"started {log[last]['at']}"}
+    if after[0]["event"] == "run_failed":
+        return {"state": "FAILED", "detail": reason_text(after[0]) or after[0].get("error", "")[:300]}
+    what = after[0].get("followup") or after[0].get("research")
+    reason = reason_text(after[0])
+    return {"state": "CURRENT", "detail": (f"result {after[0].get('result')}: {reason}" if reason
+                                           else f"result {after[0].get('result')} of {what}")}
+
+
 # ── conversation-facing operations ───────────────────────────────
 
 
@@ -461,8 +483,10 @@ def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str | None, 
            sources: list[str], schedule: Schedule, prompt: str, code_path: Path | None = None,
            now: datetime | None = None, capability: str = "strategy_followup",
            result_slug: str | None = None, model: str | None = None, tools: list[str] | None = None,
-           delivery: list[str] | None = None) -> TaskDefinition:
+           delivery: list[str] | None = None, runs_on: str = "pc") -> TaskDefinition:
     now = now or datetime.now(UTC)
+    if schedule.frequency == "on_use" and runs_on != "vps":
+        raise TaskError("on_use (al entrar al Lab) sólo corre en el VPS: no tiene hora ni entrada en el Programador de la PC")
     if (_dir(kb, task_id) / "task.json").exists():
         raise TaskError(f"task {task_id} already exists (a cancelled task keeps its id and history)")
     entry = schedulable_entry(capability)
@@ -487,8 +511,9 @@ def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str | None, 
     task = TaskDefinition(kind=capability, id=task_id, objective=objective, strategy=strategy,
                           sources=sources, expected_result=expected_result, schedule=schedule, created_at=now,
                           updated_at=now, created_by_prompt=prompt, scheduler_name=f"{SCHEDULER_FOLDER}\\{task_id}",
-                          local_time=local_time_for(schedule, now), code_path=str(code_path), **extra)
-    scheduler.create(task.scheduler_name, runner_command(code_path, task_id), schedule, task.local_time)
+                          local_time=local_time_for(schedule, now), code_path=str(code_path), runs_on=runs_on, **extra)
+    if runs_on == "pc":                          # a task of the VPS has no Windows entry (WS-0079)
+        scheduler.create(task.scheduler_name, runner_command(code_path, task_id), schedule, task.local_time)
     with _state_lock(kb, task_id):
         _save(kb, task)
         _append(kb, task_id, "created", now, schedule=schedule.model_dump(), local_time=task.local_time, prompt=prompt,
@@ -513,6 +538,8 @@ def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Sched
         if task.status == "cancelled":
             raise TaskError(f"task {task_id} is cancelled; create a new one")
         on_pc = task.runs_on == "pc"             # a task of the VPS has no Windows entry (WS-0079)
+        if schedule.frequency == "on_use" and on_pc:
+            raise TaskError("on_use (al entrar al Lab) sólo corre en el VPS")
         local = local_time_for(schedule, now) if on_pc else None
         # `schtasks /create /f` replaces the task in place: if it fails, the previous schedule is still registered.
         if on_pc:
@@ -667,6 +694,8 @@ def move(*, kb: KnowledgeBase, scheduler, task_id: str, to: str, prompt: str,
             raise TaskError(f"task {task_id} is cancelled; create a new one")
         if task.runs_on == to:
             raise TaskError(f"task {task_id} already runs on {SIDE_NAME[to]}")
+        if to == "pc" and task.schedule.frequency == "on_use":
+            raise TaskError("una tarea «al entrar al Lab» sólo corre en el VPS")
         local = None
         if to == "vps":
             if scheduler.query(task.scheduler_name).get("registered"):
@@ -837,7 +866,8 @@ def _repair_if_refused(kb: KnowledgeBase, task: TaskDefinition, target: str | No
                                                     indent=1, default=str), encoding="utf-8")
     base = {**base, "turns": (reply.turns or 0) + (fixed.turns or 0), "repaired": problems[:5],
             "duration_model_s": round((reply.duration_s or 0) + (fixed.duration_s or 0), 1),
-            **_tokens(model_run.add_tokens(reply.tokens, fixed.tokens))}
+            **_tokens(model_run.add_tokens(reply.tokens, fixed.tokens)),
+            **_cost(model_run.add_costs(reply.cost_usd, fixed.cost_usd))}
     if not fixed.ok:
         fixed.error = f"correction round failed ({fixed.error}) after: {'; '.join(problems)[:400]}"
     return fixed, base
@@ -845,6 +875,10 @@ def _repair_if_refused(kb: KnowledgeBase, task: TaskDefinition, target: str | No
 
 def _tokens(tokens: dict | None) -> dict:
     return {"tokens": tokens} if tokens else {}
+
+
+def _cost(cost: float | None) -> dict:
+    return {"cost_usd": round(cost, 4)} if cost is not None else {}
 
 
 def _code(problem: str | None) -> dict:
@@ -936,7 +970,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
             last = kb.research.load(latest.split(":", 1)[1]).current.recorded_at if latest else None
             found = curation.screen(kb, last_run=last, now=now)
             if not found["domains"]:
-                return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None, "result": "OK",
+                return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None, "result": "OK", "cost_usd": 0,
                         "reason": f"sin material nuevo que curar, sin modelo: {curation.summary(found)}"[:800],
                         "screen": found, "duration_s": round(time.monotonic() - t0, 1)}
             note = (f"The runner screened the memory by code. Curate ONLY these domains: {', '.join(found['domains'])}; "
@@ -949,7 +983,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
             screened = _screen(task, now)
             if not screened["findings"]:
                 evaluated = [c for c in screened["checked"] if c["result"] != "sin evaluar"]
-                return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None,
+                return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None, "cost_usd": 0,
                         "result": "OK" if evaluated and len(evaluated) == len(screened["checked"]) else "INCOMPLETE",
                         "reason": f"escaneo por código sin hallazgo, sin modelo: {scan.summary(screened)}"[:800],
                         "scan": screened, "duration_s": round(time.monotonic() - t0, 1)}
@@ -968,7 +1002,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
                         *(kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources)]
             if entry.id == "daily_attention" and invoked_by in AUTOMATIC and not followup_news(rec):
                 return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None, "result": "OK",
-                        "followup": rec.id, "reason": "sin novedades en SHADOW (sin posición abierta, aviso ni "
+                        "cost_usd": 0, "followup": rec.id, "reason": "sin novedades en SHADOW (sin posición abierta, aviso ni "
                         "evento nuevo), sin modelo; los datos del día quedaron guardados",
                         "duration_s": round(time.monotonic() - t0, 1)}
             note = (f"The runner already ran the follow-up for today: record {rec.id} (status {rec.status}); read it "
@@ -1000,7 +1034,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
             "route": (f"modelo elegido por el owner: {task.model}" if task.model else
                       caps.route_reason() + (f"; la historia marcó: {escalated}" if escalated else "")),
-            "duration_model_s": reply.duration_s, **_tokens(reply.tokens), **({"followup": rec.id} if rec else {}),
+            "duration_model_s": reply.duration_s, **_tokens(reply.tokens), **_cost(reply.cost_usd), **({"followup": rec.id} if rec else {}),
             **({"denied": reply.denied} if reply.denied else {}),
             **({"pack": kept} if kept else {})}
     if reply.ok:

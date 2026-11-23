@@ -357,8 +357,13 @@ function permissionMode(provider, raw) {
   return PERMISSION_MODES[engine].includes(raw) ? raw : safe;
 }
 
-function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, refreshBinaries = () => {}, autoSync = false, now = Date.now, request, sessionFile, update = () => null }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, refreshBinaries = () => {}, autoSync = false, curation = process.env.GALECORE_LAB_CURATION === '1', now = Date.now, request, sessionFile, update = () => null }) {
   const AUTO_SYNC_EVERY_MS = 12 * 60 * 60 * 1000; let lastAutoSync = 0;   // hora del último sync automático (arranque o apertura)
+  // Curaduría de memoria (WS-0106): sólo en el Lab del servidor. Abrir el Lab la lanza en segundo plano; la regla real
+  // (≥12 h desde la última, a lo sumo 2 por día) la decide `task serve --on-use` con los eventos guardados: acá sólo un
+  // freno de 1 h para no lanzar procesos de más. El arranque no cuenta como uso.
+  const CURATION_EVERY_MS = 60 * 60 * 1000; let lastCuration = 0;
+  const curationNow = () => { lastCuration = now(); sharing.cli(['task', 'serve', '--on-use'], 30 * 60 * 1000).catch(() => {}); };   // 30 min: el lock de la tarea (LOCK_STALE_MINUTES)
   const autoSyncNow = () => { lastAutoSync = now(); sharing.syncAll(listProjects, { busy }).catch(() => {}); };
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
@@ -700,7 +705,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // Reglas de permisos de Claude Code: las del producto (fijas) y las del usuario (lab-permissions.js).
     if(url.pathname==='/permissions/claude'&&req.method==='GET'){json(res,200,permissionRules(kb,local));return true;}
     if(url.pathname==='/permissions/claude'&&req.method==='POST'){saveUserRules(local,await readBody(req),fail);json(res,200,permissionRules(kb,local));return true;}
-    if(req.method==='GET' && url.pathname==='/workspaces'){if(autoSync&&now()-lastAutoSync>AUTO_SYNC_EVERY_MS)autoSyncNow();   // al abrir el Lab, si el último fue hace más de 12 h; en segundo plano
+    if(req.method==='GET' && url.pathname==='/workspaces'){if(autoSync&&now()-lastAutoSync>AUTO_SYNC_EVERY_MS)autoSyncNow();if(autoSync&&curation&&now()-lastCuration>=CURATION_EVERY_MS)curationNow();   // al abrir el Lab, si el último fue hace más de 12 h; en segundo plano
       const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),update:update(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}

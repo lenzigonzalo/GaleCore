@@ -69,9 +69,9 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   const isFollowing = p => state(p)?.subscribed === true;
   const isMine = p => { const s = state(p); return !!s && !!s.owner && s.owner === s.context?.user; };
 
-  function cli(args) {
+  function cli(args, timeout = 180000) {
     return new Promise((resolve, reject) => execute('python', ['-B', '-m', 'galecore_ai.adapters.cli', ...args],
-      { cwd: root, env: { ...environment(), GALECORE_KNOWLEDGE_DIR: kb }, windowsHide: true, timeout: 180000, maxBuffer: 4 * 1024 * 1024 },
+      { cwd: root, env: { ...environment(), GALECORE_KNOWLEDGE_DIR: kb }, windowsHide: true, timeout, maxBuffer: 4 * 1024 * 1024 },
       (error, out) => {
         let data = null;
         try { data = JSON.parse(out); } catch { /* sin JSON: falla de arranque del CLI */ }
@@ -280,7 +280,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   const notice = p => notices.get(p.id) || null;
   const clearNotice = p => { notices.delete(p.id); };
 
-  return { isShared, inThisEnvironment, isRunning, settle, isFollowing, isMine, unsynced, health: projectHealth, catalog, subscribe, add, sync, syncAll, status, share, setAccess, unshare, searchUsers, notice, clearNotice, lastSync };
+  return { cli, isShared, inThisEnvironment, isRunning, settle, isFollowing, isMine, unsynced, health: projectHealth, catalog, subscribe, add, sync, syncAll, status, share, setAccess, unshare, searchUsers, notice, clearNotice, lastSync };
 }
 
 module.exports = { createSharing, SYNC_FILE };

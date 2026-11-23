@@ -190,6 +190,33 @@ def test_an_agent_is_published_with_its_last_run_and_findings(env, galecore):  #
     assert again["updated"] == [] and again["unchanged"] == ["agent/oportunidades"]   # nothing new: no version bump
 
 
+def test_each_side_publishes_only_its_own_agents(env, galecore):  # noqa: F811  # WS-0106
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    make(kb_, sch, task_id="del-vps", strategy=None, capability="market_watch", schedule=MARKET)
+    t.move(kb=kb_, scheduler=sch, task_id="del-vps", to="vps", prompt="Pasala")
+    assert [p["key"] for p in space.local_pieces(kb_, side="pc") if p["kind"] == "agent"] == ["oportunidades"]
+    assert [p["key"] for p in space.local_pieces(kb_, side="vps") if p["kind"] == "agent"] == ["del-vps"]
+    space.publish_agents(client, kb_, sch, side="pc")
+    assert ("agent", "oportunidades") in fake.rows and ("agent", "del-vps") not in fake.rows
+    # the VPS side publishes its own and never deletes or answers the PC's piece (even with a request in it)
+    client.put("agent", "oportunidades", title="x", fmt="json",
+               content=json.dumps({**_agent(fake), "request": {"status": "paused", "at": _now()}}))
+    out = space.publish_agents(client, kb_, sch, side="vps")
+    assert out["requests"] == [] and "oportunidades" in {k for _, k in fake.rows}
+    assert _agent(fake)["request"]["status"] == "paused" and ("agent", "del-vps") in fake.rows
+    # a piece of the VPS is not deleted by the PC when its task is gone from this PC's base
+    fake.rows[("agent", "otro-vps")] = {**fake.rows[("agent", "del-vps")], "key": "otro-vps"}
+    space.publish_agents(client, kb_, sch, side="pc")
+    assert ("agent", "otro-vps") in fake.rows
+    space.publish_agents(client, kb_, sch, side="vps")
+    assert ("agent", "otro-vps") not in fake.rows                       # its own side does clean it
+
+
 def test_the_monitor_turns_an_agent_off_and_on(env, galecore):  # noqa: F811
     kb_, sch, _ = env
     fake, client = galecore
