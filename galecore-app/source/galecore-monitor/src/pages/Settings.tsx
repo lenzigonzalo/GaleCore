@@ -4,14 +4,12 @@ import { Connections } from '../components/settings/Connections';
 import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
 import { SkillsView } from '../components/settings/SkillsView';
-import { MyConnectors } from '../components/settings/MyConnectors';
 import { ProfileSettings } from '../components/settings/ProfileSettings';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
 import { SUGGESTIONS_KEY, suggestionsEnabled, saveSuggestionsEnabled } from '../components/lab/LabSuggestions';
 import { STRIKE_ALERT_KEY } from '../api/account';
-import { BrokerAccountCard } from '../components/account/BrokerAccountCard';
+import { Brokers } from '../components/settings/Brokers';
 import { ApiConnections } from '../components/settings/ApiConnections';
-import { useAccountStore } from '../store/useAccountStore';
 import { AccountSettings } from '../components/settings/AccountSettings';
 import { TextSizeSettings } from '../components/settings/TextSizeSettings';
 import { ChatBehaviorSettings } from '../components/settings/ChatBehaviorSettings';
@@ -25,7 +23,8 @@ import {
  * Configuración (GC-0007): todo lo que es de la persona, con navegación lateral, como la de cualquier app de IA.
  *
  *   GENERAL          perfil (nombre, intereses y memoria) · cuenta (usuario, idioma, contraseña) · avisos
- *   CONEXIONES       IA, GaleCore, bróker
+ *   PROVEEDORES DE IA  por motor: cuenta, permisos y conectores (MCP)
+ *   CONEXIONES       fuentes de datos · brokers
  *   SKILLS           las de la plataforma y las tuyas
  *   EQUIPO           compartido conmigo (sólo si alguien compartió algo)
  *   PLATAFORMA       estado de los servicios (admin)
@@ -33,13 +32,13 @@ import {
  * Nada se muestra como JSON ni como caja libre cuando se puede elegir: las opciones son interruptores y listas, y se
  * guardan solas. El estado vive en esta pantalla (no en un store de módulo): muere con la sesión.
  */
-export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'cuenta' | 'broker' | 'skills'
+export type Section = 'conexiones' | 'usuario' | 'cuenta' | 'broker' | 'skills'
   | 'apis' | 'compartido' | 'avisos' | 'servicios' | 'chat';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
   { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'cuenta', label: 'Cuenta', Icon: UserCog }, { id: 'chat', label: 'Chat', Icon: MessageSquare }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Proveedores de IA', items: [{ id: 'conexiones', label: 'Proveedores de IA', Icon: Plug }] },
-  { group: 'Conexiones', items: [{ id: 'apis', label: 'Fuentes de GaleCore', Icon: KeyRound }, { id: 'mcp-local', label: 'Mis conectores', Icon: Plug }, { id: 'broker', label: 'Bróker', Icon: Wallet }] },
+  { group: 'Conexiones', items: [{ id: 'apis', label: 'Fuentes de datos', Icon: KeyRound }, { id: 'broker', label: 'Brokers', Icon: Wallet }] },
   { group: 'Skills', items: [{ id: 'skills', label: 'Skills', Icon: BookOpen }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
   { group: 'Plataforma', items: [{ id: 'servicios', label: 'Servicios', Icon: Power }] },
@@ -51,6 +50,7 @@ const INTRO: Partial<Record<Section, string>> = {
   servicios: 'Lo que GaleCore corre solo, para todos: no lo crea el usuario. Tus tareas están en Agentes y las estrategias en Estrategias.',
   usuario: 'Lo que GaleCore-AI sabe de vos en cada chat: cómo llamarte, qué te interesa y lo que quieras que recuerde.',
   skills: 'Lo que GaleCore-AI sabe hacer. Las de la plataforma se leen; las tuyas se crean y se editan acá, y el chat las usa sin nombrarlas.',
+  broker: 'Elegí qué brokers entran en tu cartera. Cada uno se conecta con tu cuenta; nadie más la ve.',
   avisos: 'Avisos de la cuenta real que suenan en la campana.',
   compartido: 'Lo que otros del equipo compartieron. Se lee, no se edita.',
 };
@@ -138,9 +138,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   const label = NAV.flatMap((g) => g.items).find((i) => i.id === section)?.label ?? '';
 
   let body: React.ReactNode;
-  if (section === 'mcp-local') {
-    body = <MyConnectors />;
-  } else if (section === 'conexiones') {
+  if (section === 'conexiones') {
     body = <Connections />;
   } else if (section === 'usuario') {
     body = (
@@ -158,7 +156,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   } else if (section === 'servicios') {
     body = <PlatformServices />;
   } else if (section === 'broker') {
-    body = <BrokerAccountCard onLinked={() => { useAccountStore.getState().reset(); }} />;
+    body = <Brokers />;
   } else if (section === 'apis') {
     body = <ApiConnections />;
   } else if (section === 'avisos') {

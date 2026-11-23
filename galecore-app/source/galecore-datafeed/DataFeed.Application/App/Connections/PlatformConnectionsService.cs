@@ -24,7 +24,7 @@ namespace DataFeed.Application.App.Connections
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string? KeyLabel { get; set; }
 
-        /// <summary>connected | missing | not-needed | error | local</summary>
+        /// <summary>connected | missing | not-needed | error</summary>
         public string Status { get; set; } = "";
 
         /// <summary>"database" | "server" | null (sin valor).</summary>
@@ -142,6 +142,8 @@ namespace DataFeed.Application.App.Connections
             var view = new ConnectionsListView { CanEdit = canEdit, StorageReady = ready, StorageMessage = message };
             foreach (var def in ConnectionCatalog.All)
             {
+                // Los brokers con credencial propia (IOL, IBKR) se listan en /App/GaleCore/Brokers (WS-0108).
+                if (def.Kind == ConnectionKind.Broker && def.Id != "tastytrade") continue;
                 rows.TryGetValue(def.Id, out var row);
                 var item = new ConnectionView
                 {
@@ -154,8 +156,7 @@ namespace DataFeed.Application.App.Connections
                     Description = def.Description,
                     Group = def.Group,
                 };
-                if (def.Kind == ConnectionKind.Mcp) item.Status = "local";
-                else if (def.Kind == ConnectionKind.Broker) await FillBrokerAsync(item, userId, ct);
+                if (def.Kind == ConnectionKind.Broker) await FillBrokerAsync(item, userId, ct);
                 else if (def.Needs == KeyNeed.None) item.Status = "not-needed";
                 else FillPlatformSecret(item, def, row);
                 view.Connections.Add(item);
