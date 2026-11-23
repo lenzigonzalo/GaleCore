@@ -169,11 +169,14 @@ entries:
   - id: strategy_design
     kind: strategy
     serves: >-
-      Desarrollar una estrategia completa desde su investigación (hipótesis, entrada, construcción,
+      Anotar una idea de trade por etapas (idea, hipótesis, reglas) sin saltar a estructuras ni riesgo, y
+      desarrollar una estrategia completa desde su investigación (hipótesis, entrada, construcción,
       sizing, monitoreo, ajustes, salidas, invalidación y plan de evaluación), mapear cada regla a lo
       que el runtime de GaleCore ejecuta, preparar la StrategySpec versionada con el hash de GaleCore,
       registrar la aprobación del owner de esa versión exacta y desplegarla en SHADOW de desarrollo.
     example_requests:
+      - Quiero entrar en NVDA, me parece que está sobrevendida
+      - Creo que XLE rebota
       - Desarrollá esta estrategia hasta SHADOW.
       - Quiero desarrollar una estrategia en SPY, guiame paso a paso
       - ¿Qué le falta a esta estrategia para correr en SHADOW y qué reglas no soporta GaleCore?

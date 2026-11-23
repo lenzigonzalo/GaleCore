@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "2.5.0"
+    date: 2026-11-23
+    changes: >
+      Ante una idea de trade el default es la ficha por etapas (idea, hipótesis, reglas), una pregunta por turno y sin
+      stop, tamaño ni estructuras; A-1 y A0-A10 sólo si el trader los pide (WS-0107, owner).
+    feedback: []
   - version: "2.4.0"
     date: 2026-11-01
     changes: >
