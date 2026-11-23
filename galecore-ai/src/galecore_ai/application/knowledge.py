@@ -729,7 +729,7 @@ def _strategy_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, s
             "updated_at": (approval.recorded_at if approval else doc.recorded_at).isoformat(),
             "path": _display_path(kb.strategies.path_for(key), kb),
         }
-        body = " ".join([c.name, c.display_name, c.purpose, c.hypothesis.mechanism, *(r.text for r in c.rules)])
+        body = " ".join([c.name, c.display_name, c.purpose, c.thesis, c.hypothesis.mechanism if c.hypothesis else "", *(r.text for r in c.rules)])
         items.append((summary, body))
     return items
 

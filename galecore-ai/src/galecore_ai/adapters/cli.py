@@ -149,7 +149,7 @@ from galecore_ai.contracts.source_status import (
     SourceStatusDocument,
     SourceStatusObservation,
 )
-from galecore_ai.contracts.strategy import ProposalContent
+from galecore_ai.contracts.strategy import ProposalContent, Stage, undefined
 from galecore_ai.harness.catalog import CatalogError, describe, load_catalog
 
 logger = logging.getLogger(__name__)
@@ -1520,6 +1520,10 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
         _json_out({"spec_file": name, "spec_hash": galecore_spec_hash(text)})
     if args.strategy_command == "check":
         content, _ = _read_proposal_request()
+        if content.stage != Stage.COMPLETE:   # before SHADOW there is no spec yet: only what is still undefined
+            _json_out({"stage": content.stage.value, "verdict": "NO_SPEC", "sin_definir": undefined(content)})
+        if not args.spec:
+            _error_out("a complete proposal needs --spec", exit_code=_EXIT_VALIDATION_ERROR)
         text, name = _read_spec(args.spec)
         try:
             report = check_proposal(content, text, name)   # asks GaleCore (/App/Runtime/Specs/Check); no fallback
@@ -1571,12 +1575,13 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                        "approved": False, "path": path})
         if args.strategy_command == "save":
             content, host = _read_proposal_request()
-            text, name = _read_spec(args.spec)
+            text, name = _read_spec(args.spec) if args.spec else (None, None)
             doc, path = save_proposal(kb=kb, prompt=args.prompt, host=host, content=content,
                                       spec_json=text, spec_file=name)
             _json_out({"status": "RECORDED", "ref": f"strategy:{doc.name}/{doc.version}", "path": path,
-                       "spec_hash": doc.spec_hash, "check": doc.check.verdict,
-                       "declared_gaps": doc.check.declared_gaps, "content_hash": doc.content_hash})
+                       "spec_hash": doc.spec_hash, "check": doc.check.verdict, "stage": content.stage.value,
+                       "declared_gaps": doc.check.declared_gaps, "sin_definir": undefined(content),
+                       "content_hash": doc.content_hash})
         key = strategy_key(args.ref)
         if args.strategy_command == "approve":
             approval, path = strategy_approve(kb=kb, key=key, spec_hash=args.spec_hash, owner_words=args.owner_words,
@@ -2156,11 +2161,11 @@ def build_parser() -> _JsonArgumentParser:
     p_st_hash = st_sub.add_parser("hash", help="GaleCore's content_hash of a spec file")
     p_st_hash.add_argument("--spec", required=True)
     p_st_check = st_sub.add_parser("check", help="Check a proposal (stdin) against a spec and the runtime")
-    p_st_check.add_argument("--spec", required=True)
+    p_st_check.add_argument("--spec", help="required unless the ficha is before the SHADOW stage")
     p_st_save = st_sub.add_parser("save", help="Check and store a version (create-only)",
                                   description="stdin: {content, host_provider, host_model}; `schema proposal` gives "
                                               "the exact content")
-    p_st_save.add_argument("--spec", required=True)
+    p_st_save.add_argument("--spec", help="required unless the ficha is before the SHADOW stage")
     p_st_save.add_argument("--prompt", required=True, help="What the user asked")
     p_st_approve = st_sub.add_parser("approve", help="Record the owner's approval of an exact version and hash")
     p_st_approve.add_argument("--ref", required=True, help="strategy:<name>/<version>")
