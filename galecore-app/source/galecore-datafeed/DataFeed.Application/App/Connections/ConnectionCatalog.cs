@@ -1,6 +1,6 @@
 namespace DataFeed.Application.App.Connections
 {
-    public enum ConnectionKind { Source, Broker, Mcp }
+    public enum ConnectionKind { Source, Broker }
     public enum ConnectionOwner { Platform, Personal }
     public enum KeyNeed { Required, Optional, None }
 
@@ -24,7 +24,7 @@ namespace DataFeed.Application.App.Connections
             new ConnectionDefinition("sec", "SEC EDGAR", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.Required,
                 "Contacto (User-Agent)", "SecEdgar:UserAgent", "Presentaciones de la SEC. No tiene clave: exige un contacto (nombre y correo) en el User-Agent.", "Estados Unidos"),
             new ConnectionDefinition("tastytrade", "Tastytrade", ConnectionKind.Broker, ConnectionOwner.Personal, KeyNeed.Required,
-                null, null, "Bróker y datos de mercado. Cada usuario vincula su cuenta en Configuración › Cuenta de bróker."),
+                null, null, "Bróker y datos de mercado. Cada usuario vincula su cuenta en Configuración › Conexiones › Brokers."),
             new ConnectionDefinition("cboe", "Cboe", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.None,
                 null, null, "Índices y volatilidad. No necesita clave.", "Estados Unidos"),
             new ConnectionDefinition("fed", "Reserva Federal", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.None,
@@ -43,14 +43,10 @@ namespace DataFeed.Application.App.Connections
                 null, null, "Cotizaciones del dólar en Argentina. No necesita clave.", "Argentina"),
             new ConnectionDefinition("argentinadatos", "ArgentinaDatos", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.None,
                 null, null, "Indicadores económicos de Argentina. No necesita clave.", "Argentina"),
-            new ConnectionDefinition("alphavantage", "Alpha Vantage", ConnectionKind.Mcp, ConnectionOwner.Personal, KeyNeed.Required,
-                null, null, "Conector MCP del motor, en la PC de cada usuario."),
-            new ConnectionDefinition("fmp", "FMP", ConnectionKind.Mcp, ConnectionOwner.Personal, KeyNeed.Required,
-                null, null, "Conector MCP del motor, en la PC de cada usuario."),
-            new ConnectionDefinition("ibkr", "IBKR", ConnectionKind.Mcp, ConnectionOwner.Personal, KeyNeed.Required,
-                null, null, "Conector MCP del motor, en la PC de cada usuario."),
-            new ConnectionDefinition("iol", "IoL", ConnectionKind.Mcp, ConnectionOwner.Personal, KeyNeed.Required,
-                null, null, "Conector MCP del motor, en la PC de cada usuario."),
+            new ConnectionDefinition("ibkr", "IBKR", ConnectionKind.Broker, ConnectionOwner.Personal, KeyNeed.Required,
+                null, null, "Interactive Brokers. Se conecta por Flex Web Service (próximamente)."),
+            new ConnectionDefinition("iol", "IOL", ConnectionKind.Broker, ConnectionOwner.Personal, KeyNeed.Required,
+                null, null, "InvertirOnline. Se conecta con tu usuario y contraseña de IOL."),
         };
 
         public static ConnectionDefinition? Find(string id) =>

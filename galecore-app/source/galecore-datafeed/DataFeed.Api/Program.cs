@@ -276,6 +276,33 @@ namespace DataFeed
                     sp.GetRequiredService<ILogger<DataFeed.Application.App.Connections.PlatformConnectionsService>>());
             });
 
+            // Brokers del usuario y cartera de IOL (WS-0108). Sin base el servicio igual existe (store null): la lista sale
+            // con todo «missing» y las escrituras contestan 503. Tastytrade se prueba con el handler de balances.
+            builder.Services.AddSingleton<DataFeed.Infrastructure.Providers.Iol.IIolClient>(sp =>
+                new DataFeed.Infrastructure.Providers.Iol.IolClient(sp.GetRequiredService<IHttpClientFactory>(),
+                    sp.GetRequiredService<IConfiguration>(),
+                    sp.GetRequiredService<ILogger<DataFeed.Infrastructure.Providers.Iol.IolClient>>()));
+            builder.Services.AddSingleton<DataFeed.Application.App.Brokers.BrokersService>(sp =>
+            {
+                DataFeed.Application.App.Brokers.IBrokerStore? store = null;
+                if (dbConfigured)
+                {
+                    var dbOptions = new DbContextOptionsBuilder<GaleCoreDbContext>()
+                        .UseNpgsql(galeCoreDb).UseSnakeCaseNamingConvention().Options;
+                    store = new DataFeed.Application.App.Brokers.EfBrokerStore(() => new GaleCoreDbContext(dbOptions));
+                }
+                return new DataFeed.Application.App.Brokers.BrokersService(
+                    store, sp.GetRequiredService<ITokenProtector>(),
+                    sp.GetRequiredService<DataFeed.Infrastructure.Providers.Iol.IIolClient>(),
+                    async ct =>
+                    {
+                        using var scope = sp.CreateScope();
+                        await scope.ServiceProvider.GetRequiredService<IMediator>()
+                            .Send(new DataFeed.Application.Data.Tastytrade.AccountBalances.AccountBalancesRequest(), ct);
+                    },
+                    sp.GetRequiredService<ILogger<DataFeed.Application.App.Brokers.BrokersService>>());
+            });
+
             // Agentes que corren solos (WS-0079): clave de agentes, reporte de corridas, token de disparo y ejecución sin PC.
             // Sin base no se registra y AgentsController contesta 503.
             if (dbConfigured)

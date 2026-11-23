@@ -1122,6 +1122,55 @@ namespace DataFeed.Repositories.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.UserBroker", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Broker")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("broker");
+
+                    b.Property<bool>("IncludeInPortfolio")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("include_in_portfolio");
+
+                    b.Property<DateTime?>("LastCheckAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_check_at");
+
+                    b.Property<string>("LastCheckMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_check_message");
+
+                    b.Property<bool?>("LastCheckOk")
+                        .HasColumnType("boolean")
+                        .HasColumnName("last_check_ok");
+
+                    b.Property<string>("SecretCipher")
+                        .HasColumnType("text")
+                        .HasColumnName("secret_cipher");
+
+                    b.Property<string>("SecretHint")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("secret_hint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId", "Broker")
+                        .HasName("pk_user_brokers");
+
+                    b.ToTable("user_brokers", (string)null);
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.Account", b =>
                 {
                     b.HasOne("DataFeed.Repositories.Entities.User", "User")
