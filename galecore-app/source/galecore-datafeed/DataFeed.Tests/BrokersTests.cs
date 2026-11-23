@@ -568,7 +568,7 @@ public class BrokersTests
         Assert.Equal("U0000000", st.Account);
         Assert.Equal("USD", st.BaseCurrency);
         Assert.Equal("2026-11-20", st.ToDate);
-        Assert.Equal(new DateTime(2026, 11, 21, 16, 30, 45, DateTimeKind.Utc), st.WhenGenerated);
+        Assert.Equal(new DateTime(2026, 11, 21, 21, 30, 45, DateTimeKind.Utc), st.WhenGenerated);
         Assert.Equal(30125.45m, st.Nav); // la fila de reportDate más reciente
 
         Assert.Equal(2, st.Positions.Count); // la fila LOT de AAPL no cuenta
@@ -586,6 +586,23 @@ public class BrokersTests
 
         Assert.Equal(new[] { "USD", "EUR" }, st.Cash.Select(c => c.Currency)); // BASE_SUMMARY no es un saldo
         Assert.Equal(-300.10m, st.Cash.Single(c => c.Currency == "EUR").EndingCash);
+    }
+
+    [Fact]
+    public void Parser_cuenta_de_una_moneda_toma_el_cash_de_BASE_SUMMARY_o_del_resumen_del_nav()
+    {
+        var soloBase = """
+            <FlexQueryResponse><FlexStatements count="2">
+              <FlexStatement accountId="U1" whenGenerated="20260701;120000"><AccountInformation currency="USD" />
+                <CashReport><CashReportCurrency currency="BASE_SUMMARY" endingCash="28.69" /></CashReport></FlexStatement>
+              <FlexStatement accountId="U2"><AccountInformation currency="USD" />
+                <EquitySummaryInBase><EquitySummaryByReportDateInBase reportDate="20261120" cash="12.5" total="100" /></EquitySummaryInBase></FlexStatement>
+            </FlexStatements></FlexQueryResponse>
+            """;
+        var r = Parse(soloBase);
+        Assert.Equal(("USD", 28.69m), (r.Statements[0].Cash.Single().Currency, r.Statements[0].Cash.Single().EndingCash!.Value));
+        Assert.Equal(("USD", 12.5m), (r.Statements[1].Cash.Single().Currency, r.Statements[1].Cash.Single().EndingCash!.Value));
+        Assert.Equal(new DateTime(2026, 7, 1, 16, 0, 0, DateTimeKind.Utc), r.Statements[0].WhenGenerated); // horario de verano de Nueva York
     }
 
     [Fact]
@@ -609,7 +626,7 @@ public class BrokersTests
         var r = IbkrPortfolioMapper.Map(Parse(IbkrFlexFixture.Report));
         Assert.Equal("IBKR Flex", r.Source);
         Assert.Equal("2026-11-20", r.ReportDate);
-        Assert.Equal(new DateTime(2026, 11, 21, 16, 30, 45, DateTimeKind.Utc), r.AsOf);
+        Assert.Equal(new DateTime(2026, 11, 21, 21, 30, 45, DateTimeKind.Utc), r.AsOf);
         var stock = r.Positions.Single(p => p.Symbol == "AAPL");
         Assert.Equal("U0000000", stock.Account);
         Assert.Equal("STK", stock.Type);

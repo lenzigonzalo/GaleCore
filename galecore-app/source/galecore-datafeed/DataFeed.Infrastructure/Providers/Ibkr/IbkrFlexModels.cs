@@ -114,17 +114,22 @@ namespace DataFeed.Infrastructure.Providers.Ibkr
                         FxRateToBase = Dec(p, "fxRateToBase"),
                     });
                 }
-                // BASE_SUMMARY es el total en moneda base: ya está en el NAV, no se duplica como saldo.
-                foreach (var c in st.Descendants("CashReportCurrency"))
-                {
-                    var currency = Str(c, "currency");
-                    if (currency == null || currency.Equals("BASE_SUMMARY", StringComparison.OrdinalIgnoreCase)) continue;
-                    s.Cash.Add(new IbkrCash { Currency = currency, EndingCash = Dec(c, "endingCash") });
-                }
+                // Saldo por moneda. BASE_SUMMARY es el total en moneda base: sólo se usa si no hay filas por moneda (cuenta de
+                // una sola moneda, visto con datos reales el 23/11), para no duplicarlo.
+                var cashRows = st.Descendants("CashReportCurrency").Select(c => (Currency: Str(c, "currency"), Ending: Dec(c, "endingCash")))
+                    .Where(c => c.Currency != null).ToList();
+                foreach (var c in cashRows.Where(c => !IsBaseSummary(c.Currency)))
+                    s.Cash.Add(new IbkrCash { Currency = c.Currency!, EndingCash = c.Ending });
+                if (s.Cash.Count == 0 && s.BaseCurrency != null)
+                    foreach (var c in cashRows.Where(c => IsBaseSummary(c.Currency)).Take(1))
+                        s.Cash.Add(new IbkrCash { Currency = s.BaseCurrency, EndingCash = c.Ending });
                 // NAV: la fila de reportDate más reciente (las fechas yyyyMMdd ordenan como texto).
                 var nav = st.Descendants("EquitySummaryByReportDateInBase")
                     .OrderByDescending(e => Str(e, "reportDate") ?? "").FirstOrDefault();
                 s.Nav = nav == null ? null : Dec(nav, "total");
+                // Sin Cash Report en la query, el cash en base sale del mismo resumen del NAV.
+                if (s.Cash.Count == 0 && nav != null && s.BaseCurrency != null && Dec(nav, "cash") is { } navCash)
+                    s.Cash.Add(new IbkrCash { Currency = s.BaseCurrency, EndingCash = navCash });
                 report.Statements.Add(s);
             }
             return report;
@@ -147,13 +152,25 @@ namespace DataFeed.Infrastructure.Providers.Ibkr
                 ? d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : raw;
         }
 
-        /// <summary>«20251121;163045», «20251121, 163045» o sólo la fecha. Se toma como UTC.</summary>
+        private static bool IsBaseSummary(string? currency) =>
+            currency != null && currency.Equals("BASE_SUMMARY", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// «20251121;163045», «20251121, 163045» o sólo la fecha. IBKR lo manda en hora de Nueva York (con datos reales:
+        /// «17:47» generado a las 22:47 UTC); se devuelve en UTC.
+        /// </summary>
         public static DateTime? ParseDateTime(string? raw)
         {
             if (raw == null) return null;
             var formats = new[] { "yyyyMMdd;HHmmss", "yyyyMMdd, HHmmss", "yyyyMMdd HHmmss", "yyyyMMdd;HH:mm:ss", "yyyyMMdd", "yyyy-MM-dd;HH:mm:ss", "yyyy-MM-dd" };
-            return DateTime.TryParseExact(raw, formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var d)
-                ? DateTime.SpecifyKind(d, DateTimeKind.Utc) : null;
+            if (!DateTime.TryParseExact(raw, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d)) return null;
+            return TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(d, DateTimeKind.Unspecified), NewYork.Value);
         }
+
+        private static readonly Lazy<TimeZoneInfo> NewYork = new(() =>
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById("America/New_York"); }
+            catch (TimeZoneNotFoundException) { return TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"); }
+        });
     }
 }
