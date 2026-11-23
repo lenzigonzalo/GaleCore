@@ -7,7 +7,7 @@ const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const { createSharing } = require('./lab-sharing');
 const { codexConnectors, claudeConnectors, recordClaudeInit, listConnectors, knownConnector, setConnector } = require('./lab-brokers');
-const { authStatus, createCodexLogin } = require('./provider-auth');
+const { authStatus, createCodexLogin, createClaudeLogin } = require('./provider-auth');
 const { permissionRules, saveUserRules, mergedSettings } = require('./lab-permissions');
 
 // WS-0088: semáforo compartido con las tareas del VPS. task_service.py (galecore-ai) usa archivos
@@ -598,6 +598,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     return chat;
   }
   const codexLogin=createCodexLogin({binary:()=>{refreshBinaries();return binaries.codex||null;},spawnProcess});
+  const claudeLogin=createClaudeLogin({binary:()=>{refreshBinaries();return binaries.claude||null;},spawnProcess});
   const connectorOpts=()=>({local,binary:binaries.claude,codexBinary:binaries.codex,env:environment(),spawnProcess});
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
@@ -683,9 +684,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     // Conectores por motor (WS-0091): GaleCore va siempre; el resto se prende o apaga por motor y por conector (lab-brokers.js).
     // WS-0106: estado de los motores y login de Codex contra este Lab.
-    if(url.pathname==='/providers/auth'&&req.method==='GET'){refreshBinaries();json(res,200,{providers:await Promise.all(['codex','claude'].map(id=>authStatus(id,binaries[id]||null,execute))),codexLoginPending:codexLogin.pending()});return true;}
+    if(url.pathname==='/providers/auth'&&req.method==='GET'){refreshBinaries();json(res,200,{providers:await Promise.all(['codex','claude'].map(id=>authStatus(id,binaries[id]||null,execute))),codexLoginPending:codexLogin.pending(),claudeLoginPending:claudeLogin.pending()});return true;}
     if(url.pathname==='/providers/codex/login'&&req.method==='POST'){try{json(res,200,await codexLogin.start());}catch(e){json(res,e.status||500,{error:e.message});}return true;}
     if(url.pathname==='/providers/codex/login/cancel'&&req.method==='POST'){codexLogin.cancel();json(res,200,{ok:true});return true;}
+    if(url.pathname==='/providers/claude/login'&&req.method==='POST'){try{json(res,200,await claudeLogin.start());}catch(e){json(res,e.status||500,{error:e.message});}return true;}
+    if(url.pathname==='/providers/claude/login/code'&&req.method==='POST'){try{const b=await readBody(req)||{};claudeLogin.submit(b.code);json(res,200,{ok:true});}catch(e){json(res,e.status||500,{error:e.message});}return true;}
+    if(url.pathname==='/providers/claude/login/cancel'&&req.method==='POST'){claudeLogin.cancel();json(res,200,{ok:true});return true;}
     if(url.pathname==='/connectors'&&req.method==='GET'){json(res,200,await listConnectors(connectorOpts()));return true;}
     if(url.pathname==='/connectors'&&req.method==='POST'){
       const b=await readBody(req);

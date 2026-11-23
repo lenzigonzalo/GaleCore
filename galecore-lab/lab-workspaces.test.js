@@ -572,4 +572,13 @@ test('WS-0106: /providers/auth re-resuelve binarios y login de Codex desde el La
  const p=route(service,'POST','/providers/codex/login');await new Promise(r=>setTimeout(r,20));proc.stdout.emit('data','https://auth.openai.com/codex/device\nAB12-CD34EF\n');const r=await p;assert.deepEqual(r.value,{url:'https://auth.openai.com/codex/device',code:'AB12-CD34EF'});assert.equal(spawned,1);
  assert.equal((await route(service,'GET','/providers/auth')).value.codexLoginPending,true);
  await route(service,'POST','/providers/codex/login/cancel');assert.equal((await route(service,'GET','/providers/auth')).value.codexLoginPending,false);
+
+ const cp=new EventEmitter();cp.stdout=new EventEmitter();cp.stderr=new EventEmitter();const wrote=[];cp.stdin={write:d=>wrote.push(d)};cp.kill=()=>cp.emit('close',1);
+ const cs=createWorkspaces({root:base,kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],execute:(b,a,o,cb)=>cb(null,'{"loggedIn":true}',''),spawnProcess:()=>cp});
+ assert.equal((await route(cs,'POST','/providers/claude/login/code',{code:'abcDEF123#xyz'})).status,409);
+ const cl=route(cs,'POST','/providers/claude/login');await new Promise(r=>setTimeout(r,20));cp.stdout.emit('data','visit: https://claude.com/cai/oauth/authorize?x=1\nPaste code here if prompted > ');assert.deepEqual((await cl).value,{url:'https://claude.com/cai/oauth/authorize?x=1'});
+ assert.equal((await route(cs,'GET','/providers/auth')).value.claudeLoginPending,true);
+ assert.equal((await route(cs,'POST','/providers/claude/login/code',{code:'x'})).status,400);
+ assert.equal((await route(cs,'POST','/providers/claude/login/code',{code:'abcDEF123#xyz'})).status,200);assert.deepEqual(wrote,['abcDEF123#xyz\n']);
+ await route(cs,'POST','/providers/claude/login/cancel');assert.equal((await route(cs,'GET','/providers/auth')).value.claudeLoginPending,false);
  const ws=await route(service,'GET','/workspaces');assert.equal(ws.value.providers.find(p=>p.id==='codex').installed,true);});
