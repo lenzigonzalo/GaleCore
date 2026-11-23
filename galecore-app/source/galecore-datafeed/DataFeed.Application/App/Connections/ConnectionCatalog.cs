@@ -44,7 +44,7 @@ namespace DataFeed.Application.App.Connections
             new ConnectionDefinition("argentinadatos", "ArgentinaDatos", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.None,
                 null, null, "Indicadores económicos de Argentina. No necesita clave.", "Argentina"),
             new ConnectionDefinition("ibkr", "IBKR", ConnectionKind.Broker, ConnectionOwner.Personal, KeyNeed.Required,
-                null, null, "Interactive Brokers. Se conecta por Flex Web Service (próximamente)."),
+                null, null, "Interactive Brokers. Se conecta con un token y un Query ID de Flex Web Service."),
             new ConnectionDefinition("iol", "IOL", ConnectionKind.Broker, ConnectionOwner.Personal, KeyNeed.Required,
                 null, null, "InvertirOnline. Se conecta con tu usuario y contraseña de IOL."),
         };

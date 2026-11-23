@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  BrokerEntry, fetchBrokers, removeIolCredentials, saveIolCredentials, setBrokerInclude, testBroker,
+  BrokerEntry, fetchBrokers, removeIbkrCredentials, removeIolCredentials, saveIbkrCredentials, saveIolCredentials, setBrokerInclude, testBroker,
 } from '../../api/brokers';
 import { BrokerAccountCard } from '../account/BrokerAccountCard';
 import { useAccountStore } from '../../store/useAccountStore';
@@ -38,13 +38,37 @@ function IolForm({ linked, onSaved, onRemoved, onCancel }: {
   </div>;
 }
 
+// IBKR: el guardado trae el reporte Flex para probar el token, y IBKR puede tardar ~20 s en generarlo.
+function IbkrForm({ linked, onSaved, onRemoved, onCancel }: {
+  linked: boolean; onSaved: (e: BrokerEntry) => void; onRemoved: (e: BrokerEntry) => void; onCancel: () => void;
+}) {
+  const [token, setToken] = useState('');
+  const [queryId, setQueryId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true); setError('');
+    try { await fn(); } catch (e) { setError(errText(e)); } finally { setBusy(false); }
+  };
+  const save = () => run(async () => { onSaved(await saveIbkrCredentials(token.trim(), queryId.trim())); });
+  const remove = () => run(async () => { onRemoved(await removeIbkrCredentials()); });
+  return <div className="conn-edit">
+    <input className="prefs-input" type="password" aria-label="Token de Flex" placeholder="Token de Flex" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} />
+    <input className="prefs-input" inputMode="numeric" aria-label="Query ID" placeholder="Query ID" autoComplete="off" value={queryId} onChange={e => setQueryId(e.target.value)} />
+    <button disabled={busy || !token.trim() || !queryId.trim()} onClick={save}>{busy ? 'Probando…' : 'Guardar'}</button>
+    <button disabled={busy} onClick={onCancel}>Cancelar</button>
+    {linked && <button disabled={busy} onClick={remove}>Desconectar</button>}
+    {error && <span className="conn-error" role="alert">{error}</span>}
+  </div>;
+}
+
 function Row({ b, onChange, onLinked }: { b: BrokerEntry; onChange: (e: BrokerEntry) => void; onLinked: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const connected = b.status === 'connected';
   const linked = connected || b.status === 'invalid';
-  const connectable = b.id !== 'ibkr' && b.status !== 'soon';
+  const connectable = b.status !== 'soon';
   const st = STATE[b.status];
   const why = b.lastCheck ? b.lastCheck.message : b.status === 'soon' ? 'Todavía no está disponible.' : undefined;
   const run = async (fn: () => Promise<void>) => {
@@ -75,7 +99,9 @@ function Row({ b, onChange, onLinked }: { b: BrokerEntry; onChange: (e: BrokerEn
     {open && connectable && <tr><td colSpan={4}>
       {b.id === 'iol'
         ? <IolForm linked={linked} onSaved={e => { onChange(e); setOpen(false); }} onRemoved={e => { onChange(e); setOpen(false); }} onCancel={() => setOpen(false)} />
-        : <BrokerAccountCard onLinked={onLinked} />}
+        : b.id === 'ibkr'
+          ? <IbkrForm linked={linked} onSaved={e => { onChange(e); setOpen(false); }} onRemoved={e => { onChange(e); setOpen(false); }} onCancel={() => setOpen(false)} />
+          : <BrokerAccountCard onLinked={onLinked} />}
     </td></tr>}
   </>;
 }

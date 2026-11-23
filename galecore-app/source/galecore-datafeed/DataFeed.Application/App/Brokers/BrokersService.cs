@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DataFeed.Application.App.Connections;
+using DataFeed.Infrastructure.Providers.Ibkr;
 using DataFeed.Infrastructure.Providers.Iol;
 using DataFeed.Infrastructure.Providers.Tastytrade;
 using Microsoft.Extensions.Logging;
@@ -40,8 +41,8 @@ namespace DataFeed.Application.App.Brokers
     public enum BrokerWriteOutcome { Ok, UnknownBroker, Invalid, Rejected, StorageUnavailable }
 
     /// <summary>
-    /// Brokers del usuario en la cartera consolidada (WS-0108): estado, interruptor «incluir», credencial de IOL (cifrada con
-    /// <see cref="ITokenProtector"/>, probada contra IOL antes de guardar), prueba de conexión y la cartera de IOL.
+    /// Brokers del usuario en la cartera consolidada (WS-0108): estado, interruptor «incluir», credenciales de IOL e IBKR (cifradas con
+    /// <see cref="ITokenProtector"/>, probadas contra el broker antes de guardar), prueba de conexión y la cartera de IOL e IBKR.
     /// Tastytrade sigue con su credencial en <c>accounts</c>. Nada de lo que devuelve ni loguea incluye contraseñas ni tokens.
     /// Sin base la API arranca igual: la lista sale con todo «missing» y las escrituras contestan «storage no disponible».
     /// </summary>
@@ -51,21 +52,24 @@ namespace DataFeed.Application.App.Brokers
         public const string Ibkr = "ibkr";
         public const string Iol = "iol";
         public const int MaxFieldLength = 200;
+        public const int MaxQueryIdLength = 16;
 
         private readonly IBrokerStore? _store;
         private readonly ITokenProtector _protector;
         private readonly IIolClient _iol;
+        private readonly IIbkrFlexClient _ibkr;
         private readonly Func<CancellationToken, Task>? _tastytradeProbe;
         private readonly ILogger<BrokersService> _logger;
         private readonly Func<DateTime> _now;
 
         /// <param name="tastytradeProbe">Lee los balances de Tastytrade del usuario actual (el mismo handler de Data/Tastytrade/Account/Balances).</param>
-        public BrokersService(IBrokerStore? store, ITokenProtector protector, IIolClient iol,
+        public BrokersService(IBrokerStore? store, ITokenProtector protector, IIolClient iol, IIbkrFlexClient ibkr,
             Func<CancellationToken, Task>? tastytradeProbe, ILogger<BrokersService> logger, Func<DateTime>? now = null)
         {
             _store = store;
             _protector = protector;
             _iol = iol;
+            _ibkr = ibkr;
             _tastytradeProbe = tastytradeProbe;
             _logger = logger;
             _now = now ?? (() => DateTime.UtcNow);
@@ -135,6 +139,11 @@ namespace DataFeed.Application.App.Brokers
                     view.Status = !has ? "missing" : failed ? "invalid" : "connected";
                     if (has) view.Hint = row!.SecretHint;
                     break;
+                case Ibkr:
+                    var hasIbkr = !string.IsNullOrEmpty(row?.SecretCipher);
+                    view.Status = !hasIbkr ? "missing" : failed ? "invalid" : "connected";
+                    if (hasIbkr) view.Hint = row!.SecretHint;
+                    break;
                 default:
                     view.Status = "soon";
                     break;
@@ -187,6 +196,43 @@ namespace DataFeed.Application.App.Brokers
             return BrokerWriteOutcome.Ok;
         }
 
+        /// <summary>
+        /// Prueba el token y la Query ID de IBKR trayendo el reporte Flex y, sólo si anda, los guarda cifrados (el hint es la
+        /// Query ID). Si IBKR los rechaza no guarda nada y el mensaje es el motivo. Una caída de IBKR sale como
+        /// <see cref="DataFeed.Infrastructure.Providers.UpstreamSourceException"/>.
+        /// </summary>
+        public async Task<(BrokerWriteOutcome Outcome, string? Message)> SetIbkrCredentialsAsync(
+            Guid userId, string? token, string? queryId, CancellationToken ct)
+        {
+            var tok = token?.Trim();
+            var query = queryId?.Trim();
+            if (string.IsNullOrEmpty(tok) || tok.Length > MaxFieldLength)
+                return (BrokerWriteOutcome.Invalid, "El token de Flex es obligatorio.");
+            if (string.IsNullOrEmpty(query) || query.Length > MaxQueryIdLength || !query.All(char.IsAsciiDigit))
+                return (BrokerWriteOutcome.Invalid, "El Query ID es obligatorio y son sólo números.");
+            if (!StorageReady()) return (BrokerWriteOutcome.StorageUnavailable, "No se pueden guardar credenciales en este servidor.");
+
+            _ibkr.Forget(userId);
+            try { await _ibkr.GetReportAsync(userId, new IbkrCredentials(tok, query), false, ct); }
+            catch (IbkrCredentialInvalidException ex) { return (BrokerWriteOutcome.Rejected, ex.Message); }
+
+            var cipher = _protector.Protect(System.Text.Json.JsonSerializer.Serialize(new { token = tok, queryId = query }));
+            var now = _now();
+            await _store!.SaveSecretAsync(userId, Ibkr, cipher, query, now, ct);
+            await _store.SaveCheckAsync(userId, Ibkr, now, true, "IBKR devolvió el reporte Flex.", ct);
+            _logger.LogInformation("Credencial de IBKR cargada por {UserId}.", userId);
+            return (BrokerWriteOutcome.Ok, null);
+        }
+
+        public async Task<BrokerWriteOutcome> DeleteIbkrCredentialsAsync(Guid userId, CancellationToken ct)
+        {
+            if (_store == null) return BrokerWriteOutcome.StorageUnavailable;
+            await _store.ClearSecretAsync(userId, Ibkr, _now(), ct);
+            _ibkr.Forget(userId);
+            _logger.LogInformation("Credencial de IBKR borrada por {UserId}.", userId);
+            return BrokerWriteOutcome.Ok;
+        }
+
         public async Task<BrokerWriteOutcome> SetIncludeAsync(Guid userId, string id, bool include, CancellationToken ct)
         {
             var def = FindBroker(id);
@@ -198,7 +244,7 @@ namespace DataFeed.Application.App.Brokers
 
         // ── prueba ────────────────────────────────────────────────────────────────────────────────────────────
 
-        /// <summary>Null si el id no es de un broker. Tastytrade: lee balances; IOL: token y saldos. Guarda el resultado.</summary>
+        /// <summary>Null si el id no es de un broker. Tastytrade: lee balances; IOL: token y saldos; IBKR: trae el reporte Flex. Guarda el resultado.</summary>
         public async Task<BrokerTestResult?> TestAsync(Guid userId, string id, CancellationToken ct)
         {
             var def = FindBroker(id);
@@ -211,6 +257,7 @@ namespace DataFeed.Application.App.Brokers
                 {
                     Tastytrade => await TestTastytradeAsync(at, ct),
                     Iol => await TestIolAsync(userId, at, ct),
+                    Ibkr => await TestIbkrAsync(userId, at, ct),
                     _ => new BrokerTestResult(false, "soon", $"{def.Name} todavía no se puede conectar.", at),
                 };
             }
@@ -265,6 +312,21 @@ namespace DataFeed.Application.App.Brokers
             }
         }
 
+        private async Task<BrokerTestResult> TestIbkrAsync(Guid userId, DateTime at, CancellationToken ct)
+        {
+            var credentials = await LoadIbkrCredentialsAsync(userId, ct);
+            if (credentials == null) return new BrokerTestResult(false, "missing", "Todavía no cargaste tu token de IBKR.", at);
+            try
+            {
+                await _ibkr.GetReportAsync(userId, credentials, false, ct);
+                return new BrokerTestResult(true, "connected", "IBKR devolvió el reporte Flex.", at);
+            }
+            catch (IbkrCredentialInvalidException ex)
+            {
+                return new BrokerTestResult(false, "invalid", ex.Message, at);
+            }
+        }
+
         // ── cartera de IOL ────────────────────────────────────────────────────────────────────────────────────
 
         /// <summary>
@@ -299,6 +361,40 @@ namespace DataFeed.Application.App.Brokers
             catch (Exception)
             {
                 _logger.LogWarning("Brokers: no se pudo descifrar la credencial de IOL de {UserId}.", userId);
+                return null;
+            }
+        }
+
+        // ── cartera de IBKR ───────────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Posiciones, saldos y NAV del reporte Flex de IBKR (dato de cierre, con cache de 10 minutos).
+        /// <see cref="BrokerAccountNotLinkedException"/> si el usuario no cargó su token; <see cref="IbkrCredentialInvalidException"/>
+        /// si IBKR lo rechaza; una caída de IBKR sale como <see cref="DataFeed.Infrastructure.Providers.UpstreamSourceException"/>.
+        /// </summary>
+        public async Task<IbkrPortfolioResponse> GetIbkrPortfolioAsync(Guid userId, CancellationToken ct)
+        {
+            var credentials = await LoadIbkrCredentialsAsync(userId, ct) ?? throw new BrokerAccountNotLinkedException();
+            var report = await _ibkr.GetReportAsync(userId, credentials, true, ct);
+            return IbkrPortfolioMapper.Map(report);
+        }
+
+        /// <summary>Null si no hay credencial guardada (o no se puede leer: se trata como no vinculada).</summary>
+        private async Task<IbkrCredentials?> LoadIbkrCredentialsAsync(Guid userId, CancellationToken ct)
+        {
+            if (_store == null) return null;
+            var row = (await _store.LoadAsync(userId, ct)).FirstOrDefault(r => r.Broker == Ibkr);
+            if (string.IsNullOrEmpty(row?.SecretCipher)) return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(_protector.Unprotect(row.SecretCipher));
+                var token = doc.RootElement.GetProperty("token").GetString();
+                var query = doc.RootElement.GetProperty("queryId").GetString();
+                return string.IsNullOrEmpty(token) || string.IsNullOrEmpty(query) ? null : new IbkrCredentials(token, query);
+            }
+            catch (Exception)
+            {
+                _logger.LogWarning("Brokers: no se pudo descifrar la credencial de IBKR de {UserId}.", userId);
                 return null;
             }
         }

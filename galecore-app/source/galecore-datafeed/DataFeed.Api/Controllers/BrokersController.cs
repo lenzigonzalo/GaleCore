@@ -1,6 +1,7 @@
 using DataFeed.Api.Controllers.Dtos;
 using DataFeed.Application.App.Brokers;
 using DataFeed.Infrastructure.Providers;
+using DataFeed.Infrastructure.Providers.Ibkr;
 using DataFeed.Infrastructure.Providers.Iol;
 using DataFeed.Infrastructure.Providers.Tastytrade;
 using Microsoft.AspNetCore.Mvc;
@@ -8,8 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace DataFeed.Controllers
 {
     /// <summary>
-    /// Brokers del usuario (WS-0108): Configuración › Conexiones › Brokers (estado, credencial de IOL, interruptor
-    /// «incluir», prueba) y la cartera de IOL. Todo es del usuario actual: sin usuario, 401. Ninguna respuesta ni log
+    /// Brokers del usuario (WS-0108): Configuración › Conexiones › Brokers (estado, credenciales de IOL e IBKR,
+    /// interruptor «incluir», prueba) y la cartera de IOL e IBKR. Todo es del usuario actual: sin usuario, 401. Ninguna respuesta ni log
     /// lleva contraseñas ni tokens.
     /// </summary>
     [ApiController]
@@ -28,6 +29,12 @@ namespace DataFeed.Controllers
         {
             public string? Username { get; set; }
             public string? Password { get; set; }
+        }
+
+        public sealed class IbkrCredentialsRequest
+        {
+            public string? Token { get; set; }
+            public string? QueryId { get; set; }
         }
 
         public sealed class IncludeRequest
@@ -60,6 +67,26 @@ namespace DataFeed.Controllers
             if (_currentUser.UserId is not { } userId) return Unauthorized();
             var outcome = await _service.DeleteIolCredentialsAsync(userId, ct);
             return outcome == BrokerWriteOutcome.Ok ? Ok(await _service.GetAsync(userId, BrokersService.Iol, ct)) : Failure(outcome, null);
+        }
+
+        [HttpPut("/App/GaleCore/Brokers/ibkr/Credentials")]
+        public async Task<IActionResult> SetIbkrCredentials([FromBody] IbkrCredentialsRequest? body, CancellationToken ct)
+        {
+            if (_currentUser.UserId is not { } userId) return Unauthorized();
+            try
+            {
+                var (outcome, message) = await _service.SetIbkrCredentialsAsync(userId, body?.Token, body?.QueryId, ct);
+                return outcome == BrokerWriteOutcome.Ok ? Ok(await _service.GetAsync(userId, BrokersService.Ibkr, ct)) : Failure(outcome, message);
+            }
+            catch (UpstreamSourceException ex) { return Upstream(ex); }
+        }
+
+        [HttpDelete("/App/GaleCore/Brokers/ibkr/Credentials")]
+        public async Task<IActionResult> DeleteIbkrCredentials(CancellationToken ct)
+        {
+            if (_currentUser.UserId is not { } userId) return Unauthorized();
+            var outcome = await _service.DeleteIbkrCredentialsAsync(userId, ct);
+            return outcome == BrokerWriteOutcome.Ok ? Ok(await _service.GetAsync(userId, BrokersService.Ibkr, ct)) : Failure(outcome, null);
         }
 
         [HttpPut("/App/GaleCore/Brokers/{id}/Include")]
@@ -111,6 +138,36 @@ namespace DataFeed.Controllers
             }
         }
 
+        // Igual que IOL: 409 sin credencial o rechazada, 502 si IBKR no responde. El reporte es de cierre (no en vivo).
+        [Tags("Data.Account")]
+        [HttpGet("/Data/Ibkr/Account/Portfolio")]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status502BadGateway)]
+        public async Task<IActionResult> IbkrPortfolio(CancellationToken ct)
+        {
+            if (_currentUser.UserId is not { } userId) return Unauthorized();
+            try
+            {
+                return Ok(await _service.GetIbkrPortfolioAsync(userId, ct));
+            }
+            catch (BrokerAccountNotLinkedException)
+            {
+                return Conflict(new ApiErrorResponse
+                {
+                    Error = "No cargaste tu token de IBKR. Hacelo en Configuración › Conexiones › Brokers.",
+                    Code = BrokerAccountNotLinkedException.Code,
+                });
+            }
+            catch (IbkrCredentialInvalidException ex)
+            {
+                return Conflict(new ApiErrorResponse { Error = ex.Message, Code = IbkrCredentialInvalidException.Code });
+            }
+            catch (UpstreamSourceException ex)
+            {
+                return Upstream(ex);
+            }
+        }
+
         private ObjectResult Upstream(UpstreamSourceException ex) =>
             StatusCode(502, new ApiErrorResponse { Error = ex.Message, Code = UpstreamSourceException.Code });
 
@@ -118,7 +175,7 @@ namespace DataFeed.Controllers
         {
             BrokerWriteOutcome.UnknownBroker => NotFound(new { error = "No existe ese broker." }),
             BrokerWriteOutcome.Invalid => BadRequest(new { error = message ?? "Datos inválidos." }),
-            BrokerWriteOutcome.Rejected => BadRequest(new { error = message ?? "IOL rechazó las credenciales." }),
+            BrokerWriteOutcome.Rejected => BadRequest(new { error = message ?? "El broker rechazó las credenciales." }),
             _ => StatusCode(503, new { error = "No se pueden guardar datos de brokers en este servidor." }),
         };
     }

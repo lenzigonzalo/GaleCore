@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { Brokers } from './Brokers';
-import { fetchBrokers, saveIolCredentials, setBrokerInclude } from '../../api/brokers';
+import { fetchBrokers, saveIbkrCredentials, saveIolCredentials, setBrokerInclude } from '../../api/brokers';
 
 jest.mock('../../api/brokers');
 jest.mock('../account/BrokerAccountCard', () => ({ BrokerAccountCard: () => <p>Formulario de Tastytrade</p> }));
@@ -50,6 +50,37 @@ test('IOL muestra el error cuando rechaza las credenciales', async () => {
   fireEvent.change(screen.getByLabelText('Contraseña de IOL'), { target: { value: 'y' } });
   fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
   expect(await screen.findByText('IOL rechazó el usuario o la contraseña')).toBeInTheDocument();
+});
+
+test('IBKR guarda token y Query ID y muestra Probando… mientras espera', async () => {
+  const ibkrMissing = { ...ibkr, status: 'missing' };
+  (fetchBrokers as jest.Mock).mockResolvedValue([tasty, iol, ibkrMissing]);
+  let done: (v: unknown) => void = () => {};
+  (saveIbkrCredentials as jest.Mock).mockReturnValue(new Promise(r => { done = r; }));
+  render(<Brokers />);
+  await screen.findByText('Interactive Brokers');
+  fireEvent.click(within(screen.getByLabelText('Interactive Brokers')).getByRole('button', { name: 'Conectar' }));
+  expect(screen.getByLabelText('Token de Flex')).toHaveAttribute('type', 'password');
+  fireEvent.change(screen.getByLabelText('Token de Flex'), { target: { value: ' tok-1 ' } });
+  fireEvent.change(screen.getByLabelText('Query ID'), { target: { value: '123456' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  expect(await screen.findByRole('button', { name: 'Probando…' })).toBeDisabled();
+  expect(saveIbkrCredentials).toHaveBeenCalledWith('tok-1', '123456');
+  done({ ...ibkr, status: 'connected', hint: '123456' });
+  await waitFor(() => expect(within(screen.getByLabelText('Interactive Brokers')).getByRole('status')).toHaveTextContent('Conectado'));
+  expect(screen.queryByLabelText('Token de Flex')).toBeNull();
+});
+
+test('IBKR muestra el error cuando rechaza el token', async () => {
+  (fetchBrokers as jest.Mock).mockResolvedValue([tasty, iol, { ...ibkr, status: 'missing' }]);
+  (saveIbkrCredentials as jest.Mock).mockRejectedValue({ response: { data: { error: 'El token de Flex de IBKR venció; generá uno nuevo en el portal.' } } });
+  render(<Brokers />);
+  await screen.findByText('Interactive Brokers');
+  fireEvent.click(within(screen.getByLabelText('Interactive Brokers')).getByRole('button', { name: 'Conectar' }));
+  fireEvent.change(screen.getByLabelText('Token de Flex'), { target: { value: 'x' } });
+  fireEvent.change(screen.getByLabelText('Query ID'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  expect(await screen.findByText(/venció/)).toBeInTheDocument();
 });
 
 test('el interruptor llama a Include', async () => {

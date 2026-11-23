@@ -282,6 +282,11 @@ namespace DataFeed
                 new DataFeed.Infrastructure.Providers.Iol.IolClient(sp.GetRequiredService<IHttpClientFactory>(),
                     sp.GetRequiredService<IConfiguration>(),
                     sp.GetRequiredService<ILogger<DataFeed.Infrastructure.Providers.Iol.IolClient>>()));
+            // IBKR Flex (WS-0108): el token viaja en la query string, así que el cliente HTTP no loguea URIs.
+            builder.Services.AddHttpClient(DataFeed.Infrastructure.Providers.Ibkr.IbkrFlexClient.HttpClientName).RemoveAllLoggers();
+            builder.Services.AddSingleton<DataFeed.Infrastructure.Providers.Ibkr.IIbkrFlexClient>(sp =>
+                new DataFeed.Infrastructure.Providers.Ibkr.IbkrFlexClient(sp.GetRequiredService<IHttpClientFactory>(),
+                    sp.GetRequiredService<ILogger<DataFeed.Infrastructure.Providers.Ibkr.IbkrFlexClient>>()));
             builder.Services.AddSingleton<DataFeed.Application.App.Brokers.BrokersService>(sp =>
             {
                 DataFeed.Application.App.Brokers.IBrokerStore? store = null;
@@ -294,6 +299,7 @@ namespace DataFeed
                 return new DataFeed.Application.App.Brokers.BrokersService(
                     store, sp.GetRequiredService<ITokenProtector>(),
                     sp.GetRequiredService<DataFeed.Infrastructure.Providers.Iol.IIolClient>(),
+                    sp.GetRequiredService<DataFeed.Infrastructure.Providers.Ibkr.IIbkrFlexClient>(),
                     async ct =>
                     {
                         using var scope = sp.CreateScope();

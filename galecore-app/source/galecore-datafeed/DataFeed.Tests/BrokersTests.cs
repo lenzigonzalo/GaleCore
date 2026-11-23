@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using DataFeed.Application.App.Brokers;
 using DataFeed.Infrastructure.Providers;
+using DataFeed.Infrastructure.Providers.Ibkr;
 using DataFeed.Infrastructure.Providers.Iol;
 using DataFeed.Infrastructure.Providers.Tastytrade;
 using Microsoft.Extensions.Configuration;
@@ -86,11 +87,27 @@ public class BrokersTests
         public void Forget(Guid userId) => Forgets++;
     }
 
+    private sealed class FakeIbkr : IIbkrFlexClient
+    {
+        public Exception? Fails { get; set; }
+        public int Reports { get; private set; }
+        public int Forgets { get; private set; }
+        public IbkrFlexReport Report { get; set; } = IbkrFlexParser.ParseReport(IbkrFlexParser.Load(IbkrFlexFixture.Report));
+
+        public Task<IbkrFlexReport> GetReportAsync(Guid userId, IbkrCredentials credentials, bool useCache, CancellationToken ct)
+        {
+            Reports++;
+            return Fails != null ? Task.FromException<IbkrFlexReport>(Fails) : Task.FromResult(Report);
+        }
+
+        public void Forget(Guid userId) => Forgets++;
+    }
+
     private static (BrokersService Service, FakeStore Store, FakeIol Iol) NewRig(bool withStore = true, Func<CancellationToken, Task>? probe = null)
     {
         var store = new FakeStore();
         var iol = new FakeIol();
-        var service = new BrokersService(withStore ? store : null, new FakeProtector(), iol, probe, NullLogger<BrokersService>.Instance);
+        var service = new BrokersService(withStore ? store : null, new FakeProtector(), iol, new FakeIbkr(), probe, NullLogger<BrokersService>.Instance);
         return (service, store, iol);
     }
 
@@ -104,7 +121,7 @@ public class BrokersTests
         Assert.Equal(new[] { "tastytrade", "ibkr", "iol" }, vacio.Select(b => b.Id).OrderBy(i => i == "tastytrade" ? 0 : i == "ibkr" ? 1 : 2));
         Assert.Equal("missing", vacio.Single(b => b.Id == "tastytrade").Status);
         Assert.Equal("missing", vacio.Single(b => b.Id == "iol").Status);
-        Assert.Equal("soon", vacio.Single(b => b.Id == "ibkr").Status);
+        Assert.Equal("missing", vacio.Single(b => b.Id == "ibkr").Status);
         Assert.All(vacio, b => Assert.True(b.Include));
 
         store.TastytradeLinked = true;
@@ -527,5 +544,290 @@ public class BrokersTests
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Iol:BaseUrl"] = "https://iol.test/" }).Build();
         await new IolClient(new Factory(handler), config).LoginAsync(User, Creds, default);
         Assert.Equal("https://iol.test/auth/token", handler.Calls.Single().Url);
+    }
+
+    // ── IBKR por Flex Web Service ─────────────────────────────────────────────────────────────────────────────
+
+    private const string FlexToken = "tok-FLEX-secreto-123456";
+    private const string FlexQuery = "987654";
+
+    private static (BrokersService Service, FakeStore Store, FakeIbkr Ibkr) NewIbkrRig(bool withStore = true)
+    {
+        var store = new FakeStore();
+        var ibkr = new FakeIbkr();
+        var service = new BrokersService(withStore ? store : null, new FakeProtector(), new FakeIol(), ibkr, null, NullLogger<BrokersService>.Instance);
+        return (service, store, ibkr);
+    }
+
+    private static IbkrFlexReport Parse(string xml) => IbkrFlexParser.ParseReport(IbkrFlexParser.Load(xml));
+
+    [Fact]
+    public void Parser_lee_posiciones_saldos_y_nav_y_descarta_los_lotes()
+    {
+        var st = Assert.Single(Parse(IbkrFlexFixture.Report).Statements);
+        Assert.Equal("U0000000", st.Account);
+        Assert.Equal("USD", st.BaseCurrency);
+        Assert.Equal("2026-11-20", st.ToDate);
+        Assert.Equal(new DateTime(2026, 11, 21, 16, 30, 45, DateTimeKind.Utc), st.WhenGenerated);
+        Assert.Equal(30125.45m, st.Nav); // la fila de reportDate más reciente
+
+        Assert.Equal(2, st.Positions.Count); // la fila LOT de AAPL no cuenta
+        var stock = st.Positions.Single(p => p.Symbol == "AAPL");
+        Assert.Equal(100m, stock.Quantity);
+        Assert.Equal(15000m, stock.CostBasisMoney);
+        var opt = st.Positions.Single(p => p.AssetCategory == "OPT");
+        Assert.Equal(-2m, opt.Quantity);
+        Assert.Equal(100m, opt.Multiplier);
+        Assert.Equal("P", opt.PutCall);
+        Assert.Equal(500m, opt.Strike);
+        Assert.Equal("2026-12-18", opt.Expiry);
+        Assert.Equal("SPY", opt.UnderlyingSymbol);
+        Assert.Null(opt.ListingExchange); // atributo vacío = faltante
+
+        Assert.Equal(new[] { "USD", "EUR" }, st.Cash.Select(c => c.Currency)); // BASE_SUMMARY no es un saldo
+        Assert.Equal(-300.10m, st.Cash.Single(c => c.Currency == "EUR").EndingCash);
+    }
+
+    [Fact]
+    public void Parser_recorre_todos_los_statements_y_acepta_posiciones_sin_levelOfDetail()
+    {
+        var xml = """
+            <FlexQueryResponse><FlexStatements count="2">
+              <FlexStatement accountId="U1" toDate="20261120"><OpenPositions><OpenPosition symbol="A" position="1" /></OpenPositions></FlexStatement>
+              <FlexStatement accountId="U2" toDate="20261120"><OpenPositions><OpenPosition symbol="B" position="2.5" /></OpenPositions></FlexStatement>
+            </FlexStatements></FlexQueryResponse>
+            """;
+        var r = Parse(xml);
+        Assert.Equal(new[] { "U1", "U2" }, r.Statements.Select(s => s.Account));
+        Assert.Equal(2.5m, r.Statements[1].Positions.Single().Quantity);
+        Assert.Null(r.Statements[1].Nav);
+    }
+
+    [Fact]
+    public void Mapper_arma_la_respuesta_con_pnl_porcentual_sobre_el_costo()
+    {
+        var r = IbkrPortfolioMapper.Map(Parse(IbkrFlexFixture.Report));
+        Assert.Equal("IBKR Flex", r.Source);
+        Assert.Equal("2026-11-20", r.ReportDate);
+        Assert.Equal(new DateTime(2026, 11, 21, 16, 30, 45, DateTimeKind.Utc), r.AsOf);
+        var stock = r.Positions.Single(p => p.Symbol == "AAPL");
+        Assert.Equal("U0000000", stock.Account);
+        Assert.Equal("STK", stock.Type);
+        Assert.Equal(150m, stock.AverageCost);
+        Assert.Equal(18025m, stock.MarketValue);
+        Assert.Equal(3025m / 15000m * 100m, stock.PnlPct);
+        var opt = r.Positions.Single(p => p.Type == "OPT");
+        Assert.Equal(25m, opt.PnlPct); // corto: 300 / |-1200|
+        Assert.Equal("SPY", opt.Underlying);
+        Assert.Equal(2, r.Balances.Count);
+        Assert.Equal(12500.55m, r.Balances.Single(b => b.Currency == "USD").Total);
+        var nav = Assert.Single(r.Nav);
+        Assert.Equal("USD", nav.Currency);
+        Assert.Equal(30125.45m, nav.Total);
+    }
+
+    [Fact]
+    public void Mapper_sin_costo_no_calcula_porcentaje()
+    {
+        var r = IbkrPortfolioMapper.Map(Parse("<FlexQueryResponse><FlexStatements><FlexStatement accountId=\"U1\"><OpenPositions><OpenPosition symbol=\"A\" fifoPnlUnrealized=\"5\" costBasisMoney=\"0\" /></OpenPositions></FlexStatement></FlexStatements></FlexQueryResponse>"));
+        Assert.Null(r.Positions.Single().PnlPct);
+    }
+
+    // ── cliente IBKR ──────────────────────────────────────────────────────────────────────────────────────────
+
+    private static (IbkrFlexClient Client, ScriptedHandler Handler, Func<DateTime> Clock, Action<TimeSpan> Advance) NewFlexClient(params string[] getResponses)
+    {
+        var handler = new ScriptedHandler();
+        var queue = new Queue<string>(getResponses);
+        handler.Respond = r => r.Url.Contains("SendRequest") ? (HttpStatusCode.OK, IbkrFlexFixture.SendOk) : (HttpStatusCode.OK, queue.Count > 1 ? queue.Dequeue() : queue.Peek());
+        var now = new DateTime(2026, 11, 23, 12, 0, 0, DateTimeKind.Utc);
+        var waits = new[] { TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero };
+        return (new IbkrFlexClient(new Factory(handler), null, waits, () => now), handler, () => now, d => now += d);
+    }
+
+    private static readonly IbkrCredentials FlexCreds = new(FlexToken, FlexQuery);
+
+    [Fact]
+    public async Task Cliente_Ibkr_pide_SendRequest_y_GetStatement_con_User_Agent()
+    {
+        var (client, handler, _, _) = NewFlexClient(IbkrFlexFixture.Report);
+        var report = await client.GetReportAsync(User, FlexCreds, false, default);
+        Assert.Equal(2, handler.Calls.Count);
+        Assert.StartsWith("https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService/SendRequest?t=" + FlexToken + "&q=" + FlexQuery + "&v=3", handler.Calls[0].Url);
+        Assert.Contains("GetStatement?q=1234567890&t=" + FlexToken + "&v=3", handler.Calls[1].Url);
+        Assert.All(handler.UserAgents, ua => Assert.Equal("GaleCore/1.0", ua));
+        Assert.Equal(2, report.Statements.Single().Positions.Count);
+    }
+
+    [Fact]
+    public async Task Cliente_Ibkr_reintenta_mientras_genera_el_reporte_1019()
+    {
+        var (client, handler, _, _) = NewFlexClient(IbkrFlexFixture.Fail("1019", "Statement generation in progress"), IbkrFlexFixture.Fail("1019", "Statement generation in progress"), IbkrFlexFixture.Report);
+        var report = await client.GetReportAsync(User, FlexCreds, false, default);
+        Assert.Single(report.Statements);
+        Assert.Equal(4, handler.Calls.Count); // 1 SendRequest + 3 GetStatement
+    }
+
+    [Fact]
+    public async Task Cliente_Ibkr_si_nunca_termina_avisa_que_pruebe_en_un_minuto()
+    {
+        var (client, _, _, _) = NewFlexClient(IbkrFlexFixture.Fail("1019", "Statement generation in progress"));
+        var ex = await Assert.ThrowsAsync<UpstreamSourceException>(() => client.GetReportAsync(User, FlexCreds, false, default));
+        Assert.Contains("todavía está generando el reporte", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("1012", "venció")]
+    [InlineData("1015", "no reconoce el token")]
+    [InlineData("1014", "Query ID")]
+    [InlineData("1013", "restricción de IP")]
+    public async Task Cliente_Ibkr_credencial_rechazada_es_invalida_en_SendRequest(string code, string fragment)
+    {
+        var handler = new ScriptedHandler { Respond = _ => (HttpStatusCode.OK, IbkrFlexFixture.Fail(code, "x")) };
+        var client = new IbkrFlexClient(new Factory(handler), null, Array.Empty<TimeSpan>());
+        var ex = await Assert.ThrowsAsync<IbkrCredentialInvalidException>(() => client.GetReportAsync(User, FlexCreds, false, default));
+        Assert.Contains(fragment, ex.Message);
+        Assert.Equal("broker_credential_invalid", IbkrCredentialInvalidException.Code);
+        Assert.DoesNotContain(FlexToken, ex.Message);
+    }
+
+    [Fact]
+    public async Task Cliente_Ibkr_credencial_rechazada_en_GetStatement_tambien()
+    {
+        var (client, _, _, _) = NewFlexClient(IbkrFlexFixture.Fail("1012", "Token has expired"));
+        await Assert.ThrowsAsync<IbkrCredentialInvalidException>(() => client.GetReportAsync(User, FlexCreds, false, default));
+    }
+
+    [Fact]
+    public async Task Cliente_Ibkr_errores_ajenos_salen_como_upstream_sin_la_url_ni_el_token()
+    {
+        var casos = new (HttpStatusCode, string)[]
+        {
+            (HttpStatusCode.OK, IbkrFlexFixture.Fail("1003", "Statement is not available.")),
+            (HttpStatusCode.BadGateway, "<html>bad gateway</html>"),
+            (HttpStatusCode.OK, "esto no es xml <<<"),
+        };
+        foreach (var caso in casos)
+        {
+            var handler = new ScriptedHandler { Respond = _ => caso };
+            var client = new IbkrFlexClient(new Factory(handler), null, Array.Empty<TimeSpan>());
+            var ex = await Assert.ThrowsAsync<UpstreamSourceException>(() => client.GetReportAsync(User, FlexCreds, false, default));
+            Assert.DoesNotContain(FlexToken, ex.Message);
+            Assert.DoesNotContain("http", ex.Message);
+        }
+        var fail = new ScriptedHandler { Throw = new HttpRequestException("fallo en https://x/?t=" + FlexToken) };
+        var ex2 = await Assert.ThrowsAsync<UpstreamSourceException>(() =>
+            new IbkrFlexClient(new Factory(fail), null, Array.Empty<TimeSpan>()).GetReportAsync(User, FlexCreds, false, default));
+        Assert.DoesNotContain(FlexToken, ex2.Message);
+    }
+
+    [Fact]
+    public async Task Cliente_Ibkr_cache_de_diez_minutos_no_repite_el_pedido_y_Forget_lo_limpia()
+    {
+        var (client, handler, _, advance) = NewFlexClient(IbkrFlexFixture.Report);
+        await client.GetReportAsync(User, FlexCreds, true, default);
+        await client.GetReportAsync(User, FlexCreds, true, default);
+        Assert.Equal(2, handler.Calls.Count); // sólo el primer SendRequest + GetStatement
+
+        await client.GetReportAsync(User, FlexCreds, false, default); // sin cache: vuelve a pedir
+        Assert.Equal(4, handler.Calls.Count);
+
+        client.Forget(User);
+        await client.GetReportAsync(User, FlexCreds, true, default);
+        Assert.Equal(6, handler.Calls.Count);
+
+        advance(TimeSpan.FromMinutes(11));
+        await client.GetReportAsync(User, FlexCreds, true, default);
+        Assert.Equal(8, handler.Calls.Count);
+    }
+
+    // ── servicio IBKR ─────────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Ibkr_guarda_token_y_query_cifrados_y_queda_conectado_con_la_query_de_hint()
+    {
+        var (service, store, ibkr) = NewIbkrRig();
+        var result = await service.SetIbkrCredentialsAsync(User, "  " + FlexToken + " ", FlexQuery, default);
+        Assert.Equal(BrokerWriteOutcome.Ok, result.Outcome);
+        Assert.Equal(1, ibkr.Reports);
+        Assert.Equal(1, ibkr.Forgets);
+        Assert.DoesNotContain(FlexToken, store.Rows["ibkr"].SecretHint);
+        Assert.Equal(FlexQuery, store.Rows["ibkr"].SecretHint);
+        Assert.StartsWith("enc:", store.Rows["ibkr"].SecretCipher);
+
+        var view = (await service.ListAsync(User, default)).Single(b => b.Id == "ibkr");
+        Assert.Equal("connected", view.Status);
+        Assert.Equal(FlexQuery, view.Hint);
+        Assert.Equal("IBKR devolvió el reporte Flex.", view.LastCheck!.Message);
+    }
+
+    [Fact]
+    public async Task Ibkr_si_lo_rechaza_no_guarda_y_devuelve_el_motivo()
+    {
+        var (service, store, ibkr) = NewIbkrRig();
+        ibkr.Fails = new IbkrCredentialInvalidException("El token de Flex de IBKR venció; generá uno nuevo en el portal.");
+        var (outcome, message) = await service.SetIbkrCredentialsAsync(User, FlexToken, FlexQuery, default);
+        Assert.Equal(BrokerWriteOutcome.Rejected, outcome);
+        Assert.Contains("venció", message);
+        Assert.Empty(store.Rows);
+    }
+
+    [Fact]
+    public async Task Ibkr_valida_los_campos_y_el_storage()
+    {
+        var (service, _, _) = NewIbkrRig();
+        Assert.Equal(BrokerWriteOutcome.Invalid, (await service.SetIbkrCredentialsAsync(User, null, FlexQuery, default)).Outcome);
+        Assert.Equal(BrokerWriteOutcome.Invalid, (await service.SetIbkrCredentialsAsync(User, FlexToken, "", default)).Outcome);
+        Assert.Equal(BrokerWriteOutcome.Invalid, (await service.SetIbkrCredentialsAsync(User, FlexToken, "12ab", default)).Outcome);
+        Assert.Equal(BrokerWriteOutcome.Invalid, (await service.SetIbkrCredentialsAsync(User, FlexToken, new string('1', 17), default)).Outcome);
+        Assert.Equal(BrokerWriteOutcome.Invalid, (await service.SetIbkrCredentialsAsync(User, new string('t', 201), FlexQuery, default)).Outcome);
+        var (sinBase, _, _) = NewIbkrRig(withStore: false);
+        Assert.Equal(BrokerWriteOutcome.StorageUnavailable, (await sinBase.SetIbkrCredentialsAsync(User, FlexToken, FlexQuery, default)).Outcome);
+    }
+
+    [Fact]
+    public async Task Ibkr_una_caida_en_el_guardado_sale_como_upstream_y_no_guarda()
+    {
+        var (service, store, ibkr) = NewIbkrRig();
+        ibkr.Fails = new UpstreamSourceException("IBKR", "respondió 502.");
+        await Assert.ThrowsAsync<UpstreamSourceException>(() => service.SetIbkrCredentialsAsync(User, FlexToken, FlexQuery, default));
+        Assert.Empty(store.Rows);
+    }
+
+    [Fact]
+    public async Task Ibkr_cartera_sin_credencial_es_no_vinculada_y_con_credencial_devuelve_el_reporte()
+    {
+        var (service, _, ibkr) = NewIbkrRig();
+        await Assert.ThrowsAsync<BrokerAccountNotLinkedException>(() => service.GetIbkrPortfolioAsync(User, default));
+
+        await service.SetIbkrCredentialsAsync(User, FlexToken, FlexQuery, default);
+        var portfolio = await service.GetIbkrPortfolioAsync(User, default);
+        Assert.Equal("IBKR Flex", portfolio.Source);
+        Assert.Equal(2, portfolio.Positions.Count);
+
+        ibkr.Fails = new IbkrCredentialInvalidException("x");
+        await Assert.ThrowsAsync<IbkrCredentialInvalidException>(() => service.GetIbkrPortfolioAsync(User, default));
+    }
+
+    [Fact]
+    public async Task Ibkr_prueba_de_conexion_missing_ok_e_invalid_y_borrar_limpia()
+    {
+        var (service, store, ibkr) = NewIbkrRig();
+        Assert.Equal("missing", (await service.TestAsync(User, "ibkr", default))!.Status);
+
+        await service.SetIbkrCredentialsAsync(User, FlexToken, FlexQuery, default);
+        var ok = await service.TestAsync(User, "ibkr", default);
+        Assert.True(ok!.Ok);
+
+        ibkr.Fails = new IbkrCredentialInvalidException("El token de Flex de IBKR venció; generá uno nuevo en el portal.");
+        var bad = await service.TestAsync(User, "ibkr", default);
+        Assert.Equal("invalid", bad!.Status);
+        Assert.Equal("invalid", (await service.ListAsync(User, default)).Single(b => b.Id == "ibkr").Status);
+
+        var forgetsAntes = ibkr.Forgets;
+        Assert.Equal(BrokerWriteOutcome.Ok, await service.DeleteIbkrCredentialsAsync(User, default));
+        Assert.Equal(forgetsAntes + 1, ibkr.Forgets);
+        Assert.Null(store.Rows["ibkr"].SecretCipher);
+        Assert.Equal("missing", (await service.ListAsync(User, default)).Single(b => b.Id == "ibkr").Status);
     }
 }
