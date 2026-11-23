@@ -7,6 +7,7 @@ const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const { createSharing } = require('./lab-sharing');
 const { codexConnectors, claudeConnectors, recordClaudeInit, listConnectors, knownConnector, setConnector } = require('./lab-brokers');
+const { authStatus, createCodexLogin } = require('./provider-auth');
 const { permissionRules, saveUserRules, mergedSettings } = require('./lab-permissions');
 
 // WS-0088: semáforo compartido con las tareas del VPS. task_service.py (galecore-ai) usa archivos
@@ -356,7 +357,7 @@ function permissionMode(provider, raw) {
   return PERMISSION_MODES[engine].includes(raw) ? raw : safe;
 }
 
-function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, now = Date.now, request, sessionFile, update = () => null }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, refreshBinaries = () => {}, autoSync = false, now = Date.now, request, sessionFile, update = () => null }) {
   const AUTO_SYNC_EVERY_MS = 12 * 60 * 60 * 1000; let lastAutoSync = 0;   // hora del último sync automático (arranque o apertura)
   const autoSyncNow = () => { lastAutoSync = now(); sharing.syncAll(listProjects, { busy }).catch(() => {}); };
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
@@ -596,6 +597,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }).catch(()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});
     return chat;
   }
+  const codexLogin=createCodexLogin({binary:()=>{refreshBinaries();return binaries.codex||null;},spawnProcess});
   const connectorOpts=()=>({local,binary:binaries.claude,codexBinary:binaries.codex,env:environment(),spawnProcess});
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
@@ -680,6 +682,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       }
     }
     // Conectores por motor (WS-0091): GaleCore va siempre; el resto se prende o apaga por motor y por conector (lab-brokers.js).
+    // WS-0106: estado de los motores y login de Codex contra este Lab.
+    if(url.pathname==='/providers/auth'&&req.method==='GET'){refreshBinaries();json(res,200,{providers:await Promise.all(['codex','claude'].map(id=>authStatus(id,binaries[id]||null,execute))),codexLoginPending:codexLogin.pending()});return true;}
+    if(url.pathname==='/providers/codex/login'&&req.method==='POST'){try{json(res,200,await codexLogin.start());}catch(e){json(res,e.status||500,{error:e.message});}return true;}
+    if(url.pathname==='/providers/codex/login/cancel'&&req.method==='POST'){codexLogin.cancel();json(res,200,{ok:true});return true;}
     if(url.pathname==='/connectors'&&req.method==='GET'){json(res,200,await listConnectors(connectorOpts()));return true;}
     if(url.pathname==='/connectors'&&req.method==='POST'){
       const b=await readBody(req);
@@ -690,7 +696,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // Reglas de permisos de Claude Code: las del producto (fijas) y las del usuario (lab-permissions.js).
     if(url.pathname==='/permissions/claude'&&req.method==='GET'){json(res,200,permissionRules(kb,local));return true;}
     if(url.pathname==='/permissions/claude'&&req.method==='POST'){saveUserRules(local,await readBody(req),fail);json(res,200,permissionRules(kb,local));return true;}
-    if(req.method==='GET' && url.pathname==='/workspaces'){if(autoSync&&now()-lastAutoSync>AUTO_SYNC_EVERY_MS)autoSyncNow();   // al abrir el Lab, si el último fue hace más de 12 h; en segundo plano
+    if(req.method==='GET' && url.pathname==='/workspaces'){refreshBinaries();if(autoSync&&now()-lastAutoSync>AUTO_SYNC_EVERY_MS)autoSyncNow();   // al abrir el Lab, si el último fue hace más de 12 h; en segundo plano
       const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),update:update(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}

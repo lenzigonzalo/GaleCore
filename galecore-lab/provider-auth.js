@@ -1,7 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFile, execFileSync } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 
 const PROVIDERS = ['claude', 'codex'];
 function nativeCodexFromWrapper(wrapper, exists = fs.existsSync, arch = process.arch) {
@@ -60,4 +60,36 @@ async function authStatus(provider, binary, execute = execFile) {
     resolve({ id: provider, status: parseAuthStatus(provider, error, stdout, stderr) });
   }));
 }
-module.exports = { PROVIDERS, providerBinary, nativeCodexFromWrapper, authCommand, authEnvironment, parseAuthStatus, authStatus };
+
+// WS-0106: login de Codex con código de dispositivo, lanzado desde el Lab (un proceso por vez).
+const ANSI = /\u001b\[[0-9;?]*[ -\/]*[@-~]/g;
+function parseDeviceLogin(text) {
+  const clean = String(text || '').replace(ANSI, '');
+  const url = (clean.match(/https:\/\/[^\s]+(?=\s)/) || [])[0];
+  const code = (clean.match(/\b[A-Z0-9]{4,}-[A-Z0-9]{4,}(?=\s)/) || [])[0];
+  return url && code ? { url, code } : null;
+}
+function createCodexLogin({ binary, spawnProcess = spawn, environment = authEnvironment, timeoutMs = 15 * 60 * 1000, waitMs = 20000 }) {
+  let current = null;
+  const stop = () => { if (!current) return; const c = current; current = null; clearTimeout(c.timer); try { c.proc.kill(); } catch { /* ya terminó */ } };
+  function start() {
+    if (current) return current.ready;
+    const exe = binary();
+    if (!exe) return Promise.reject(Object.assign(new Error('Codex no está instalado en el Lab.'), { status: 409 }));
+    const proc = spawnProcess(exe, ['login', '--device-auth'], { env: environment(), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const c = current = { proc, text: '', info: null };
+    c.ready = new Promise((resolve, reject) => {
+      const fail = message => { if (current === c) { current = null; clearTimeout(c.timer); } clearTimeout(waiter); try { proc.kill(); } catch { /* ya terminó */ } reject(Object.assign(new Error(message), { status: 502 })); };
+      const waiter = setTimeout(() => fail('Codex no devolvió el código a tiempo.'), waitMs);
+      const feed = chunk => { c.text += chunk; if (!c.info) { c.info = parseDeviceLogin(c.text); if (c.info) { clearTimeout(waiter); resolve(c.info); } } };
+      proc.stdout.on('data', feed); proc.stderr.on('data', feed);
+      proc.on('error', () => fail('No se pudo iniciar Codex.'));
+      proc.on('close', () => { if (current === c) { current = null; clearTimeout(c.timer); } if (!c.info) { clearTimeout(waiter); reject(Object.assign(new Error('Codex terminó sin dar el código.'), { status: 502 })); } });
+    });
+    c.ready.catch(() => {});
+    c.timer = setTimeout(stop, timeoutMs);
+    return c.ready;
+  }
+  return { start, cancel: stop, pending: () => !!current };
+}
+module.exports = { parseDeviceLogin, createCodexLogin, PROVIDERS, providerBinary, nativeCodexFromWrapper, authCommand, authEnvironment, parseAuthStatus, authStatus };

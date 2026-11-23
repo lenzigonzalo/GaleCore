@@ -565,3 +565,11 @@ test('permisos de Claude Code (WS-0083): reglas del producto fijas, las del usua
  assert.equal(JSON.stringify(merged).includes('bypassPermissions'),false);
 });
 
+test('WS-0106: /providers/auth re-resuelve binarios y login de Codex desde el Lab',async t=>{const {EventEmitter}=require('events');const {base,kb,local}=setup(t);const binaries={codex:null,claude:null};let spawned=0;const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.kill=()=>proc.emit('close',1);
+ const service=createWorkspaces({root:base,kb,local,binaries,environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],refreshBinaries:()=>{binaries.codex='codex';},execute:(bin,args,o,cb)=>cb(null,'Logged in using ChatGPT',''),spawnProcess:()=>{spawned++;return proc;}});
+ const noLogin=await route(createWorkspaces({root:base,kb,local,binaries:{},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[]}),'POST','/providers/codex/login');assert.equal(noLogin.status,409);
+ const st=await route(service,'GET','/providers/auth');assert.deepEqual(st.value.providers.find(p=>p.id==='codex'),{id:'codex',status:'authenticated'});assert.deepEqual(st.value.providers.find(p=>p.id==='claude'),{id:'claude',status:'not-installed'});
+ const p=route(service,'POST','/providers/codex/login');await new Promise(r=>setTimeout(r,20));proc.stdout.emit('data','https://auth.openai.com/codex/device\nAB12-CD34EF\n');const r=await p;assert.deepEqual(r.value,{url:'https://auth.openai.com/codex/device',code:'AB12-CD34EF'});assert.equal(spawned,1);
+ assert.equal((await route(service,'GET','/providers/auth')).value.codexLoginPending,true);
+ await route(service,'POST','/providers/codex/login/cancel');assert.equal((await route(service,'GET','/providers/auth')).value.codexLoginPending,false);
+ const ws=await route(service,'GET','/workspaces');assert.equal(ws.value.providers.find(p=>p.id==='codex').installed,true);});

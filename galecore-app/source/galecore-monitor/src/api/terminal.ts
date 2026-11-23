@@ -39,7 +39,3 @@ export async function fetchProviderAuth(): Promise<{ providers: ProviderAuth[] }
     return response.json();
   } finally { window.clearTimeout(timer); }
 }
-export function authSocketUrl(provider: ProviderAuth['id'], cols: number, rows: number): string {
-  const params = new URLSearchParams({ auth: provider, cols: String(cols), rows: String(rows) });
-  return `${TERMINAL_URL.replace(/^http/, 'ws')}/pty?${params}`;
-}

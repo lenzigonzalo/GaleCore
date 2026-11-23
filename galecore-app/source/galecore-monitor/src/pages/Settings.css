@@ -130,6 +130,10 @@
 .settings-agent-card { padding:20px; border:1px solid var(--border); border-radius:10px; background:var(--bg-secondary); }
 .settings-agent-login { display:flex; align-items:center; justify-content:space-between; gap:16px; border-top:1px solid var(--border-dark); padding-top:18px; margin-top:18px; flex-wrap:wrap; }
 .settings-agent-note { margin-bottom:18px; }
+.settings-device-login { display:grid; gap:12px; width:100%; }
+.settings-device-login a { color:var(--accent); word-break:break-all; font-size:14px; }
+.settings-device-code { font:600 36px var(--font-mono, monospace); letter-spacing:.08em; color:var(--text-primary); }
+.settings-device-login > div { display:flex; gap:10px; flex-wrap:wrap; }
 
 /* Selectores de «Al abrir un chat nuevo»: uno debajo de otro, con nombre y el mismo estilo oscuro */
 .prefs-fields { display: grid; grid-template-columns: auto 210px; align-items: center; gap: 10px 14px; flex-shrink: 0; }

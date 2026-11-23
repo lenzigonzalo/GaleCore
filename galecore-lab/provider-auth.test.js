@@ -30,3 +30,39 @@ test('npm Codex wrapper resolves native Windows binary, without running a comman
   assert.equal(nativeCodexFromWrapper(wrapper, value => value === expected, 'x64'), expected);
   assert.equal(nativeCodexFromWrapper(wrapper, () => false, 'x64'), null);
 });
+const { EventEmitter } = require('events');
+const { parseDeviceLogin, createCodexLogin } = require('./provider-auth');
+const SALIDA = '\nWelcome to Codex [v\u001b[90m0.169.0\u001b[0m]\n1. Open this link\n   \u001b[94mhttps://auth.openai.com/codex/device\u001b[0m\n\n2. Enter this one-time code \u001b[90m(expires in 15 minutes)\u001b[0m\n   \u001b[94mYP05-MWBNI\u001b[0m\n';
+function fakeProc() { const p = new EventEmitter(); p.stdout = new EventEmitter(); p.stderr = new EventEmitter(); p.killed = false; p.kill = () => { p.killed = true; p.emit('close', 1); }; return p; }
+test('parseDeviceLogin lee URL y código sin depender de colores', () => {
+  assert.deepEqual(parseDeviceLogin(SALIDA), { url: 'https://auth.openai.com/codex/device', code: 'YP05-MWBNI' });
+  assert.equal(parseDeviceLogin('Welcome to Codex'), null);
+});
+test('login de Codex: un proceso por vez, devuelve url/código y se corta', async () => {
+  const procs = []; const calls = [];
+  const login = createCodexLogin({ binary: () => 'codex', environment: () => ({}), spawnProcess: (bin, args) => { calls.push([bin, args]); const p = fakeProc(); procs.push(p); return p; } });
+  const first = login.start();
+  procs[0].stdout.emit('data', SALIDA.slice(0, 60));
+  procs[0].stdout.emit('data', SALIDA.slice(60));
+  assert.deepEqual(await first, { url: 'https://auth.openai.com/codex/device', code: 'YP05-MWBNI' });
+  assert.deepEqual(calls, [['codex', ['login', '--device-auth']]]);
+  assert.deepEqual(await login.start(), { url: 'https://auth.openai.com/codex/device', code: 'YP05-MWBNI' });
+  assert.equal(procs.length, 1); assert.equal(login.pending(), true);
+  login.cancel(); assert.equal(procs[0].killed, true); assert.equal(login.pending(), false);
+});
+test('login de Codex: termina solo al completar, falla sin binario o sin código, y vence por tiempo', async () => {
+  const none = createCodexLogin({ binary: () => null });
+  await assert.rejects(() => none.start(), /no está instalado/);
+  const procs = [];
+  const sp = () => { const p = fakeProc(); procs.push(p); return p; };
+  const login = createCodexLogin({ binary: () => 'codex', spawnProcess: sp, timeoutMs: 20 });
+  const ready = login.start(); procs[0].stdout.emit('data', SALIDA); await ready;
+  await new Promise(r => setTimeout(r, 60));
+  assert.equal(procs[0].killed, true); assert.equal(login.pending(), false);
+  const done = createCodexLogin({ binary: () => 'codex', spawnProcess: sp });
+  const r2 = done.start(); procs[1].stdout.emit('data', SALIDA); await r2; procs[1].emit('close', 0);
+  assert.equal(done.pending(), false);
+  const dead = createCodexLogin({ binary: () => 'codex', spawnProcess: sp });
+  const r3 = dead.start(); procs[2].emit('close', 1);
+  await assert.rejects(() => r3, /sin dar el código/);
+});

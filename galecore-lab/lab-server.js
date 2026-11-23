@@ -204,7 +204,7 @@ const updater = createUpdater({
   git: gitIn(ROOT), busy: () => workspaces.isBusy(),
   restart: () => { relaunch(__dirname); shutdown(); },
 });
-const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true, update:() => updater.info() });
+const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true, refreshBinaries:() => { for (const id of ['codex', 'claude']) if (!binaries[id] || !fs.existsSync(binaries[id])) binaries[id] = binary(id); }, update:() => updater.info() });
 const agents = createAgents({ root: ROOT, environment, binary: binaries.claude });   // WS-0079: rutinas en la nube al instante
 const server = http.createServer(async (req, res) => {
   if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite GaleCore: la plataforma o el monitor local de esta PC.' });
