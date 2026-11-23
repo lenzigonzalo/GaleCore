@@ -87,27 +87,43 @@ function createBinaryRefresher({ binaries, resolve, now = Date.now, retryMs = 60
     }
   };
 }
-function createCodexLogin({ binary, spawnProcess = spawn, platform = process.platform, killProcess, environment = authEnvironment, timeoutMs = 15 * 60 * 1000, waitMs = 20000 }) {
+// Login lanzado desde el Lab (un proceso por vez). Codex: código de dispositivo. Claude: enlace y el código que se pega (stdin).
+function createLogin({ name, args, parse, pasteCode = false, binary, spawnProcess = spawn, platform = process.platform, killProcess, environment = authEnvironment, timeoutMs = 15 * 60 * 1000, waitMs = 20000 }) {
   let current = null;
   const stop = () => { if (!current) return; const c = current; current = null; clearTimeout(c.timer); killTree(c.proc, { platform, killProcess }); };
   function start() {
     if (current) return current.ready;
     const exe = binary();
-    if (!exe) return Promise.reject(Object.assign(new Error('Codex no está instalado en el Lab.'), { status: 409 }));
-    const proc = spawnProcess(exe, ['login', '--device-auth'], { env: environment(), windowsHide: true, detached: platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+    if (!exe) return Promise.reject(Object.assign(new Error(name + ' no está instalado en el Lab.'), { status: 409 }));
+    const proc = spawnProcess(exe, args, { env: environment(), windowsHide: true, detached: platform !== 'win32', stdio: [pasteCode ? 'pipe' : 'ignore', 'pipe', 'pipe'] });
     const c = current = { proc, text: '', info: null };
     c.ready = new Promise((resolve, reject) => {
       const fail = message => { if (current === c) { current = null; clearTimeout(c.timer); } clearTimeout(waiter); killTree(proc, { platform, killProcess }); reject(Object.assign(new Error(message), { status: 502 })); };
-      const waiter = setTimeout(() => fail('Codex no devolvió el código a tiempo.'), waitMs);
-      const feed = chunk => { if (c.info || c.text.length > 65536) return; c.text += chunk; { c.info = parseDeviceLogin(c.text); if (c.info) { clearTimeout(waiter); resolve(c.info); } } };
+      const waiter = setTimeout(() => fail(name + ' no devolvió el código a tiempo.'), waitMs);
+      const feed = chunk => { if (c.info || c.text.length > 65536) return; c.text += chunk; { c.info = parse(c.text); if (c.info) { clearTimeout(waiter); resolve(c.info); } } };
       proc.stdout.on('data', feed); proc.stderr.on('data', feed);
-      proc.on('error', () => fail('No se pudo iniciar Codex.'));
-      proc.on('close', () => { if (current === c) { current = null; clearTimeout(c.timer); } if (!c.info) { clearTimeout(waiter); reject(Object.assign(new Error('Codex terminó sin dar el código.'), { status: 502 })); } });
+      proc.on('error', () => fail('No se pudo iniciar ' + name + '.'));
+      proc.on('close', () => { if (current === c) { current = null; clearTimeout(c.timer); } if (!c.info) { clearTimeout(waiter); reject(Object.assign(new Error(name + ' terminó sin dar el código.'), { status: 502 })); } });
     });
     c.ready.catch(() => {});
     c.timer = setTimeout(stop, timeoutMs);
     return c.ready;
   }
-  return { start, cancel: stop, pending: () => !!current };
+  // Entrega el código pegado por el trader a la entrada del proceso; no se guarda ni se registra.
+  function submit(code) {
+    const value = String(code || '').trim();
+    if (!/^[\w#.~-]{8,1024}$/.test(value)) throw Object.assign(new Error('El código no tiene el formato esperado.'), { status: 400 });
+    if (!current || !current.info || !current.proc.stdin) throw Object.assign(new Error('No hay una conexión en curso.'), { status: 409 });
+    current.proc.stdin.write(value + '\n');
+  }
+  return { start, submit, cancel: stop, pending: () => !!current };
 }
-module.exports = { createBinaryRefresher, killTree, parseDeviceLogin, createCodexLogin, PROVIDERS, providerBinary, nativeCodexFromWrapper, authCommand, authEnvironment, parseAuthStatus, authStatus };
+const createCodexLogin = options => createLogin({ ...options, name: 'Codex', args: ['login', '--device-auth'], parse: parseDeviceLogin });
+// `claude auth login` imprime «visit: <url>» y espera «Paste code here». Funciona sin terminal.
+function parseClaudeLogin(text) {
+  const clean = String(text || '').replace(ANSI, '');
+  const url = (clean.match(/https:\/\/(?:claude\.com|claude\.ai|platform\.claude\.com)\/[^\s]+(?=\s)/) || [])[0];
+  return url && /Paste code/i.test(clean) ? { url } : null;
+}
+const createClaudeLogin = options => createLogin({ ...options, name: 'Claude Code', args: authCommand('claude'), parse: parseClaudeLogin, pasteCode: true });
+module.exports = { createBinaryRefresher, killTree, parseDeviceLogin, parseClaudeLogin, createCodexLogin, createClaudeLogin, PROVIDERS, providerBinary, nativeCodexFromWrapper, authCommand, authEnvironment, parseAuthStatus, authStatus };

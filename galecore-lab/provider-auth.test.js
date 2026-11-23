@@ -101,3 +101,17 @@ test('login de Codex: un segundo pedido concurrente devuelve lo mismo sin lanzar
   assert.deepEqual(await a, await b); assert.equal(spawned, 1);
   login.cancel();
 });
+const { parseClaudeLogin, createClaudeLogin } = require('./provider-auth');
+const SALIDA_CLAUDE = 'Opening browser to sign in…\nIf the browser didn\'t open, visit: https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=abc\nPaste code here if prompted > ';
+test('login de Claude: lee el enlace, entrega el código por stdin y se corta', async () => {
+  const writes = []; const calls = []; const opts = []; const p = fakeProc(); p.stdin = { write: d => writes.push(d) };
+  const login = createClaudeLogin({ binary: () => 'claude', environment: () => ({}), spawnProcess: (b, a, o) => { calls.push([b, a]); opts.push(o); return p; } });
+  assert.equal(parseClaudeLogin('visit: https://claude.com/x'), null);
+  const ready = login.start(); p.stdout.emit('data', SALIDA_CLAUDE.slice(0, 50)); p.stdout.emit('data', SALIDA_CLAUDE.slice(50));
+  assert.deepEqual(await ready, { url: 'https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=abc' });
+  assert.deepEqual(calls, [['claude', ['auth', 'login']]]); assert.equal(opts[0].stdio[0], 'pipe');
+  assert.throws(() => login.submit('mal formato!'), /formato/);
+  login.submit(' abcDEF123#stateXYZ '); assert.deepEqual(writes, ['abcDEF123#stateXYZ\n']);
+  assert.equal(login.pending(), true); login.cancel(); assert.equal(p.killed, true); assert.equal(login.pending(), false);
+  assert.throws(() => login.submit('abcDEF123#stateXYZ'), /en curso/);
+});
