@@ -13,6 +13,8 @@ set -euo pipefail
 LAB_DIR=/srv/galecore/lab
 TARBALL=/home/galecore-deploy/galecore-lab.tar.gz
 INSTANCES=(elenzi glenzi)
+AI_DIR=/srv/galecore/ai/galecore-ai
+AI_TARBALL=/home/galecore-deploy/galecore-ai.tar.gz   # opcional: sin él, el harness queda como está
 
 if [[ $# -ne 0 ]]; then
   echo "FALLO: galecore-lab-deploy no recibe argumentos (despliega $TARBALL)" >&2
@@ -57,6 +59,41 @@ sudo -u galecore env HOME="$LAB_DIR" npm_config_cache="$LAB_DIR/.npm" \
 # Exito: ya no hay que restaurar; limpiar el backup antes del restart.
 trap - ERR
 rm -rf "$BACKUP_DIR"
+
+# Harness Python (WS-0106): el Lab, el supervisor y `task serve` corren /srv/galecore/ai/galecore-ai, instalado
+# con `pip install -e` en el venv. src/ y tools/ se reemplazan enteros (no quedan modulos borrados); lo demas se
+# pisa archivo por archivo, sin borrar lo que el VPS tenga de mas (.scratch compartido, configuracion local).
+# pip sólo si cambió pyproject.toml. Si algo falla, vuelve la copia anterior y el Lab sigue con el harness viejo.
+if [[ -f "$AI_TARBALL" ]]; then
+  echo "==> Actualizando galecore-ai en $AI_DIR"
+  AI_BACKUP="$AI_DIR.prev.tar.gz"
+  tar -czf "$AI_BACKUP" -C "$AI_DIR" --exclude=./.scratch .
+  deps_changed=1
+  if tar -xzOf "$AI_TARBALL" pyproject.toml | cmp -s - "$AI_DIR/pyproject.toml"; then deps_changed=0; fi
+  ai_rollback() {
+    echo "FALLO actualizando galecore-ai; restaurando la copia anterior" >&2
+    rm -rf "$AI_DIR/src" "$AI_DIR/tools"
+    tar -xzf "$AI_BACKUP" -C "$AI_DIR"
+  }
+  trap ai_rollback ERR
+  rm -rf "$AI_DIR/src" "$AI_DIR/tools"
+  tar -xzf "$AI_TARBALL" -C "$AI_DIR" --no-same-owner
+  chown -R galecore:galecore "$AI_DIR"
+  chmod 1777 "$AI_DIR/.scratch" 2>/dev/null || true
+  if [[ $deps_changed -eq 1 ]]; then
+    echo "==> pyproject.toml cambió: pip install -e"
+    sudo -u galecore env HOME=/srv/galecore/ai /srv/galecore/ai/venv/bin/pip install -q -e "$AI_DIR"
+  fi
+  (cd /tmp && sudo -u galecore /srv/galecore/ai/venv/bin/python -B -c "import galecore_ai.adapters.cli")
+  trap - ERR
+  rm -f "$AI_BACKUP" "$AI_TARBALL"
+fi
+
+# El propio script de deploy: si el repo trae otra versión, queda instalada para el próximo deploy.
+if [[ -f "$LAB_DIR/deploy/galecore-lab-deploy.sh" ]] && ! cmp -s "$LAB_DIR/deploy/galecore-lab-deploy.sh" /usr/local/bin/galecore-lab-deploy; then
+  echo "==> Actualizando /usr/local/bin/galecore-lab-deploy"
+  install -o root -g root -m 755 "$LAB_DIR/deploy/galecore-lab-deploy.sh" /usr/local/bin/galecore-lab-deploy
+fi
 
 # Si el unit file del repo cambio, aplicarlo antes del restart. El install.sh ya lo instala en
 # la primera vuelta; aca lo refrescamos por si evoluciono con el deploy.

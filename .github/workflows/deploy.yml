@@ -130,6 +130,12 @@ jobs:
             .
           ls -lh "$RUNNER_TEMP/galecore-lab.tar.gz"
 
+      # El harness Python que usa el Lab (y el supervisor y `task serve` del VPS): sólo lo versionado, sin tests.
+      - name: Empaquetar galecore-ai (lo versionado, sin tests)
+        run: |
+          git archive --format=tar.gz -o "$RUNNER_TEMP/galecore-ai.tar.gz" HEAD:galecore-ai -- . ':(exclude)tests'
+          ls -lh "$RUNNER_TEMP/galecore-ai.tar.gz"
+
       - name: Preparar SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -145,6 +151,8 @@ jobs:
           SSH_OPTS="-i $HOME/.ssh/deploy_key -p $SSH_PORT -o BatchMode=yes -o StrictHostKeyChecking=yes"
           scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$RUNNER_TEMP/galecore-lab.tar.gz" "$SSH_USER@$SSH_HOST:galecore-lab.tar.gz"
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/galecore-ai.tar.gz" "$SSH_USER@$SSH_HOST:galecore-ai.tar.gz"
           ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "sudo /usr/local/bin/galecore-lab-deploy"
 
       - name: Verificar que el Lab responde (preflight OPTIONS, sin auth)
