@@ -6,10 +6,10 @@ const NOT_LINKED = 'broker_account_not_linked';
 const CREDENTIAL_INVALID = 'broker_credential_invalid';
 
 const NOT_LINKED_MESSAGE =
-  'No tenés una cuenta de bróker configurada. Vinculala en Configuración › Conexiones › Bróker.';
+  'No tenés una cuenta de bróker configurada. Vinculala en Configuración › Conexiones › Brokers.';
 
 const CREDENTIAL_INVALID_MESSAGE =
-  'Tastytrade rechaza la credencial de tu cuenta. Revisá en Configuración › Conexiones › Bróker que el ' +
+  'Tastytrade rechaza la credencial de tu cuenta. Revisá en Configuración › Conexiones › Brokers que el ' +
   'refresh token y el client secret sean de la misma aplicación OAuth, y que el token siga vigente.';
 
 /**

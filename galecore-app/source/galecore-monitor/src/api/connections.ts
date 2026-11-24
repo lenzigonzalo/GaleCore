@@ -8,7 +8,7 @@ export interface ConnectionTest { at: string; ok: boolean; message: string }
 export interface ConnectionEntry {
   id: string;
   name: string;
-  kind: 'source' | 'broker' | 'mcp';
+  kind: 'source' | 'broker';
   owner: 'platform' | 'personal';
   needsKey: 'required' | 'optional' | 'none';
   keyLabel?: string;

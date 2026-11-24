@@ -76,7 +76,8 @@ def _agent_history(kb: KnowledgeBase, task, outcomes: list[dict]) -> list[dict]:
                 lines += [f"## {title}", *(f"- {x}" for x in items), ""]
             findings = "\n".join(lines)
         trimmed = bool(findings and len(findings) > HISTORY_FINDINGS_LIMIT)
-        rows.append({**{k: e[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error", "reason_code")
+        rows.append({**{k: e[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error", "reason_code",
+                                    "cost_usd")
                         if e.get(k) is not None}, "failed": e["event"] == "run_failed",
                      "findings": findings[:HISTORY_FINDINGS_LIMIT] if findings else None, "truncated": trimmed})
     return rows
@@ -130,7 +131,7 @@ def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) ->
         "history": _agent_history(kb, task, outcomes), "history_total": len(outcomes),
         "state": fresh["state"], "state_detail": fresh.get("detail"), "next_expected_at": fresh.get("next_expected_at"),
         "last_run": ({k: last[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error",
-                                           "reason_code") if last.get(k) is not None}
+                                           "reason_code", "cost_usd") if last.get(k) is not None}
                      | {"failed": last["event"] == "run_failed"}
                      | ({"reason_text": t.reason_text(last)} if t.reason_text(last) else {})) if last else None,
         "runs": sum(1 for e in log if e["event"] == "run_finished"),
@@ -177,12 +178,15 @@ def idea_pieces(kb: KnowledgeBase) -> list[dict]:
     return pieces
 
 
-def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
-    """Every piece the local sources hold today (agents, skills and ideas; no profile since WS-0058), as {kind, key, title, content, format, visibility}."""
+def local_pieces(kb: KnowledgeBase, now: datetime | None = None, side: str | None = None) -> list[dict]:
+    """Every piece the local sources hold today (agents, skills and ideas; no profile since WS-0058), as {kind, key, title, content, format, visibility}.
+
+    With `side` ("pc" or "vps") only the agents that run on that side: each side publishes only what it runs."""
     from galecore_ai.application import tasks as t  # lazy: tasks imports the CLI side lazily too
 
     pieces: list[dict] = []
-    for task in (x for x in t.list_tasks(kb) if x["status"] != "cancelled"):   # a cancelled task is history
+    for task in (x for x in t.list_tasks(kb) if x["status"] != "cancelled"
+                 and (side is None or x["runs_on"] == side)):   # a cancelled task is history
         pieces.append({"kind": "agent", "key": _slug(task["id"]), "title": f"{task['id']} ({task['capability']})",
                        "content": json.dumps({"id": task["id"], **agent_state(kb, task["id"], now)},
                                              ensure_ascii=False),
@@ -278,18 +282,26 @@ def _create_agent(kb: KnowledgeBase, scheduler, item: dict, content: dict, creat
     return out
 
 
+def _side_of(content: dict) -> str:
+    """Which side runs the agent a piece describes; the pieces that predate WS-0079 say nothing: the PC."""
+    return content.get("runs_on") or "pc"
+
+
 def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None,
-                   items: list[tuple[dict, dict]] | None = None) -> list[dict]:
+                   items: list[tuple[dict, dict]] | None = None, side: str | None = None) -> list[dict]:
     """Carry out the on/off requests the monitor wrote into the agent pieces; return what was done or refused.
 
     Only an agent of this PC whose slug is the piece's key is touched (the id comes from GaleCore). A request older
     than the agent's last change is refused: the owner decided something later (on this PC or by chat).
+    With `side`, the pieces of the other side are ignored (its own runner applies them).
     """
     from galecore_ai.application import tasks as t
 
     known = {_slug(x["id"]): x["id"] for x in t.list_tasks(kb)}
     done = []
     for item, content in (items if items is not None else _agent_items(client)):
+        if side is not None and _side_of(content) != side:
+            continue
         req = content.get("request") or {}
         if not isinstance(req, dict):
             continue
@@ -507,21 +519,23 @@ def _write_ideas_stamp(kb: KnowledgeBase, stamp: str) -> None:
 
 
 def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None,
-                   supervise=None) -> dict:
+                   supervise=None, side: str | None = None) -> dict:
     """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written).
 
     A refusal stays in the piece (`request_error`) until the next request. A piece whose agent is cancelled or gone
     from this PC is removed from the space (WS-0063), unless a refused request must still be explained: then it is published as cancelled once.
+    With `side` ("pc" or "vps") only the agents that run there are published, and the pieces of the other side are
+    neither answered nor deleted: each runner owns its own (the VPS one no longer overwrites the PC's last run).
     """
     agent_rows = client.items("agent")["items"]    # one read for the pass (BF-0017)
     items = _agent_items(client, rows=agent_rows)
     # Every agent piece, readable or not: one with broken content must not stay deferred forever.
     seen = {("agent", i["key"]): i["version"] for i in agent_rows}
-    requests = apply_requests(client, kb, scheduler, now, items)
+    requests = apply_requests(client, kb, scheduler, now, items, side)
     refused = {r["agent"]: r["error"] for r in requests if r["result"] == "refused"}
     kept = {i["key"]: c["request_error"] for i, c in items if c.get("request_error") and not c.get("request")}
     cloud_keys = {i["key"] for i, _ in _agent_items(client, cloud=True, rows=agent_rows)}
-    pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent" and p["key"] not in cloud_keys]
+    pieces = [p for p in local_pieces(kb, now, side) if p["kind"] == "agent" and p["key"] not in cloud_keys]
     responses: list[dict] = []
     if supervise is not None:                    # WS-0007: answers first, then a pass, then the piece
         from galecore_ai.application import supervisor as sv
@@ -565,6 +579,8 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     live = {p["key"] for p in pieces}
     for item, content in items:
         if item["key"] == SUPERVISOR_KEY:          # not a task: it is refreshed above, never deleted here
+            continue
+        if side is not None and _side_of(content) != side:   # the other side's: its runner keeps it
             continue
         if item["key"] not in live and not refused.get(item["key"]):
             client.delete("agent", item["key"])    # WS-0063: a cancelled or gone task is history, not a piece in the space

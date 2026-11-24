@@ -498,6 +498,17 @@ def test_the_client_keeps_the_tokens_the_run_reports(tmp_path, monkeypatch):
     assert reply.ok and reply.tokens == {"input": 120, "output": 900, "cache_read": 40000, "cache_write": 5000}
 
 
+def test_the_client_keeps_the_cost_the_run_reports(tmp_path, monkeypatch):
+    out = {"num_turns": 1, "structured_output": {"status": "OK"}, "total_cost_usd": 0.1234}
+    script = tmp_path / "fake.py"
+    script.write_text(f"import sys; sys.stdin.read(); print({json.dumps(json.dumps(out))})", encoding="utf-8")
+    client = mr.ClaudeCodeClient(binary="x")
+    monkeypatch.setattr(client, "command", lambda **kw: [sys.executable, str(script)])
+    reply = client.run(prompt="p", allowed=[], max_turns=5, schema={}, cwd=tmp_path, timeout_s=30, add_dir=tmp_path)
+    assert reply.ok and reply.cost_usd == 0.1234
+    assert mr.cost_of({"num_turns": 1}) is None and mr.add_costs(0.1, None) == 0.1 and mr.add_costs(0.1, 0.2) == pytest.approx(0.3)
+
+
 def test_a_run_without_usage_has_no_tokens():
     assert mr.usage_of({"num_turns": 1}) is None and mr.usage_of({"usage": {"foo": 1}}) is None
 
@@ -509,10 +520,10 @@ def test_the_run_records_its_tokens_including_the_correction_round(briefing):
                  antecedents=[{"ref": "evidence:@fred", "summary": "s", "bearing": "b"}])
     good = output(ev=ev, statements=[{"kind": "interpretation", "text": "El VIX subió"}],
                   antecedents=[{"ref": "evidence:@fred", "summary": "s", "bearing": "b"}])
-    model = Sequence(mr.ModelReply(ok=True, structured=bad, turns=30, model="m", tokens={"input": 10, "output": 100}),
-                     mr.ModelReply(ok=True, structured=good, turns=1, model="m", tokens={"input": 2, "output": 20}))
+    model = Sequence(mr.ModelReply(ok=True, structured=bad, turns=30, model="m", tokens={"input": 10, "output": 100}, cost_usd=0.5),
+                     mr.ModelReply(ok=True, structured=good, turns=1, model="m", tokens={"input": 2, "output": 20}, cost_usd=0.25))
     result = run(kb, follow, model)
-    assert result["tokens"] == {"input": 12, "output": 120}
+    assert result["tokens"] == {"input": 12, "output": 120} and result["cost_usd"] == 0.75
     status = t.status(kb=kb, scheduler=FakeScheduler(), task_id="atencion-diaria", now=LATER)
     assert status["last_run"]["tokens"] == {"input": 12, "output": 120}
 
@@ -526,7 +537,7 @@ def test_a_scheduled_briefing_without_news_does_not_call_the_model(briefing, mon
     model = model_ok(output())
     result = t.run(kb=kb, task_id="atencion-diaria", followup=follow, now=LATER, client=model, invoked_by="scheduler",
                    commit=False)
-    assert model.calls == [] and result["model"] is None and result["result"] == "OK"
+    assert model.calls == [] and result["model"] is None and result["result"] == "OK" and result["cost_usd"] == 0
     assert result["followup"] and "sin novedades" in result["reason"]
     assert "Sin modelo: sin novedades" in (kb.base / "tasks" / "atencion-diaria" / "LATEST.md").read_text(encoding="utf-8")
 

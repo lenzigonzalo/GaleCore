@@ -1,8 +1,8 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Connections } from './Connections';
-import { labRequest, fetchLabProviderAuth, startCodexLogin, cancelCodexLogin } from '../../api/lab';
-jest.mock('../../api/lab', () => ({ labRequest: jest.fn(), fetchLabProviderAuth: jest.fn(), startCodexLogin: jest.fn(), cancelCodexLogin: jest.fn() }));
+import { labRequest, fetchLabProviderAuth, startCodexLogin, cancelCodexLogin, startClaudeLogin, sendClaudeLoginCode, cancelClaudeLogin } from '../../api/lab';
+jest.mock('../../api/lab', () => ({ labRequest: jest.fn(), fetchLabProviderAuth: jest.fn(), startCodexLogin: jest.fn(), cancelCodexLogin: jest.fn(), startClaudeLogin: jest.fn(), sendClaudeLoginCode: jest.fn(), cancelClaudeLogin: jest.fn() }));
 const user = { allow: ['WebFetch(domain:cnn.com)'], ask: [], deny: [] };
 const product = { allow: ['Read', 'Bash'], ask: [], deny: ['Bash(git push:*)'] };
 beforeEach(() => {
@@ -11,11 +11,14 @@ beforeEach(() => {
   (fetchLabProviderAuth as jest.Mock).mockResolvedValue({ providers: [{ id: 'claude', status: 'authenticated' }, { id: 'codex', status: 'signed-out' }] });
   (startCodexLogin as jest.Mock).mockResolvedValue({ url: 'https://auth.openai.com/codex/device', code: 'YP05-MWBNI' });
   (cancelCodexLogin as jest.Mock).mockResolvedValue({ ok: true });
+  (startClaudeLogin as jest.Mock).mockResolvedValue({ url: 'https://claude.com/cai/oauth/authorize?x=1' });
+  (sendClaudeLoginCode as jest.Mock).mockResolvedValue({ ok: true });
+  (cancelClaudeLogin as jest.Mock).mockResolvedValue({ ok: true });
 });
-test('estado por motor contra el Lab; Claude sólo informa, Codex ofrece conectar', async () => {
+test('estado por motor contra el Lab; los dos ofrecen reautenticar o conectar', async () => {
   render(<Connections/>);
   await screen.findByText('Cuenta conectada');
-  expect(screen.queryByRole('button', { name: /Reautenticar|Conectar/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Reautenticar Claude Code' })).toBeEnabled();
   fireEvent.click(screen.getByRole('tab', { name: 'Codex' }));
   expect(screen.getByText('Sin autenticar')).toBeInTheDocument();
   expect(screen.queryByText(/Git|Antes de empezar/)).not.toBeInTheDocument();
@@ -40,6 +43,31 @@ test('conectar Codex: muestra enlace y código, copia, consulta cada 3 s y termi
     expect(screen.getByText('Cuenta conectada')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reautenticar Codex' })).toBeInTheDocument();
   } finally { jest.useRealTimers(); }
+});
+test('reautenticar Claude: muestra el enlace, envía el código pegado y termina al quedar conectado', async () => {
+  jest.useFakeTimers();
+  try {
+    render(<Connections/>);
+    await screen.findByText('Cuenta conectada');
+    fireEvent.click(screen.getByRole('button', { name: 'Reautenticar Claude Code' }));
+    expect(await screen.findByRole('link', { name: 'https://claude.com/cai/oauth/authorize?x=1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Código de Claude'), { target: { value: ' abc123#xyz ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await waitFor(() => expect(sendClaudeLoginCode).toHaveBeenCalledWith('abc123#xyz'));
+    (fetchLabProviderAuth as jest.Mock).mockResolvedValue({ providers: [{ id: 'claude', status: 'authenticated' }, { id: 'codex', status: 'signed-out' }], claudeLoginPending: false });
+    await act(async () => { jest.advanceTimersByTime(3100); });
+    await waitFor(() => expect(screen.queryByLabelText('Código de Claude')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Reautenticar Claude Code' })).toBeInTheDocument();
+  } finally { jest.useRealTimers(); }
+});
+test('cancelar el login de Claude lo corta en el Lab', async () => {
+  render(<Connections/>);
+  await screen.findByText('Cuenta conectada');
+  fireEvent.click(screen.getByRole('button', { name: 'Reautenticar Claude Code' }));
+  await screen.findByLabelText('Código de Claude');
+  fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+  expect(cancelClaudeLogin).toHaveBeenCalled();
 });
 test('cancelar el login lo corta en el Lab', async () => {
   render(<Connections/>);

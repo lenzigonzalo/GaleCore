@@ -125,9 +125,9 @@ public class ConnectionsTests
         Assert.Equal("not-needed", Get("cboe").Status);
         Assert.Equal("not-needed", Get("bcra").Status);
         Assert.Equal("Argentina", Get("dolarapi").Group);
-        Assert.Equal("local", Get("fmp").Status);
+        Assert.DoesNotContain(list.Connections, c => c.Id is "fmp" or "alphavantage" or "ibkr" or "iol"); // MCP fuera; IOL e IBKR van en /Brokers
         Assert.Equal("missing", Get("tastytrade").Status);
-        Assert.Equal(ConnectionCatalog.All.Count, list.Connections.Count);
+        Assert.Equal(ConnectionCatalog.All.Count - 2, list.Connections.Count); // sin ibkr ni iol
     }
 
     [Fact]

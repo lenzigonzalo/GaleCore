@@ -11,7 +11,7 @@
 .lw-drawer { max-width:calc(calc(100 * var(--vw)) - 48px); }
 .lw-resize { position:absolute; inset:0 auto 0 -5px; width:10px; z-index:3; cursor:col-resize; touch-action:none; }
 .lw-resize:hover,.lw-resize:focus-visible { background:var(--border-light); outline:none; }
-.lw-drawer > header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); flex-shrink:0; height:64px; }
+.lw-drawer > header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); flex-shrink:0; height:48px; }
 .lw-drawer header > div { display:flex; gap:6px; }
 .lw-drawer h2 { font-size:18px; font-weight:600; margin:0; }
 .lw-close { display:grid; place-items:center; width:30px; height:30px; background:none; border:0; color:var(--text-secondary); cursor:pointer; }

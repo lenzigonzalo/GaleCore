@@ -928,7 +928,7 @@ async def _cmd_space(args: argparse.Namespace) -> None:
             from galecore_ai.application.tasks import WindowsScheduler
             kb = _build_knowledge_base()
             result = space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] != "agent"])
-            agents = space.publish_agents(client, kb, WindowsScheduler())   # agents keep the monitor's requests
+            agents = space.publish_agents(client, kb, WindowsScheduler(), side="pc")   # agents keep the monitor's requests
             for k in ("created", "updated", "unchanged", "deferred"):
                 result[k] = result.get(k, []) + agents[k]
             _json_out({"status": "SYNCED", "user": client.user, "credentials": client.source,
@@ -944,7 +944,7 @@ async def _cmd_space(args: argparse.Namespace) -> None:
                 WindowsScheduler().create_every(SYNC_TASK, sync_command(), SYNC_MINUTES)
                 _json_out({"status": "INSTALLED", "task": SYNC_TASK, "every_minutes": SYNC_MINUTES})
                 return
-            result = space.publish_agents(client, _build_knowledge_base(), WindowsScheduler())
+            result = space.publish_agents(client, _build_knowledge_base(), WindowsScheduler(), side="pc")
             _json_out({"status": "PUBLISHED", "user": client.user, **result})
     except SpaceError as exc:
         _error_out(str(exc), exit_code=1)
@@ -1069,6 +1069,8 @@ def _cmd_agent_cloud(args: argparse.Namespace) -> None:
             _json_out(ac.body(client, args.agent_key))
         elif c == "applied":
             _json_out({"status": "APPLIED", **ac.applied(client, args.agent_key, args.trigger_id, args.url, args.error)})
+        elif c in ("pause", "resume"):
+            _json_out({"status": "REQUESTED", **ac.set_status(client, args.agent_key, "paused" if c == "pause" else "active")})
         else:
             try:
                 when = json.loads(args.when)
@@ -1728,7 +1730,8 @@ async def _cmd_task(args: argparse.Namespace) -> None:
             _json_out({"status": "MOVED", "task": args.id, "runs_on": task.runs_on})
         elif c == "serve":
             from galecore_ai.application import task_service
-            _json_out({"status": "SERVED", "runs": task_service.serve(kb, once=args.once, interval=args.interval)})
+            _json_out({"status": "SERVED", "runs": task_service.serve(kb, once=args.once, interval=args.interval,
+                                                                             on_use=args.on_use)})
         elif c == "rebind":
             task = t.rebind(kb=kb, scheduler=sch, task_id=args.id, code_path=Path(args.code_path), prompt=args.prompt)
             _json_out({"status": "REBOUND", "code_path": task.code_path, "scheduler": sch.query(task.scheduler_name)})
@@ -1920,6 +1923,8 @@ def build_parser() -> _JsonArgumentParser:
     p_ag_app.add_argument("--trigger-id", help="The routine's id")
     p_ag_app.add_argument("--url", help="The routine's link in claude.ai")
     p_ag_app.add_argument("--error", help="Why it could not be applied")
+    ag_sub.add_parser("pause", help="Pause a cloud agent (it stops at once; the Lab disables its routine)").add_argument("agent_key")
+    ag_sub.add_parser("resume", help="Resume a paused cloud agent (the Lab enables its routine)").add_argument("agent_key")
     p_ag_new = ag_sub.add_parser("new", help="Ask for a cloud agent from the chat (the Lab creates its routine)")
     p_ag_new.add_argument("--name", required=True)
     p_ag_new.add_argument("--what", required=True, help="What the agent does")
@@ -2158,6 +2163,9 @@ def build_parser() -> _JsonArgumentParser:
     p_tv = t_sub.add_parser("serve", help="The VPS runner: every minute runs the tasks of this knowledge base that are due")
     p_tv.add_argument("--once", action="store_true", help="One pass and exit")
     p_tv.add_argument("--interval", type=int, default=60, help="Seconds between passes")
+    p_tv.add_argument("--on-use", dest="on_use", action="store_true",
+                      help="One pass of the tasks that run when someone opens the Lab (creates the memory curation if "
+                           "it never existed); implies --once")
     for name in ("pause", "resume", "cancel"):
         p = t_sub.add_parser(name)
         p.add_argument("id")
