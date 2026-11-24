@@ -251,6 +251,18 @@ def pending(client: SpaceClient) -> list[dict]:
             if isinstance(c.get("request"), dict) and any(_asked(c["request"], k) for k in REQUEST_KEYS)]
 
 
+def set_status(client: SpaceClient, key: str, status: str, now: datetime | None = None) -> dict:
+    """Pause or resume from the chat, the same as the monitor's switch: the status counts at once and the request
+    leaves the routine for the Lab to disable or enable in claude.ai."""
+    item, content = _find(client, key)
+    req = content.get("request") if isinstance(content.get("request"), dict) else {}
+    piece = {k: v for k, v in content.items() if k != "request_error"} | {
+        "status": status, "request": {**req, "status": status, "at": (now or datetime.now(UTC)).isoformat()}}
+    client.put("agent", key, title=item["title"], content=json.dumps(piece, ensure_ascii=False), fmt="json",
+               visibility=item.get("visibility", "private"))
+    return {"agent": key, "status": status}
+
+
 def body(client: SpaceClient, key: str, today: date | None = None) -> dict:
     """What the Lab sends to RemoteTrigger for this piece: create / update (with the environment), or run."""
     _, content = _find(client, key)
@@ -269,12 +281,16 @@ def body(client: SpaceClient, key: str, today: date | None = None) -> dict:
             return {"action": "run", "trigger_id": trigger_id}
         _ask_update(client, only_key=key)        # a new key: this routine is rewritten first and runs on the next pass
         return body(client, key, today)
-    env_id = environment_id()
-    variables, _ = routine_variables(client, key)
     piece = effective(content) | {"key": key}
     try:
+        env_id = environment_id()
+        variables, _ = routine_variables(client, key)
         routine = routine_body(piece, env_id, today, variables)
-    except ValueError as exc:
+    except (AgentCloudError, ValueError) as exc:
+        if trigger_id and piece.get("status") == "paused":     # pausing never waits for the Lab's config (WS-0106)
+            return {"action": "update", "trigger_id": trigger_id, "body": {"enabled": False}}
+        if isinstance(exc, AgentCloudError):
+            raise
         raise AgentCloudError(f"El agente tiene datos inválidos: {str(exc)[:200]}") from exc
     return {"action": "update", "trigger_id": trigger_id, "body": routine} if trigger_id else {"action": "create", "body": routine}
 

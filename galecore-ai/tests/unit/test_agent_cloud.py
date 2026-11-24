@@ -155,10 +155,37 @@ def test_settings_pause_and_run_requests(galecore, lab):  # noqa: F811
     assert ac.body(client, "resumen-diario", NOV)["body"]["enabled"] is False
     ac.applied(client, "resumen-diario")
     assert piece_of(fake)["status"] == "paused"
+    saved = (lab / "agents.json").read_text(encoding="utf-8")
+    (lab / "agents.json").unlink()            # a Lab without the environment (the VPS one) still pauses
+    ask(status="paused")
+    assert ac.body(client, "resumen-diario", NOV) == {"action": "update", "trigger_id": "trig_1", "body": {"enabled": False}}
+    ask(status="active")
+    with pytest.raises(ac.AgentCloudError, match="Falta configurar el entorno"):
+        ac.body(client, "resumen-diario", NOV)
+    (lab / "agents.json").write_text(saved, encoding="utf-8")
     ask(run=True)
     assert ac.body(client, "resumen-diario") == {"action": "run", "trigger_id": "trig_1"}
     ac.applied(client, "resumen-diario")
     assert "request" not in piece_of(fake)
+
+
+def test_pause_and_resume_from_the_chat_write_what_the_monitor_writes(galecore, lab):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    ac.new(client, "Resumen diario", "Resumí SPY", DAILY)
+    ac.applied(client, "resumen-diario", "trig_1", "https://x/trig_1")
+    client.put("agent", "resumen-diario", title="Resumen diario", fmt="json",
+               content=json.dumps({**piece_of(fake), "request_error": "viejo"}))
+    assert ac.set_status(client, "resumen-diario", "paused") == {"agent": "resumen-diario", "status": "paused"}
+    p = piece_of(fake)
+    assert p["status"] == "paused" and p["request"]["status"] == "paused" and "request_error" not in p
+    assert ac.pending(client)[0]["requests"] == ["status"]
+    assert ac.body(client, "resumen-diario", NOV)["body"]["enabled"] is False
+    ac.applied(client, "resumen-diario")
+    ac.set_status(client, "resumen-diario", "active")
+    assert ac.body(client, "resumen-diario", NOV)["body"]["enabled"] is True
+    with pytest.raises(ac.AgentCloudError, match="No hay un agente"):
+        ac.set_status(client, "otro", "paused")
 
 
 def test_delete_pauses_the_routine_and_then_removes_the_piece(galecore, lab):  # noqa: F811

@@ -6,11 +6,11 @@ const path = require('path');
 const { EventEmitter } = require('events');
 const { createAgents } = require('./lab-agents');
 
-function setup(t, { pending = [{ key: 'resumen-diario' }], exit = 0 } = {}) {
+function setup(t, { pending = [{ key: 'resumen-diario' }], exit = 0, skill = true } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-lab-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  fs.mkdirSync(path.join(root, 'galecore-lab', 'skills', 'agentes-nube'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'galecore-lab', 'skills', 'agentes-nube', 'SKILL.md'), 'SKILL agentes-nube');
+  const skillFile = path.join(root, 'SKILL.md');
+  if (skill) fs.writeFileSync(skillFile, 'SKILL agentes-nube');
   const calls = { cli: [], spawn: [] };
   const execute = (cmd, args, opts, cb) => {
     calls.cli.push(args.join(' '));
@@ -23,7 +23,7 @@ function setup(t, { pending = [{ key: 'resumen-diario' }], exit = 0 } = {}) {
     if (exit !== null) setImmediate(() => proc.emit('close', exit));
     return proc;
   };
-  const agents = createAgents({ root, environment: () => ({ X: '1' }), binary: 'claude', execute, spawnProcess, timeoutMs: 50 });
+  const agents = createAgents({ root, environment: () => ({ X: '1' }), binary: 'claude', execute, spawnProcess, timeoutMs: 50, skillFile });
   return { agents, calls, procs };
 }
 
@@ -58,6 +58,17 @@ test('lo que sigue pendiente con el mismo pedido queda con error; si el pedido c
   const failed = setup(t, { pending: [{ key: 'a', at: 'T1' }], exit: 1 });
   assert.equal(await failed.agents.applyOnce(), 'failed');
   assert.equal(failed.calls.cli.filter(c => / agent applied /.test(c)).length, 1);
+});
+
+test('si la skill no se puede leer no lanza nada y el pedido queda con error (nunca en silencio)', async t => {
+  const { agents, calls } = setup(t, { pending: [{ key: 'a', at: 'T1' }], skill: false });
+  assert.equal(await agents.applyOnce(), 'failed');
+  assert.equal(calls.spawn.length, 0);
+  assert.match(calls.cli.find(c => / agent applied /.test(c)), /agent applied a --error El Lab no pudo aplicar el pedido/);
+});
+
+test('la skill por defecto es la de esta carpeta (en el VPS el Lab no está en <root>/galecore-lab)', () => {
+  assert.equal(fs.existsSync(path.join(__dirname, 'skills', 'agentes-nube', 'SKILL.md')), true);
 });
 
 test('una aplicación a la vez; al terminar se puede otra', async t => {
