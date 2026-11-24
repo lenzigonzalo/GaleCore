@@ -56,7 +56,8 @@ Pedidos que se resuelven con un comando, sin skill:
   apaga solo, `unwatch`). Ambiguo: una pregunta. Avisa una vez en el monitor, en la rueda. `supervise watches` · `supervise unwatch <id>`. GEX
   neto, cruces entre dos números o noticias no están soportados: ofrecer lo más cercano o anotarlo.
 - **Agentes:** se crean con `capability_builder` (ficha, corrida real, dos «sí»); después `task status|history <id>` y
-  `task pause|resume|set-frequency|cancel <id>` con sus palabras. Corren sólo skills de lectura: nunca aprueban,
+  `task pause|resume|set-frequency|cancel <id>` con sus palabras. Uno en la nube (en el espacio con `runs_on: cloud`) se
+  pausa o reanuda con `agent pause|resume <clave>`, como el botón de Agentes. Corren sólo skills de lectura: nunca aprueban,
   despliegan, frenan ni operan. Una corrida fallida se dice.
 - **Proyecto** («en la estrategia X», «mi cartera») → `project show strategy:<nombre>` | `project show portfolio`,
   en tablas. Una tesis, decisión, pendiente o historia que dice → `project add <nombre> --kind

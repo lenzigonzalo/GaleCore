@@ -1069,6 +1069,8 @@ def _cmd_agent_cloud(args: argparse.Namespace) -> None:
             _json_out(ac.body(client, args.agent_key))
         elif c == "applied":
             _json_out({"status": "APPLIED", **ac.applied(client, args.agent_key, args.trigger_id, args.url, args.error)})
+        elif c in ("pause", "resume"):
+            _json_out({"status": "REQUESTED", **ac.set_status(client, args.agent_key, "paused" if c == "pause" else "active")})
         else:
             try:
                 when = json.loads(args.when)
@@ -1909,6 +1911,8 @@ def build_parser() -> _JsonArgumentParser:
     p_ag_app.add_argument("--trigger-id", help="The routine's id")
     p_ag_app.add_argument("--url", help="The routine's link in claude.ai")
     p_ag_app.add_argument("--error", help="Why it could not be applied")
+    ag_sub.add_parser("pause", help="Pause a cloud agent (it stops at once; the Lab disables its routine)").add_argument("agent_key")
+    ag_sub.add_parser("resume", help="Resume a paused cloud agent (the Lab enables its routine)").add_argument("agent_key")
     p_ag_new = ag_sub.add_parser("new", help="Ask for a cloud agent from the chat (the Lab creates its routine)")
     p_ag_new.add_argument("--name", required=True)
     p_ag_new.add_argument("--what", required=True, help="What the agent does")
