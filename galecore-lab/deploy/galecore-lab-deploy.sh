@@ -39,6 +39,9 @@ rollback() {
 trap rollback ERR
 
 install -d -o galecore -g galecore -m 755 "$LAB_DIR"
+# BF-0020: carpeta del semáforo de tareas y de la marca del chat (GALECORE_TASKS_SLOTS_DIR), común a todos los usuarios.
+install -d -m 755 /var/lib/galecore
+install -d -m 777 /var/lib/galecore/tasks-slots
 # Guardar codigo anterior (sin node_modules para ahorrar espacio/tiempo; se reinstala con npm ci).
 rm -rf "$BACKUP_DIR"
 if [[ -n "$(ls -A "$LAB_DIR" 2>/dev/null)" ]]; then

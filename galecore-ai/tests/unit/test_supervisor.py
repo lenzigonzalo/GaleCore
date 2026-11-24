@@ -446,3 +446,20 @@ def test_the_session_knows_nyse_holidays_and_early_closes():     # WS-0107
 def test_business_days_do_not_count_market_holidays():          # WS-0107
     assert supervisor._business_days(date(2026, 11, 25), date(2026, 11, 27)) == 1   # Thursday is Thanksgiving
     assert supervisor._business_days(date(2026, 11, 25), date(2026, 11, 30)) == 2
+
+
+def test_the_vps_pass_runs_only_around_the_us_session():
+    """BF-0020: off-hours the pass would only spend reads of GaleCore and the space (Supabase)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    ny = ZoneInfo("America/New_York")
+    def at(*a):
+        return datetime(*a, tzinfo=ny)
+
+    assert supervisor.pass_due(at(2026, 11, 23, 9, 25)) and supervisor.pass_due(at(2026, 11, 23, 12, 0))
+    assert supervisor.pass_due(at(2026, 11, 23, 16, 30))                    # the day's closes
+    assert not supervisor.pass_due(at(2026, 11, 23, 9, 20)) and not supervisor.pass_due(at(2026, 11, 23, 16, 35))
+    assert not supervisor.pass_due(at(2026, 11, 23, 23, 0)) and not supervisor.pass_due(at(2026, 11, 21, 12, 0))   # night, Saturday
+    assert not supervisor.pass_due(at(2026, 11, 26, 12, 0))                 # Thanksgiving
+    assert supervisor.pass_due(at(2026, 11, 27, 13, 20)) and not supervisor.pass_due(at(2026, 11, 27, 13, 35))     # early close 13:00

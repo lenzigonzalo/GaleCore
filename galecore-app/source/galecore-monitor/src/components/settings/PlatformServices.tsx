@@ -89,7 +89,7 @@ export function PlatformServices() {
     </tr>)}
     <tr>
       <td>Supervisor de SHADOW</td>
-      <td>Cada 5 minutos revisa las reglas de lo abierto en SHADOW (stop, cierres, precio, límite) y guarda las decisiones. Corre en la PC del trader.</td>
+      <td>Con el mercado de EE.UU. abierto, cada 5 minutos revisa las reglas de lo abierto en SHADOW (stop, cierres, precio, límite) y guarda las decisiones. Corre en el servidor; fuera de horario no corre.</td>
       <td><SupervisorState /></td>
       {canManage && <td />}
     </tr>

@@ -129,6 +129,16 @@ def _in_session(now: datetime) -> bool:
     return market_clock.status(now).state == "open"
 
 
+def pass_due(now: datetime) -> bool:
+    """Whether the VPS pass has something to do (BF-0020): from 5 min before the open to 30 min after the close (the
+    day's closes are seen). Off-hours nothing it watches moves and each pass reads GaleCore and the space (Supabase).
+
+    What it watches is US-session only (SHADOW, and the price rules only in the session): a rule on something that
+    trades 24/7 (crypto, FX) would need its own hours here."""
+    day = market_clock.session(now.astimezone(NEW_YORK).date())
+    return day is not None and day[0] - timedelta(minutes=5) <= now <= day[1] + timedelta(minutes=30)
+
+
 def _spec(kb: KnowledgeBase, version_hash: str) -> tuple[str | None, dict]:
     """(strategy:<name>/<version>, spec) of the knowledge version whose spec GaleCore runs; (None, {}) if none."""
     for key in kb.strategies.versions():
