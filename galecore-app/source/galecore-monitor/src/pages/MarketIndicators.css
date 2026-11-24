@@ -4,6 +4,7 @@
 .market-active-symbol { font-size:24px; font-weight:650; color:var(--text-primary); }
 .market-symbol-price > strong { font-size:36px; line-height:1.1; font-weight:550; color:var(--text-primary); font-variant-numeric:tabular-nums; letter-spacing:-.8px; }
 .market-symbol-price > span:last-child { font-size:18px; font-variant-numeric:tabular-nums; }
+.market-symbol-price > .market-extended { font-size:15px; font-variant-numeric:tabular-nums; cursor:help; }
 .market-up { color:#56d9ad; }.market-down { color:#ff747b; }.market-neutral { color:var(--text-secondary); }
 .market-quote-detail { display:flex; flex-wrap:wrap; gap:10px 24px; width:100%; font-size:14px; color:var(--text-secondary); }
 .market-quote-detail b { color:var(--text-primary); font-weight:500; margin-left:6px; font-variant-numeric:tabular-nums; }

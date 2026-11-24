@@ -7,10 +7,11 @@ import { fetchGexRules } from '../api/gex';
 import { fetchSpace } from '../api/space';
 
 let mockEnabled = true;
+let mockSummaryExtra: Record<string, unknown> = {};
 jest.mock('../api/gex', () => ({ GEX_SWITCH_ENDPOINT:'/test/switch', fetchGexRules:jest.fn(), fetchGexAnalysis:jest.fn() }));
 jest.mock('../api/account', () => ({ ...jest.requireActual('../api/account'), fetchAccountOverview: () => Promise.resolve({ positions: [] }) }));
 jest.mock('../api/space', () => ({ fetchSpace:jest.fn(), saveSpaceItem:jest.fn() }));
-jest.mock('../api/marketdata', () => ({ ...jest.requireActual('../api/marketdata'), fetchMarketSummary: () => Promise.resolve({ symbol: 'SPY', last: 771.74, prevClose: 769.6, change: 2.14, changePct: 0.28, volume: 43300000, high: 772.87, low: 764.43, sessionDate: '2026-10-15' }) }));
+jest.mock('../api/marketdata', () => ({ ...jest.requireActual('../api/marketdata'), fetchMarketSummary: () => Promise.resolve({ symbol: 'SPY', last: 771.74, prevClose: 769.6, change: 2.14, changePct: 0.28, volume: 43300000, high: 772.87, low: 764.43, sessionDate: '2026-10-15', ...mockSummaryExtra }) }));
 jest.mock('../store/useStrategySwitchStore', () => ({ useSwitchEnabled:()=>mockEnabled, useStrategySwitchStore:(select:any)=>select({read:()=>Promise.resolve()}) }));
 jest.mock('../store/useAppConfigStore', () => ({ useSwitchEndpoint:()=>'/test/switch', useAppConfigStore:(select:any)=>select({tickers:['SPY','QQQ']}) }));
 jest.mock('../components/common/StrategySwitch', () => ({ StrategySwitch:()=> <span>Barrido</span> }));
@@ -31,6 +32,7 @@ beforeEach(() => {
   (fetchSpace as jest.Mock).mockResolvedValue({items:[]});
   localStorage.clear();
   mockEnabled=true;
+  mockSummaryExtra={};
   useGexStore.setState({rules:{} as any,tickers:['SPY','QQQ'],rulesLoading:false,rulesError:null,display:null,selectedSymbol:'SPY',selectedExpiry:{},error:{},errorCode:{},loading:{},adHocSymbols:[],cache:{
     SPY:{updatedAt:new Date(),data:{spotPrice:100,frozen:false,macroRegime:null,structureInputs:null,gex:{config:{maxDte:60},global:{netGex:2,strikes:[],expirationsIncluded:1,expirationsRequested:1},byExpiry:[{expiration:'2026-10-12',dte:2,netGex:2,gammaZeroLevel:99,callWall:102,putWall:98,callBand:null,putBand:null,expectedMove:2,atmIv:.2,strikes:[]}]}} as any}
   },fetchGex:jest.fn() as any});
@@ -146,4 +148,15 @@ test('el indicador controlado cambia la vista con el mismo simbolo', () => {
   rerender(<Gex {...props} indicator="price" onIndicatorChange={change}/>);
   expect(screen.getByTestId('chart')).toHaveTextContent('SPY');
   expect(useGexStore.getState().selectedSymbol).toBe('SPY');
+});
+
+test('fuera de la sesión regular el número grande es el cierre de la API y al lado va «Fuera de hora»', async () => {
+  mockSummaryExtra = { last: 689.81, prevClose: 715.9, change: -26.09, changePct: -3.64, sessionOpen: false,
+    extendedLast: 697.13, extendedChange: 7.32, extendedChangePct: 1.06, extendedAt: '2026-11-20T22:00:00Z', extendedSession: 'afterhours' };
+  const { container } = render(<Gex {...props}/>);
+  const extended = await screen.findByText(/Fuera de hora/);
+  expect(extended.textContent).toMatch(/697[.,]13/);
+  expect(extended.textContent).toMatch(/1[.,]06/);
+  expect(extended).toHaveAttribute('title', expect.stringContaining('After-hours'));
+  expect(container.querySelector('.market-symbol-price > strong')?.textContent).toMatch(/689[.,]81/);
 });
