@@ -46,19 +46,18 @@ public class MarketSummaryHandler(IDxLinkStreamingService streaming) : IRequestH
         if (symbol.Length == 0 || symbol.Length > 24) throw new DataFeed.Application.Shared.ValidationException("Símbolo inválido.");
         var key = symbol + "{=d}";
         var from = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(-10)).ToUnixTimeMilliseconds();
-        // Velas de 5m con horario extendido (tho=false): ~20 h cubren after-hours y premarket; de sábado a lunes, 72 h para
-        // alcanzar el after-hours del viernes. La math filtra desde el cierre.
-        var extKey = symbol + "{=5m,tho=false}";
+        // Velas de 5m de las últimas 2 h (`{=5m}` incluye horario extendido): alcanza para el último precio fuera de hora y
+        // el snapshot llega rápido (20 h tardaban ~6 s y el pedido se cortaba). Sin operaciones extendidas recientes, no hay dato.
+        var extKey = symbol + "{=5m}";
         var now = DateTimeOffset.UtcNow;
-        var etDay = TimeZoneInfo.ConvertTime(now, PremarketMath.EasternZone).DayOfWeek;
-        var extFrom = now.AddHours(etDay is DayOfWeek.Saturday or DayOfWeek.Sunday or DayOfWeek.Monday ? -72 : -20).ToUnixTimeMilliseconds();
+        var extFrom = now.AddHours(-2).ToUnixTimeMilliseconds();
         var candles = await streaming.RequestSnapshotAsync(new[] { (key, "Candle", (long?)from), (extKey, "Candle", (long?)extFrom) },
             isSymbolComplete: item => (((int?)item["eventFlags"] ?? 0) & 0x18) != 0, timeout: TimeSpan.FromSeconds(8), cancellationToken: ct);
-        // DXLink puede devolver el símbolo de la vela normalizado (sin `tho=false`, que es el default): se compara por prefijo.
+        // Se compara por prefijo por si DXLink devuelve el símbolo de la vela con otros atributos.
         List<Day> Parse(string prefix) => candles.Where(c => ((string?)c["eventSymbol"])?.StartsWith(prefix, StringComparison.Ordinal) == true)
             .Select(c => new Day((long?)c["time"] ?? 0, Num(c["close"]), Num(c["high"]), Num(c["low"]), Num(c["volume"])))
             .Where(d => d.Time > 0 && d.Close is > 0).GroupBy(d => d.Time).Select(g => g.Last()).OrderBy(d => d.Time).ToList();
-        return MarketSummaryMath.Build(symbol, Parse(key), Parse(symbol + "{=5m"), now);
+        return MarketSummaryMath.Build(symbol, Parse(key), Parse(extKey), now);
     }
 
     private static double? Num(JToken? t)
