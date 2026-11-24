@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "2.6.1"
+    date: 2026-11-23
+    changes: >
+      Prueba XLE (WS-0107): activó en el mismo turno en que el trader eligió la regla. El sí responde a «¿La activo?»
+      con la ficha ya mostrada; «avisame» o elegir una regla no lo son.
+    feedback: []
   - version: "2.6.0"
     date: 2026-11-23
     changes: >

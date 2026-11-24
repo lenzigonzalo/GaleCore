@@ -49,7 +49,8 @@ Pedidos que se resuelven con un comando, sin skill:
   devuelve; sin coincidencia, falta en el registro (no adivinar otra). Estado viejo: `sources check` (GaleCore, FRED)
   o probar la llamada y `sources declare`.
 - **Avisos de un nivel** («avisame si SPY baja a 760») → `supervise watch --symbol SPY --below 760 [--metric
-  price|gamma_zero|call_wall|put_wall|iv_rank] --text "<sus palabras>"`; vigila el supervisor, nunca un bucle propio.
+  price|gamma_zero|call_wall|put_wall|iv_rank] --text "<sus palabras>"`; vigila el supervisor, nunca un bucle propio. Si el aviso es de una idea
+  de trade o estrategia en armado, no: la regla va a su ficha y la activa `strategy activate` tras su «sí» a «¿La activo?».
   Por hora o evaluación, el mismo supervisor: «avisame a las 13:50 NY» → `supervise remind --on <AAAA-MM-DD> --at 13:50
   --text "…" --prompt "…"`; «avisame cuando evalúe <estrategia>» → `supervise remind --on-evaluation --instance <id de
   la instancia> --text "…" --prompt "…"` (un aviso por evaluación nueva: entró o no entró y por qué gate; no se

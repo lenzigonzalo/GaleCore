@@ -1,6 +1,6 @@
 ---
 name: strategy-design
-version: 2.6.0
+version: 2.6.1
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Parte A (método): convierte una idea y su investigación en una estrategia completa (hipótesis, reglas por bloque,
@@ -57,7 +57,8 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   no soportado y su motivo («serie de WTI vacía en GaleCore»): se muestra, no corre.
 - **Aceptar y activar:** cuando las reglas están, guardar la versión en etapa `ready`, mostrar la ficha corta (tesis,
   por qué, invalida, aviso, qué vigila y cada cuánto: «regla en código, 0 tokens»; lo que no corre y por qué; «Sin
-  definir tamaño · salida · instrumento») y preguntar sólo «¿La activo?». Con su sí, `strategy activate <nombre> --mode
+  definir tamaño · salida · instrumento») y preguntar sólo «¿La activo?», y terminar el turno ahí. «Avisame», «dale
+  con eso» o elegir una regla no son el sí: el sí responde a «¿La activo?» con la ficha ya mostrada. Con su sí, `strategy activate <nombre> --mode
   seguimiento --prompt "<pedido>" --text "<sus palabras>"`. **Nunca `supervise watch` para una estrategia**: los avisos
   de una ficha los crea `activate`, y sólo después del sí. Un cambio de reglas es una versión nueva y se activa de nuevo
   (cancela los avisos de la anterior).
