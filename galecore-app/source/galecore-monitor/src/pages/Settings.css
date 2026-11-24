@@ -34,6 +34,8 @@
 .strike-alert-form .saf-row small { font-size:13px; color:var(--text-secondary); }
 .strike-alert-form .saf-distance { display:flex; flex-wrap:wrap; }
 .strike-alert-form .saf-distance[aria-disabled="true"] { opacity:.5; }
+/* Con el aviso apagado, «Sólo en horario de mercado» tampoco se puede tocar: que se vea igual de apagado que la distancia. */
+.strike-alert-form .saf-row:has(input:disabled) { opacity:.5; }
 .strike-alert-form input[type="number"] { width:84px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-dark); border-radius:8px; padding:8px 10px; font-size:15px; }
 .strike-alert-form select { background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-dark); border-radius:8px; padding:8px 10px; font-size:15px; }
 .strike-alert-form input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); }
@@ -155,6 +157,8 @@
 .connector-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--text-muted); padding: 4px 10px 6px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .connector-table td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--border-dark); vertical-align: middle; color: var(--text-secondary); }
 .connector-table td:first-child { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+/* La fila que abre el formulario de un broker ocupa toda la tabla: sin esto hereda el nowrap del nombre y se sale del cuadro. */
+.connector-table .conn-form td { white-space: normal; font-weight: 400; }
 .connector-table .is-yes, .conn-state.is-good { color: var(--green); }
 .conn-state.is-bad { color: var(--red-gc); }
 .conn-state { white-space: nowrap; cursor: help; }

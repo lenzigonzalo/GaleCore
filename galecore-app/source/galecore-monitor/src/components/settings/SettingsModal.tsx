@@ -14,7 +14,9 @@ export function SettingsModal({ onClose, wizard = false }: { onClose: () => void
     const previous = document.activeElement as HTMLElement | null;
     dialog.current?.querySelector<HTMLButtonElement>('button')?.focus();
     const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); close.current(); }
+      // Los campos de Configuración se guardan al salir de ellos: soltar el foco antes de cerrar para que Escape no
+      // descarte lo recién escrito (BF-0011).
+      if (event.key === 'Escape') { event.preventDefault(); (document.activeElement as HTMLElement | null)?.blur(); close.current(); }
       if (event.key !== 'Tab') return;
       const targets = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]') || []);
       const first = targets[0], last = targets[targets.length - 1];
