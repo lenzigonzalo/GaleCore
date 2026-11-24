@@ -54,10 +54,11 @@ public class MarketSummaryHandler(IDxLinkStreamingService streaming) : IRequestH
         var extFrom = now.AddHours(etDay is DayOfWeek.Saturday or DayOfWeek.Sunday or DayOfWeek.Monday ? -72 : -20).ToUnixTimeMilliseconds();
         var candles = await streaming.RequestSnapshotAsync(new[] { (key, "Candle", (long?)from), (extKey, "Candle", (long?)extFrom) },
             isSymbolComplete: item => (((int?)item["eventFlags"] ?? 0) & 0x18) != 0, timeout: TimeSpan.FromSeconds(8), cancellationToken: ct);
-        List<Day> Parse(string k) => candles.Where(c => (string?)c["eventSymbol"] == k)
+        // DXLink puede devolver el símbolo de la vela normalizado (sin `tho=false`, que es el default): se compara por prefijo.
+        List<Day> Parse(string prefix) => candles.Where(c => ((string?)c["eventSymbol"])?.StartsWith(prefix, StringComparison.Ordinal) == true)
             .Select(c => new Day((long?)c["time"] ?? 0, Num(c["close"]), Num(c["high"]), Num(c["low"]), Num(c["volume"])))
             .Where(d => d.Time > 0 && d.Close is > 0).GroupBy(d => d.Time).Select(g => g.Last()).OrderBy(d => d.Time).ToList();
-        return MarketSummaryMath.Build(symbol, Parse(key), Parse(extKey), now);
+        return MarketSummaryMath.Build(symbol, Parse(key), Parse(symbol + "{=5m"), now);
     }
 
     private static double? Num(JToken? t)
