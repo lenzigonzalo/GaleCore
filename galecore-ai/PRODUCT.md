@@ -28,13 +28,14 @@ python -B -m galecore_ai.adapters.cli state                     # estado ahora: 
 python -B -m galecore_ai.adapters.cli catalog --match "<pedido>" # capacidad y su flujo
 python -B -m galecore_ai.adapters.cli kb search --text "<términos>"   # lo ya trabajado sobre un tema
 python -B -m galecore_ai.adapters.cli galecore list             # qué datos sirve GaleCore y cómo se piden
-python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--out .scratch/x.json] [--keep "<pedido>"]
+python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--param Nombre=valor] [--out .scratch/x.json] [--keep "<pedido>"]
 ```
 
 - Si el Lab ya indicó la capacidad del pedido, usala; `catalog --match` si no la indicó o necesitás su flujo. Una
   skill propia del trader (`skill propia` en `[espacio]`) se lee con `space show skill/<clave>` y se sigue igual. Si
   ninguna sirve, ofrecé `capability_builder`. El trader no nombra skills ni hace falta anunciarlas.
-- Cómo se pide un dato: `galecore list` (no `docs/` ni `GaleCore/`). Lo pesado (una cadena ~1 MB) va con
+- Cómo se pide un dato: `galecore list` (no `docs/` ni `GaleCore/`); los parámetros de cada capacidad son los que
+  lista (`--param Nombre=valor`) y `--symbol X` es un atajo para las que piden símbolo o Ticker. Lo pesado (una cadena ~1 MB) va con
   `--out .scratch/<nombre>.json`, con la `.scratch/` de la carpeta del proyecto (ruta completa: en `galecore-ai/` no se
   escribe) y se borra al terminar. Lo que el Lab ya trajo en el contexto no se vuelve a pedir.
 - Consultas a GaleCore en primer plano y en paralelo, esperando el resultado (no en segundo plano).

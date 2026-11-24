@@ -92,3 +92,18 @@ def test_kept_reads_in_the_same_second_do_not_collide():
     again = _evidence_slug("market_data.candles", {"symbol": "AAPL"}, at)
     assert a.startswith("galecore-market-data-candles-aapl-112005-") and "-msft-" in b
     assert len({a, b, again}) == 3
+
+
+def test_galecore_list_params_carry_name_required_and_what(capsys):
+    import argparse
+    import asyncio
+    import json
+
+    from galecore_ai.adapters import cli
+
+    with pytest.raises(SystemExit):
+        asyncio.run(cli._cmd_galecore(argparse.Namespace(galecore_command="list")))
+    caps = {c["id"]: c for c in json.loads(capsys.readouterr().out)["capabilities"]}
+    tag = next(p for p in caps["filings.sec_facts"]["params"] if p["name"] == "Tag")
+    assert tag == {"name": "Tag", "required": True, "what": "XBRL concept"}
+    assert all(set(p) <= {"name", "required", "what"} for c in caps.values() for p in c["params"])
