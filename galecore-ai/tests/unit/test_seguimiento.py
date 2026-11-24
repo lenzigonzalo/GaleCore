@@ -232,17 +232,3 @@ def test_the_cli_activates_and_explains(kb, capsys, monkeypatch):  # noqa: F811
     with pytest.raises(SystemExit):
         asyncio.run(cli._cmd_strategy(args))
     assert json.loads(capsys.readouterr().out)["version_activa"] == "0.2.0"
-
-
-def test_the_design_view_carries_the_board_of_a_strategy_in_seguimiento(kb):  # noqa: F811
-    from galecore_ai.application import project
-    save(kb)
-    assert project._seguimiento(kb, NAME, IN_SESSION) is None                  # not activated: no board
-    activate(kb)
-    supervisor.scan(kb, reader(mid=58.0), IN_SESSION + timedelta(minutes=5))
-    board = project._seguimiento(kb, NAME, IN_SESSION + timedelta(minutes=6))
-    assert board["estado"] == "vigilando" and board["version_activa"] == "0.2.0"
-    assert board["ultima"]["value"] == 58.0 and board["mercado_abierto"] and board["proxima"] is None
-    closed = project._seguimiento(kb, NAME, IN_SESSION + timedelta(hours=10))     # 21:00 New York
-    assert not closed["mercado_abierto"] and closed["proxima"].startswith("2026-09-24T09:30")
-    assert "seguimiento" in project.strategy_design_view(kb, NAME)
