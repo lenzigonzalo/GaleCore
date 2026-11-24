@@ -25,6 +25,8 @@ CPUQuota=150%
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/home/%i/.galecore /home/%i/.claude /home/%i/.codex
+# BF-0020: el semáforo de tareas y la marca del chat, compartidos por todos los Labs y el supervisor (fuera del /tmp privado).
+ReadWritePaths=-/var/lib/galecore/tasks-slots
 PrivateTmp=true
 
 [Install]
