@@ -343,7 +343,24 @@ def strategy_design_view(kb: KnowledgeBase, name: str, checker: controls.SpecChe
         view["current"] = current
         view["newer_than_approved"] = [v["ref"] for v in versions if _vkey(v["ref"].split(":", 1)[1]) >
                                       _vkey(selected["ref"].split(":", 1)[1])]
+    view["seguimiento"] = _seguimiento(kb, name)
     return view
+
+
+def _seguimiento(kb: KnowledgeBase, name: str, now: datetime | None = None) -> dict | None:
+    """The board of a strategy in Seguimiento: ``explain`` plus the last reading and when the next one is due."""
+    from galecore_ai.application import market_clock, seguimiento
+
+    cur = seguimiento.current(kb, name)
+    if cur is None:
+        return None
+    now = now or datetime.now(UTC)
+    out = seguimiento.explain(kb, name, now)
+    out["ultima"] = next((x for x in reversed(seguimiento.runs(kb, name)) if x.get("rule") in cur["rules"]), None)
+    clock = market_clock.status(now)
+    out["mercado_abierto"] = clock.state == "open"
+    out["proxima"] = None if out["estado"] != "vigilando" or clock.state == "open" else clock.next_open.isoformat()
+    return out
 
 
 def _missing(view: dict) -> list[str]:
