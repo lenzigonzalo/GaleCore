@@ -2,7 +2,8 @@ r"""Entry point of the VPS supervisor — the Linux equivalent of space_sync.py 
 
     /srv/galecore/ai/venv/bin/python -B /srv/galecore/ai/galecore-ai/tools/vps_supervisor.py
 
-Runs as a systemd oneshot (galecore-supervisor@<user>.timer, every 5 min). Does the same as the
+Runs as a systemd oneshot (galecore-supervisor@<user>.timer, every 5 min). Outside the US session (`supervisor.pass_due`)
+it exits at once, without reading GaleCore nor the space (Supabase): BF-0020. Does the same as the
 Windows ``espacio-agentes`` task without the Windows bits (winreg, %LOCALAPPDATA%, schtasks):
 
 1. Builds a KnowledgeBase from $GALECORE_KNOWLEDGE_DIR (per-user on the VPS).
@@ -14,6 +15,7 @@ Errors go to stderr (journald captures them via the systemd unit).
 """
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -25,11 +27,13 @@ from galecore_ai.adapters.record_store import FileRecordStore, default_records_d
 from galecore_ai.adapters.research_store import FileResearchStore
 from galecore_ai.application.knowledge import KnowledgeBase
 from galecore_ai.application.space import publish_agents
-from galecore_ai.application.supervisor import api_reader
+from galecore_ai.application.supervisor import api_reader, pass_due
 from galecore_ai.application.tasks import VpsScheduler
 
 
 def main() -> int:
+    if not pass_due(datetime.now(UTC)):
+        return 0
     base = knowledge_dir()
     kb = KnowledgeBase(
         base=base,
