@@ -843,37 +843,64 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
     """Read-only GaleCore data the harness declares (GC-AI-0019): `list` what can be asked, `get` one capability."""
     if args.galecore_command == "list":
         _json_out({"capabilities": [{"id": c.capability_id, "kind": c.semantic_class.value, "what": c.description,
-                                     "params": [p.name for p in c.parameters], "returns": c.returns}
+                                     "params": [{"name": p.name, "required": p.required, **({"what": p.description} if p.description else {})}
+                                                for p in c.parameters], "returns": c.returns}
                                     for c in KNOWN_CAPABILITIES]})
         return
-    params: dict = {"symbol": args.symbol} if args.symbol else {}
+    from galecore_ai.application import gap_log
+    from galecore_ai.capabilities.dispatcher import _ROUTE_TABLE
+    contract = next((c for c in KNOWN_CAPABILITIES if c.capability_id == args.capability), None)
+    accepted = [p.name for p in contract.parameters] if contract else []
+    declared = {n.lower() for n in accepted}
+    declared.add(str(_ROUTE_TABLE.get(args.capability, {}).get("source_param") or "").lower())
+    declared.discard("")
+    params: dict = {}
+    if args.symbol:
+        # BF-0016: --symbol on a capability that takes Ticker (and not symbol) is sent as Ticker
+        if contract and "symbol" not in declared and "ticker" in declared:
+            params["Ticker"] = args.symbol
+        else:
+            params["symbol"] = args.symbol
     for item in args.param or []:
         key, sep, value = item.partition("=")
         if not sep or not key:
             _error_out(f"--param must be key=value: {item!r}", exit_code=_EXIT_VALIDATION_ERROR)
         params[key] = value
-    result = await _build_dispatcher().invoke(args.capability, params)
+    # BF-0016: a wrong call is not hidden: it is noted as invalid_call (our bug) and the engine is told how to call it
+    unknown = [k for k in params if k.lower() not in declared] if accepted else []
+    route = _ROUTE_TABLE.get(args.capability)   # what is actually sent: symbol renamed, calendar defaults filled
+    dispatcher = _build_dispatcher()
+    sent = dispatcher._build_query_params(route, params) if route else params
+    passed = {k.lower() for k in [*params, *sent]}
+    missing = [p.name for p in contract.parameters if p.required and p.name.lower() not in passed] if accepted else []
+
+    def _invalid(error: str, why: str, latency_ms: int | None) -> None:
+        noted = gap_log.add(knowledge_dir(), need=f"Llamada inválida a {args.capability}", kind="invalid_call",
+                            why=why[:300], instead="se le indicó al motor cómo llamarla", project="")
+        hint = f"esta capacidad acepta {', '.join(accepted)}"
+        if unknown:
+            hint += f"; parámetro desconocido: {', '.join(unknown)}"
+        if missing:
+            hint += f"; faltan: {', '.join(missing)}"
+        _json_out({"capability": args.capability, "ok": False, "error": error, "latency_ms": latency_ms,
+                   "missing_params": missing, "unknown_params": unknown, "accepted_params": accepted, "hint": hint,
+                   "gap": {"id": noted["id"], "count": noted["count"]}}, exit_code=_EXIT_VALIDATION_ERROR)
+
+    if missing:
+        _invalid(f"faltan parámetros: {', '.join(missing)}",
+                 f"faltan: {', '.join(missing)}; de más: {', '.join(unknown) or '-'}", None)
+        return
+    result = await dispatcher.invoke(args.capability, params)
     if not result.ok:
         first_line = str(result.error).strip().splitlines()[0][:300] if result.error else ""   # no stack trace for the host
-        # BF-0016: a failed call with a parameter the contract does not declare is the caller's mistake, not an API error.
-        contract = next((c for c in KNOWN_CAPABILITIES if c.capability_id == args.capability), None)
-        if contract and contract.parameters:
-            from galecore_ai.capabilities.dispatcher import _ROUTE_TABLE
-            accepted = [p.name for p in contract.parameters]
-            declared = {n.lower() for n in accepted}
-            declared.add(str(_ROUTE_TABLE.get(args.capability, {}).get("source_param") or "").lower())
-            unknown = [k for k in params if k.lower() not in declared]
-            if unknown:
-                _json_out({"capability": args.capability, "ok": False, "error": first_line,
-                           "latency_ms": result.latency_ms, "unknown_params": unknown, "accepted_params": accepted,
-                           "hint": f"parámetro desconocido: {', '.join(unknown)}; esta capacidad acepta {', '.join(accepted)}"},
-                          exit_code=_EXIT_VALIDATION_ERROR)
-                return
-        from galecore_ai.application import gap_log
+        if unknown and re.search(r"HTTP 400|\bVALIDATION\b", str(result.error)):   # only the caller's validation error
+            _invalid(first_line, f"{str(result.error)[:200]}; parámetros de más: {', '.join(unknown)}", result.latency_ms)
+            return
         noted = gap_log.add(knowledge_dir(), need=f"Error de API en {args.capability}", kind="api_error",
                             why=str(result.error)[:300], instead="se siguió con lo disponible", project="")
         _json_out({"capability": args.capability, "ok": False, "error": first_line,
-                   "latency_ms": result.latency_ms, "gap": {"id": noted["id"], "count": noted["count"]}}, exit_code=1)
+                   "latency_ms": result.latency_ms, "gap": {"id": noted["id"], "count": noted["count"]},
+                   **({"unknown_params": unknown} if unknown else {})}, exit_code=1)
         return
     retrieved = datetime.now(UTC)
     body = {"capability": args.capability, "ok": True, "params": params, "latency_ms": result.latency_ms,

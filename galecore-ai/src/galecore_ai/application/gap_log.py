@@ -12,7 +12,8 @@ import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 
-KINDS = ("data", "calc", "analysis", "cross", "action", "api_error")
+KINDS = ("data", "calc", "analysis", "cross", "action", "api_error", "invalid_call")
+# invalid_call: the harness called a capability wrongly (our bug, BF-0016); it becomes a bugfix by count, not by 5xx
 MAX_OCCURRENCES = 20
 BUGFIX_AFTER = 3            # server faults (HTTP 5xx) of the same request before it becomes a bugfix to attend
 _SERVER_FAULT = re.compile(r"HTTP 5\d\d")   # a 4xx is the caller's mistake (bad range, missing parameter), not a bug
@@ -51,7 +52,7 @@ def _existing(kb: Path, need: str, kind: str) -> Path | None:
     exact = gap_dir(kb) / f"{_slug(need)}.json"
     if exact.exists():
         return exact
-    if kind == "api_error":                 # one gap per capability: «option_greeks» is not «option_chains» reworded
+    if kind in ("api_error", "invalid_call"):   # one gap per capability: «option_greeks» is not «option_chains» reworded
         return None
     for f in sorted(gap_dir(kb).glob("*.json")) if gap_dir(kb).exists() else []:
         try:
@@ -80,13 +81,17 @@ def add(kb: Path, *, need: str, kind: str, why: str = "", instead: str = "", pro
     item.pop("resolution", None)
     item["count"] += 1
     item["last_seen"] = now
-    occurrence = {"at": now, "why": why, "instead": instead, "project": project}
+    occurrence = {"at": now, "why": why, "instead": instead, "project": project, **({"reopened": True} if reopened else {})}
     item["occurrences"] = (item["occurrences"] + [occurrence])[-MAX_OCCURRENCES:]
     faults = sum(1 for o in item["occurrences"] if _SERVER_FAULT.search(o.get("why", "")))
     if reopened and not _SERVER_FAULT.search(why or ""):
         faults = 0                          # the old faults were closed: only a new 5xx raises it again
     if kind == "api_error" and "bugfix" not in item and faults >= BUGFIX_AFTER:
         item["bugfix"] = {"raised_at": now, "state": "open"}   # GaleCore is failing, not the caller: to be fixed first
+    marks = [i for i, o in enumerate(item["occurrences"]) if o.get("reopened")]
+    recent = len(item["occurrences"]) - (marks[-1] if marks else 0)   # only the calls since the last reopening
+    if kind == "invalid_call" and "bugfix" not in item and recent >= BUGFIX_AFTER:
+        item["bugfix"] = {"raised_at": now, "state": "open"}   # BF-0016: the harness keeps calling it wrongly
     _write(path, item)
     return item
 

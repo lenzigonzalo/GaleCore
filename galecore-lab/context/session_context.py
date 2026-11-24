@@ -81,6 +81,17 @@ def clock_line():
         return "[reloj] no disponible: no asumas la fecha ni si el mercado está abierto."
 
 
+def _params_hint(params):
+    """BF-0016: the required parameters of a capability, `(Req1,Req2)`; nothing if it takes symbol or has none."""
+    if not isinstance(params, list):
+        return ""
+    ps = [p for p in params if isinstance(p, dict) and isinstance(p.get("name"), str)]
+    if any(p["name"].lower() == "symbol" for p in ps):
+        return ""
+    req = [p["name"] for p in ps if p.get("required")]
+    return f"({','.join(req)})" if req else ""
+
+
 def galecore_map():
     """Qué sirve GaleCore (de `galecore list`, agrupado por área) y qué no."""
     out = cli("galecore", "list")
@@ -96,7 +107,7 @@ def galecore_map():
     areas = {}
     for c in caps:
         area, _, name = c["id"].partition(".")
-        areas.setdefault(area, []).append(name)
+        areas.setdefault(area, []).append(name + _params_hint(c.get("params")))
     lines = ["[mapa de GaleCore] Lo que GaleCore sirve (`galecore get <área.nombre> --param k=v`; "
              "el detalle: `galecore list`):"]
     lines += [f"- {a}: {', '.join(n)}" for a, n in areas.items()]

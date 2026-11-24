@@ -5,7 +5,7 @@ Phase 3: read-only (PURE_QUERY and COMPUTE only).
 
 Endpoint mapping (from GaleCore controllers):
   market_data.quote         → GET /Data/Tastytrade/MarketData/Quote?symbol={symbol}  (GaleCore requires Symbol; 400 with symbols, 06/10)
-  compute.gamma_exposure    → GET /App.Analytics/GammaExposure?symbol={symbol}[&dte={dte}]
+  compute.gamma_exposure    → GET /App.Analytics/GammaExposure?symbol={symbol}[&MaxDTE={n}][&TargetDte={n}]
   compute.iv_rank           → GET /App.Analytics/IVRank?symbol={symbol}
   compute.implied_volatility → GET /App.Analytics/ImpliedVolatility?symbol={symbol}
   market_data.option_chains → GET /Data/Tastytrade/OptionChains?symbol={symbol}
@@ -284,7 +284,7 @@ class CapabilityDispatcher:
         if source and source in parameters:
             params[target] = parameters[source]
 
-        # Pass through additional params (e.g. dte for gamma_exposure)
+        # Pass through additional params (e.g. MaxDTE/TargetDte for gamma_exposure)
         for k, v in parameters.items():
             if k != source and v is not None:
                 params[k] = v

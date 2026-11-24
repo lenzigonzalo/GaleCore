@@ -40,6 +40,14 @@ namespace DataFeed.Infrastructure
                 context.Response.StatusCode = (int)HttpStatusCode.BadGateway;
                 await WriteResponseAsync(context, new { error = ex.Message, code = DataFeed.Infrastructure.Providers.UpstreamSourceException.Code });
             }
+            catch (DataFeed.Infrastructure.Providers.SourceNoDataException ex)
+            {
+                // La fuente no tiene ese dato: 404 con su motivo, no una caída (BF-0016).
+                this.logger.LogWarning(ex.Message);
+
+                context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                await WriteResponseAsync(context, new { error = ex.Message, code = DataFeed.Infrastructure.Providers.SourceNoDataException.Code });
+            }
             catch (ResourceNotFoundException ex)
             {
                 this.logger.LogError(ex, ex.Message);
