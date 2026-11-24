@@ -63,6 +63,17 @@ namespace DataFeed.Controllers
                 // middleware porque en Development la página de errores lo atrapa antes (GC-0006).
                 return this.StatusCode(502, new ApiErrorResponse { Error = ex.Message, Code = DataFeed.Infrastructure.Providers.UpstreamSourceException.Code });
             }
+            catch (DataFeed.Infrastructure.Providers.SourceNoDataException ex)
+            {
+                // 404: la fuente respondió pero no tiene ese dato; falta de dato, no caída (BF-0016).
+                return this.NotFound(new ApiErrorResponse { Error = ex.Message, Code = DataFeed.Infrastructure.Providers.SourceNoDataException.Code });
+            }
+            catch (DataFeed.Application.Shared.ValidationException ex)
+            {
+                // 400: un parámetro mal armado es del que llama, no una caída. Se mapea acá porque en Development la
+                // página de errores atrapa antes al middleware (BF-0016).
+                return this.BadRequest(new ApiErrorResponse { Error = ex.Message, Code = "VALIDATION" });
+            }
             catch (OptionChainNotFoundException ex)
             {
                 // 409 por lo mismo: el símbolo que eligió el operador no se puede analizar, y eso es

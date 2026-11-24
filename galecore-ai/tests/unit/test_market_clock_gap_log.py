@@ -93,3 +93,20 @@ def test_repeated_server_faults_are_raised_as_bugfix_but_caller_mistakes_are_not
     gap_log.close(tmp_path, "error-de-api-en-calendar-macro-releases", resolution="arreglado")
     timeout = gap_log.add(tmp_path, need="Error de API en calendar.macro_releases", kind="api_error", why="HTTP 400")
     assert "bugfix" not in timeout   # the closed 5xx do not count for a new non-5xx failure
+
+
+def test_invalid_calls_are_raised_as_bugfix_by_count_without_a_5xx(tmp_path):
+    for n in range(gap_log.BUGFIX_AFTER):
+        item = gap_log.add(tmp_path, need="Llamada inválida a filings.sec_company", kind="invalid_call", why="faltan: Ticker")
+        assert ("bugfix" in item) == (n == gap_log.BUGFIX_AFTER - 1)
+
+
+def test_invalid_calls_count_only_after_a_reopening(tmp_path):
+    need = "Llamada inválida a filings.sec_facts"
+    for _ in range(gap_log.BUGFIX_AFTER):
+        item = gap_log.add(tmp_path, need=need, kind="invalid_call", why="faltan: Tag")
+    assert "bugfix" in item
+    gap_log.close(tmp_path, item["id"], resolution="arreglado")
+    for n in range(gap_log.BUGFIX_AFTER):
+        item = gap_log.add(tmp_path, need=need, kind="invalid_call", why="faltan: Tag")
+        assert ("bugfix" in item) == (n == gap_log.BUGFIX_AFTER - 1)

@@ -8,9 +8,11 @@ const errText = (e: any) => e?.response?.data?.error ?? e?.response?.data?.messa
 const REQUIRES: Record<ConnectionEntry['needsKey'], string> = { required: 'Sí', optional: 'Opcional', none: 'No' };
 
 // ✓ / ✗ con el motivo en el tooltip (la API ya trae el de la última prueba).
-function stateOf(c: ConnectionEntry): { ok: boolean; label: string; why: string } {
+// Sin clave pero opcional no es un error: anda con límites bajos, así que va sin ✓ ni ✗ (BF-0011).
+function stateOf(c: ConnectionEntry): { ok: boolean | null; label: string; why: string } {
   if (c.status === 'error') return { ok: false, label: 'Con error', why: c.lastTest?.message || 'La última prueba falló.' };
-  if (c.status === 'missing') return { ok: false, label: 'Sin clave', why: c.needsKey === 'optional' ? 'Sin clave cargada: anda con límites bajos.' : 'Falta cargar la API key.' };
+  if (c.status === 'missing' && c.needsKey === 'optional') return { ok: null, label: 'Sin clave (opcional)', why: 'Sin clave cargada: anda con límites bajos.' };
+  if (c.status === 'missing') return { ok: false, label: 'Sin clave', why: 'Falta cargar la API key.' };
   return { ok: true, label: 'Conectado', why: c.lastTest?.ok ? 'Última prueba: ' + (c.lastTest.message || 'funciona') : c.needsKey === 'none' ? 'No necesita clave.' : c.origin === 'server' ? 'Clave de la configuración del servidor.' : 'Clave cargada.' };
 }
 
@@ -53,7 +55,7 @@ function Row({ c, canEdit, onChange }: { c: ConnectionEntry; canEdit: boolean; o
     <td>{c.description}</td>
     <td>{REQUIRES[c.needsKey]}</td>
     <td>{keyCell}{error && <span className="conn-error" role="alert">{error}</span>}</td>
-    <td><span className={'conn-state ' + (st.ok ? 'is-good' : 'is-bad')} role="status" title={st.why}>{st.ok ? '✓' : '✗'} {st.label}</span></td>
+    <td><span className={'conn-state ' + (st.ok ? 'is-good' : st.ok === false ? 'is-bad' : '')} role="status" title={st.why}>{st.ok ? '✓ ' : st.ok === false ? '✗ ' : ''}{st.label}</span></td>
     <td><button disabled={busy || !keyed} title={keyed ? undefined : 'No necesita clave: no hay nada que probar'} onClick={test}>Probar</button></td>
   </tr>;
 }

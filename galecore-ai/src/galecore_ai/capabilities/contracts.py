@@ -65,7 +65,9 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         description="Compute gamma exposure (GEX) for a symbol (single expiration)",
         parameters=[
             CapabilityParameter(name="symbol", type="string", description="Underlying symbol"),
-            CapabilityParameter(name="dte", type="number", required=False, description="Days to expiration filter"),
+            CapabilityParameter(name="MaxDTE", type="number", required=False, description="Max DTE: picks the highest-DTE expiration within this cap; default 60"),
+            CapabilityParameter(name="TargetDte", type="number", required=False, description="Picks the expiration closest to this DTE (comparable series); default 0 = use MaxDTE"),
+            CapabilityParameter(name="IncludeZeroDte", type="boolean", required=False, description="Include the same-day expiration (DTE 0); default false"),
         ],
         returns="Net GEX, call/put GEX, zero gamma level, walls, strikes",
     ),
@@ -75,6 +77,7 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         description="Global GEX analysis across all expirations with macro regime context",
         parameters=[
             CapabilityParameter(name="symbol", type="string", description="Underlying symbol"),
+            CapabilityParameter(name="Refresh", type="boolean", required=False, description="true = ignore the cache and re-scan the chain; default false"),
         ],
         returns="Global GEX scope (net/call/put, walls, coverage), macro regime, config",
     ),
@@ -84,6 +87,8 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         description="25-delta put skew snapshot (iv_put_25delta / iv_atm) for a symbol",
         parameters=[
             CapabilityParameter(name="symbol", type="string", description="Underlying symbol"),
+            CapabilityParameter(name="Delta", type="number", required=False, description="Target put delta magnitude; default 0.25"),
+            CapabilityParameter(name="MaxDTE", type="number", required=False, description="Max DTE to filter expirations; default 60"),
         ],
         returns="Spot, ATM IV, 25-delta put IV, putSkew25d ratio, GaleCore level semaphore",
     ),
@@ -330,7 +335,7 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         capability_id="filings.sec_company",
         semantic_class=SemanticClass.PURE_QUERY,
         description="SEC company by ticker: CIK and name",
-        parameters=[CapabilityParameter(name="Ticker", type="string", description="e.g. AAPL")],
+        parameters=[CapabilityParameter(name="Ticker", type="string", description="e.g. AAPL (the handler takes no Cik)")],
         returns="source=sec, data[cik, ticker, name]",
     ),
     CapabilityDefinition(
@@ -338,8 +343,8 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         semantic_class=SemanticClass.PURE_QUERY,
         description="Recent SEC filings of a company (8-K items: 2.02 = earnings release), with document URLs",
         parameters=[
-            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik"),
-            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik: one is required"),
+            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik: one is required"),
             CapabilityParameter(name="Forms", type="string", required=False, description="e.g. 8-K,10-Q,10-K; default all"),
             CapabilityParameter(name="Since", type="string", required=False, description="YYYY-MM-DD; default 90 days ago"),
         ],
@@ -351,8 +356,8 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         semantic_class=SemanticClass.PURE_QUERY,
         description="Reported XBRL values of one concept for a company (e.g. Revenues, NetIncomeLoss, EarningsPerShareDiluted)",
         parameters=[
-            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik"),
-            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik: one is required"),
+            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik: one is required"),
             CapabilityParameter(name="Tag", type="string", description="XBRL concept"),
             CapabilityParameter(name="Taxonomy", type="string", required=False, description="default us-gaap"),
             CapabilityParameter(name="Since", type="string", required=False, description="period end from YYYY-MM-DD"),
@@ -366,8 +371,8 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         description="The latest 10-K (or 10-Q/20-F) of a company as text by item: 1 business (products, segments), "
         "1A risks, 7 management's discussion (net sales by product and region, margins); tables with cells split by |",
         parameters=[
-            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik"),
-            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik: one is required"),
+            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik: one is required"),
             CapabilityParameter(name="Form", type="string", required=False, description="default 10-K"),
             CapabilityParameter(name="Items", type="string", required=False, description="e.g. 1,1A,7 (default)"),
             CapabilityParameter(name="MaxChars", type="string", required=False, description="per item, default 30000"),
@@ -383,7 +388,11 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         description="REAL account (Tastytrade, read-only) at a glance: value, cash, buying power, today's and open "
         "result, max risk against the profile caps (`galecore get` passes them), SPY-equivalent exposure, theta, vega "
         "and what needs attention today",
-        parameters=[],
+        parameters=[
+            CapabilityParameter(name="AccountNumber", type="string", required=False, description="Account number; default the configured account"),
+            CapabilityParameter(name="maxRiskPerTradePct", type="number", required=False, description="Max loss per trade, % of net liq; default the user profile"),
+            CapabilityParameter(name="maxOpenRiskPct", type="number", required=False, description="Max summed open risk, % of net liq; default the user profile"),
+        ],
         returns="asOf, netLiq, cash, buyingPower, dayPnl, dayPnlPct, openPnl, maxRisk, maxRiskPct, maxRiskLimitPct, "
         "riskLimitsSource, "
         "exposure (SPY delta x beta, theta, vega), attention[], positions[], missing[]",
@@ -392,14 +401,19 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         capability_id="account.balances",
         semantic_class=SemanticClass.PURE_QUERY,
         description="REAL account (Tastytrade, read-only) balances: cash, derivative values, margin equity, buying power",
-        parameters=[],
+        parameters=[
+            CapabilityParameter(name="AccountNumber", type="string", required=False, description="Account number; default the configured account"),
+            CapabilityParameter(name="WithHistory", type="boolean", required=False, description="Add the last year of account value history"),
+        ],
         returns="accountNumber, cashBalance, longDerivativeValue, shortDerivativeValue, marginEquity, equityBuyingPower, …",
     ),
     CapabilityDefinition(
         capability_id="account.positions",
         semantic_class=SemanticClass.PURE_QUERY,
         description="REAL account (Tastytrade, read-only) open positions, leg by leg",
-        parameters=[],
+        parameters=[
+            CapabilityParameter(name="AccountNumber", type="string", required=False, description="Account number; default the configured account"),
+        ],
         returns="positions[symbol, instrumentType, underlyingSymbol, quantity, quantityDirection, closePrice, "
         "averageOpenPrice, expiresAt, …]",
     ),
@@ -408,7 +422,9 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         semantic_class=SemanticClass.PURE_QUERY,
         description="REAL account (Tastytrade, read-only) positions grouped as spreads, with max loss, probability of "
         "profit and net greeks computed by GaleCore",
-        parameters=[],
+        parameters=[
+            CapabilityParameter(name="AccountNumber", type="string", required=False, description="Account number; default the configured account"),
+        ],
         returns="spreads[id, underlyingSymbol, expiration, structure, contracts, width, short/long put/call strikes, "
         "initialCredit, currentNetCredit, hasLiveQuote, maxProfit, maxLoss, pop, openPnl, dayPnl, greeks]",
     ),

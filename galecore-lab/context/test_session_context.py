@@ -53,6 +53,17 @@ def test_map_uses_canonical_coverage_without_fetching_board():
     assert quote["what"] not in text
 
 
+def test_map_shows_only_required_params_of_capabilities_without_symbol():  # BF-0016
+    def cap(id_, *params):
+        return {"id": id_, "params": [{"name": n, "required": r} for n, r in params]}
+
+    text, _ = context({"capabilities": [
+        cap("filings.sec_facts", ("Ticker", False), ("Tag", True)), cap("filings.sec_company", ("Ticker", False)),
+        cap("market_data.quote", ("symbol", True)), cap("macro.board")]})
+    assert "sec_facts(Tag)" in text and "sec_company" in text
+    assert "sec_company(" not in text and "quote(" not in text and "board(" not in text
+
+
 @pytest.mark.parametrize("listed", [{}, {"capabilities": "bad"}, {"capabilities": [{}]}])
 def test_invalid_listing_keeps_existing_fallback(listed):
     text, _ = context(listed)

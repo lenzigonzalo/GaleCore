@@ -149,7 +149,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
       <AccountSettings user={user}
         textSize={<TextSizeSettings items={items} onChanged={reload} />}
         suggestions={suggestionsEnabled(items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY))}
-        onSuggestions={next => { void saveSuggestionsEnabled(next).then(reload).catch(() => setError('No se pudo guardar la preferencia.')); }} />
+        onSuggestions={next => saveSuggestionsEnabled(next).then(reload)} />
     );
   } else if (section === 'chat') {
     body = <ChatBehaviorSettings />;

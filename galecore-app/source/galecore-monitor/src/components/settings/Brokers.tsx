@@ -96,7 +96,7 @@ function Row({ b, onChange, onLinked }: { b: BrokerEntry; onChange: (e: BrokerEn
         ? <Switch on={b.include} label={'Incluir ' + b.name + ' en mi cartera'} onChange={next => { if (!busy) void toggle(next); }} />
         : <button type="button" role="switch" aria-checked={false} aria-label={'Incluir ' + b.name + ' en mi cartera'} className="pref-switch" disabled><i /></button>}</td>
     </tr>
-    {open && connectable && <tr><td colSpan={4}>
+    {open && connectable && <tr className="conn-form"><td colSpan={4}>
       {b.id === 'iol'
         ? <IolForm linked={linked} onSaved={e => { onChange(e); setOpen(false); }} onRemoved={e => { onChange(e); setOpen(false); }} onCancel={() => setOpen(false)} />
         : b.id === 'ibkr'

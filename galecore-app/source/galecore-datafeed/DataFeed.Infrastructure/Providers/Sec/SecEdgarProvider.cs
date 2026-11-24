@@ -162,7 +162,7 @@ namespace DataFeed.Infrastructure.Providers.Sec
                 request.Headers.TryAddWithoutValidation("User-Agent", _userAgent);
                 var response = await _httpClient.SendAsync(request, cancellationToken);
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                    throw new UpstreamSourceException("sec", $"{what}: la SEC no tiene ese dato (404)");
+                    throw new SourceNoDataException("sec", $"{what}: la SEC no tiene ese dato (404)");
                 if (!response.IsSuccessStatusCode)
                     throw new UpstreamSourceException("sec", $"{what} respondió {(int)response.StatusCode}");
                 return await response.Content.ReadAsStringAsync(cancellationToken);

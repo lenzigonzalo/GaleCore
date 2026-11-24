@@ -151,6 +151,14 @@ namespace DataFeed.Tests
             Assert.Contains("403", ex.Message);
         }
 
+        [Fact]
+        public async Task SecSin404EsFaltaDeDatoNoFuenteCaida()
+        {
+            var handler = new SecFactsHandler(Config(), new Factory(new Recorded(_ => Json("", HttpStatusCode.NotFound))));
+            var ex = await Assert.ThrowsAsync<SourceNoDataException>(() => handler.Handle(new SecFactsRequest { Cik = "320193", Tag = "Revenues" }, default));
+            Assert.Contains("la SEC no tiene ese dato (404)", ex.Message);
+        }
+
         [Theory]
         [InlineData(null, null, "Revenues")]
         [InlineData(null, "12ab", "Revenues")]

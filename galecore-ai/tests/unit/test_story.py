@@ -263,3 +263,65 @@ def test_a_sign_flip_a_big_move_or_a_near_release_escalate():
 
 def test_the_first_pack_has_no_previous_and_only_the_calendar_can_escalate():
     assert story.escalation_reason({"since_previous": None, "calendar": {}}, ESC_DAY) is None
+
+
+# ── galecore get: a wrong call is noted as invalid_call, not hidden (BF-0016) ──
+
+
+def _galecore_get(monkeypatch, tmp_path, capsys, capability, params, symbol=None, error=None):
+    import argparse
+
+    from galecore_ai.adapters import cli
+    from galecore_ai.application import gap_log
+
+    calls = []
+
+    class Failing:
+        def _build_query_params(self, route, p):
+            return dict(p)
+
+        async def invoke(self, cap, p):
+            calls.append(p)
+            return CapabilityResult(cap, error=error or "HTTP 400: ValidationException: Ticker requerido\n   at Stack.Trace",
+                                    latency_ms=7)
+
+    monkeypatch.setenv("GALECORE_KNOWLEDGE_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "_build_dispatcher", lambda: Failing())
+    args = argparse.Namespace(galecore_command="get", capability=capability, symbol=symbol, out=None, keep=None,
+                              param=[f"{k}={v}" for k, v in params.items()])
+    try:
+        asyncio.run(cli._cmd_galecore(args))
+    except SystemExit as exc:
+        return exc.code, json.loads(capsys.readouterr().out), gap_log.items(tmp_path), calls
+    raise AssertionError("expected an exit")
+
+
+def test_galecore_get_failing_with_an_undeclared_param_is_noted_as_invalid_call(monkeypatch, tmp_path, capsys):
+    code, out, gaps, _ = _galecore_get(monkeypatch, tmp_path, capsys, "filings.sec_company",
+                                      {"Ticker": "AAPL", "symbol": "AAPL"})
+    assert code == 3 and out["ok"] is False and out["error"] == "HTTP 400: ValidationException: Ticker requerido"
+    assert out["unknown_params"] == ["symbol"] and "Ticker" in out["accepted_params"] and out["gap"]["count"] == 1
+    assert [g["kind"] for g in gaps] == ["invalid_call"]
+
+
+def test_galecore_get_symbol_shortcut_is_sent_as_ticker(monkeypatch, tmp_path, capsys):
+    _, _, _, calls = _galecore_get(monkeypatch, tmp_path, capsys, "filings.sec_company", {}, symbol="AAPL")
+    assert calls == [{"Ticker": "AAPL"}]
+
+
+def test_galecore_get_missing_required_param_does_not_call_the_api(monkeypatch, tmp_path, capsys):
+    code, out, gaps, calls = _galecore_get(monkeypatch, tmp_path, capsys, "filings.sec_facts", {"Ticker": "AAPL"})
+    assert code == 3 and calls == [] and "Tag" in out["missing_params"] and out["gap"]["count"] == 1
+    assert [g["kind"] for g in gaps] == ["invalid_call"]
+
+
+def test_galecore_get_failing_with_declared_params_still_notes_an_api_error(monkeypatch, tmp_path, capsys):
+    code, out, gaps, _ = _galecore_get(monkeypatch, tmp_path, capsys, "filings.sec_company", {"Ticker": "AAPL"})
+    assert code == 1 and out["gap"]["count"] == 1 and "unknown_params" not in out
+    assert len(gaps) == 1 and gaps[0]["kind"] == "api_error" and gaps[0]["need"] == "Error de API en filings.sec_company"
+
+
+def test_galecore_get_5xx_with_an_undeclared_param_stays_an_api_error_and_shows_it(monkeypatch, tmp_path, capsys):
+    code, out, gaps, _ = _galecore_get(monkeypatch, tmp_path, capsys, "filings.sec_company",
+                                      {"Ticker": "AAPL", "symbol": "AAPL"}, error="HTTP 500: boom")
+    assert code == 1 and out["unknown_params"] == ["symbol"] and [g["kind"] for g in gaps] == ["api_error"]

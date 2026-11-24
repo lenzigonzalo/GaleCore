@@ -20,6 +20,20 @@ const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)',
 };
 
+/** Los errores de Supabase al cambiar la contraseña, en castellano (BF-0010). */
+export function passwordErrorText(error: { code?: string; name?: string; message: string }): string {
+  switch (error.code) {
+    case 'same_password': return 'La contraseña nueva tiene que ser distinta de la actual.';
+    case 'weak_password': return 'La contraseña es muy corta o débil: usá al menos 6 caracteres.';
+    case 'reauthentication_needed': return 'Por seguridad hay que volver a entrar: cerrá sesión, entrá de nuevo y cambiala enseguida.';
+    case 'session_not_found':
+    case 'session_expired': return 'Tu sesión venció: cerrá sesión, entrá de nuevo y volvé a probar.';
+    case 'over_request_rate_limit': return 'Demasiados intentos. Esperá unos minutos antes de volver a probar.';
+  }
+  if (error.name === 'AuthSessionMissingError') return 'Tu sesión venció: cerrá sesión, entrá de nuevo y volvé a probar.';
+  return error.message;
+}
+
 interface Props {
   /**
    * Le saca el chrome de card (borde, fondo y la fila del título) para montarlo adentro de un
@@ -65,9 +79,9 @@ export function MyPasswordCard({ embedded = false }: Props = {}) {
       const { error: authError } = await updateOwnPassword(password);
 
       if (authError) {
-        // El motivo de Supabase es accionable ("password should be at least 6 characters"): se
-        // muestra tal cual en vez de un "no se pudo guardar" que no dice qué arreglar.
-        setError(authError.message);
+        // El motivo de Supabase es accionable pero viene en inglés: se traduce por código y, si es
+        // uno que no conocemos, se muestra tal cual antes que un "no se pudo guardar" mudo.
+        setError(passwordErrorText(authError));
         return;
       }
 
