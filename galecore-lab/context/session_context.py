@@ -5,8 +5,11 @@ acá sólo lo que cambia, con tope de diseño de 6.000 caracteres (D-0012).
 """
 import datetime
 import json
+import os
 import subprocess
 import sys
+import time
+from types import SimpleNamespace
 
 from concepto import es_concepto
 
@@ -27,7 +30,19 @@ def start(*args):
 # Owner 19/10: «Mercado hoy» no puede salir vacío al retomar: SPY, VIX y eventos de GaleCore, en paralelo con el resto.
 _TODAY = datetime.date.today()
 _FROM = (_TODAY - datetime.timedelta(days=12)).isoformat()
-_RUNS = {"clock": start("clock"), "space": start("space", "context")}
+# BF-0017: el espacio se baja como mucho cada 10 min, no en cada turno.
+_KB = os.environ.get("GALECORE_KNOWLEDGE_DIR")
+_CACHE = os.path.join(_KB, ".local", "space-context.txt") if _KB else None
+_CACHED = None
+try:
+    if _CACHE and time.time() - os.path.getmtime(_CACHE) < 600:
+        with open(_CACHE, encoding="utf-8") as f:
+            _CACHED = f.read() or None
+except OSError:
+    pass
+_RUNS = {"clock": start("clock")}
+if _CACHED is None:
+    _RUNS["space"] = start("space", "context")
 # Una pregunta de concepto no usa el mercado, el mapa ni la cuenta: no se consultan (WS-0050).
 if not _LIGHT:
     _RUNS |= {"list": start("galecore", "list"),
@@ -190,7 +205,14 @@ if not _LIGHT:
         print(line)
     print(galecore_map())
 print()
-out = cli("space", "context")
+out = SimpleNamespace(returncode=0, stdout=_CACHED) if _CACHED is not None else cli("space", "context")
+if _CACHED is None and out.returncode == 0 and out.stdout.strip() and _CACHE:
+    try:
+        os.makedirs(os.path.dirname(_CACHE), exist_ok=True)
+        with open(_CACHE, "w", encoding="utf-8") as f:
+            f.write(out.stdout)
+    except OSError:
+        pass
 if out.returncode != 0:
     print("[espacio del trader] consulta fallida; nombre, intereses y memoria no disponibles.")
     print(out.stderr, file=sys.stderr)

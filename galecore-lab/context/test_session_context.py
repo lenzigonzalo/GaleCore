@@ -1,8 +1,10 @@
 """The real context entry point discovers coverage without another market request."""
 import io
 import json
+import os
 import runpy
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -61,3 +63,27 @@ def test_missing_board_description_does_not_invent_coverage():
     text, _ = context({"capabilities": [{"id": "macro.board"}]})
     assert "- macro: board" in text
     assert "- macro.board:" not in text
+
+
+@pytest.fixture(autouse=True)
+def _no_cache(monkeypatch):
+    monkeypatch.delenv("GALECORE_KNOWLEDGE_DIR", raising=False)
+
+
+def test_space_context_cache_fresh_skips_the_subprocess(tmp_path, monkeypatch):  # BF-0017
+    monkeypatch.setenv("GALECORE_KNOWLEDGE_DIR", str(tmp_path))
+    (tmp_path / ".local").mkdir()
+    (tmp_path / ".local" / "space-context.txt").write_text("[espacio] cacheado", encoding="utf-8")
+    text, calls = context({})
+    assert "[espacio] cacheado" in text and ["space", "context"] not in calls
+
+
+def test_space_context_cache_expired_runs_and_saves(tmp_path, monkeypatch):  # BF-0017
+    monkeypatch.setenv("GALECORE_KNOWLEDGE_DIR", str(tmp_path))
+    cache = tmp_path / ".local" / "space-context.txt"
+    cache.parent.mkdir()
+    cache.write_text("viejo", encoding="utf-8")
+    os.utime(cache, (time.time() - 700, time.time() - 700))
+    text, calls = context({})
+    assert ["space", "context"] in calls and "viejo" not in text
+    assert cache.read_text(encoding="utf-8") == '{"data": []}'

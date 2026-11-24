@@ -94,9 +94,17 @@ def test_the_session_starts_with_who_the_trader_is(galecore):
     space.sync(client, PIECES)
     client.login()
     text = space.context(client)
-    assert "demo: 3 piezas propias, 1 compartidas" in text
-    assert "perfil" not in text and "30 a 45 días" not in text and "además: 1 agentes" in text   # WS-0058: no trading profile
-    assert "compartido: skill (1)" in text
+    assert text.startswith("[espacio] demo") and "piezas propias" not in text and "compartido:" not in text
+    assert "perfil" not in text and "30 a 45 días" not in text and "agentes" not in text   # WS-0058: no trading profile
+
+
+def test_the_context_never_downloads_the_whole_space(galecore):  # BF-0017
+    fake, client = galecore
+    space.sync(client, PIECES)
+    client.login()
+    fake.reads.clear()
+    space.context(client)
+    assert None not in fake.reads and sorted(fake.reads) == ["convention", "memory", "skill"]
 
 
 def test_the_traders_own_skills_are_named_for_the_chat(galecore):  # WS-0054: created in the monitor, private

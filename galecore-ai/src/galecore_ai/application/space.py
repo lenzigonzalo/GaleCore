@@ -635,23 +635,23 @@ def _skill_with_code_line(label: str, piece: dict, folder: dict) -> str:
 
 
 def context(client: SpaceClient) -> str:
-    """The session's opening summary: the trader's name, interests and memory (the whole profile, WS-0058), and what they have."""
-    space = client.items()
-    own, shared = space["items"], space["shared"]
+    """The session's opening summary: the trader's name, interests and memory (the whole profile, WS-0058), and what they have.
+    BF-0017: only the kinds it uses (convention, memory, skill), one call each, not the whole space."""
+    got = [client.items(k) for k in ("convention", "memory", "skill")]
+    own = [i for g in got for i in g["items"]]
+    shared = [i for g in got for i in g["shared"]]
     by_kind: dict[str, list[dict]] = {}
     for i in own:
         by_kind.setdefault(i["kind"], []).append(i)
-    lines = [f"[espacio] {client.user}: {len(own)} piezas propias, {len(shared)} compartidas por el equipo"]
+    lines = [f"[espacio] {client.user}"]
     conventions = {c["key"]: c for c in by_kind.get("convention", [])}
     for key, label in {"como-te-llamo": "nombre", "intereses": "intereses"}.items():
         if text := " ".join(str(conventions.get(key, {}).get("content", "")).split()):
             lines.append(f"  {label}: {text}")
     for m in by_kind.get("memory", []):  # title + one line each: short enough to go whole
         lines.append(f"  memoria — {m['title']}: " + " ".join(str(m.get("content", "")).split()))
-    counts = [f"{len(by_kind[k])} {label}" for k, label in
-              {"agent": "agentes", "skill": "skills", "data": "datos"}.items() if by_kind.get(k)]
-    if counts:
-        lines.append("  además: " + " · ".join(counts))
+    if by_kind.get("skill"):
+        lines.append(f"  además: {len(by_kind['skill'])} skills")
     # The trader's own skills (created in the monitor, private) are not in the catalog: name them so a request can
     # use one (WS-0054); the product's skills are shared and reached through the catalog.
     for s in by_kind.get("skill", []):
@@ -664,8 +664,5 @@ def context(client: SpaceClient) -> str:
     for s in (i for i in shared if i["kind"] == "skill"):   # others' shared skills with scripts are named too
         if (folder := skill_space.parse_piece(s)) is not None:
             lines.append(_skill_with_code_line(f"compartida de {s.get('owner') or 'otro'}", s, folder))
-    shared_kinds = sorted({i["kind"] for i in shared})
-    if shared_kinds:
-        lines.append("  compartido: " + ", ".join(f"{k} ({sum(1 for i in shared if i['kind'] == k)})" for k in shared_kinds))
     lines.append("  detalle: `space list [--kind K]` · `space show K/clave`")
     return "\n".join(lines)
