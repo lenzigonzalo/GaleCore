@@ -26,15 +26,6 @@ export interface StrategyView {
   };
   versions?:{ref:string;approved:boolean}[];newer_than_approved?:string[];
   log?:{open?:{words:string}[]};integrity_failed?:unknown[];
-  seguimiento?:Seguimiento|null;
-}
-interface Seguimiento {
-  estado:string;version_activa:string;activada:string;mercado_abierto:boolean;proxima:string|null;
-  entrada:{rule:string;vigila:string;cumplida:boolean;cuando:string|null}[];
-  invalidacion:{rule:string|null;cumplida:boolean;cuando:string|null};
-  ultima:{at:string;outcome:string;value:number|null;threshold:number}|null;
-  huecos:{ruedas_sin_lectura_valida:string[];fallas:{dia:string;motivo:string;veces:number}[]};
-  reglas_que_no_corren:{rule:string;text:string;reason:string}[];
 }
 const basis:Record<string,string>={grounded:'Con evidencia',hypothesis:'Hipótesis',pending_parameter:'Sin fundamento suficiente',owner_decision:'Decisión del usuario',design_choice:'Elección de diseño'};
 const structures:Record<string,string>={iron_condor:'Iron condor',put_credit_spread:'Put credit spread',call_credit_spread:'Call credit spread'};
@@ -47,26 +38,6 @@ function RuleTable({rules,controls}:{rules:Rule[];controls?:Controls}) {
   if(!rules.length)return <p>Sin reglas guardadas en esta sección.</p>;
   return <Table headers={['Regla','Definición','Valor declarado','Control']}>{rules.map(r=><tr key={r.id}><td>{r.id}</td><td><p>{r.text}</p><details><summary>Fundamento y alcance</summary><p>{basis[r.basis || ''] || 'Fundamento no informado'}</p>{r.rationale&&<p>{r.rationale}</p>}{r.runtime_note&&<p>{r.runtime_note}</p>}{!!r.sources?.length&&<small>{r.sources.join(', ')}</small>}</details></td><td>{r.parameter || 'No separado en la regla'}</td><td>{controls?.reglas.find(c=>c.regla===r.id)?.clase || (r.runtime==='not_applicable'?'No aplica':'Sin clasificación comprobada')}</td></tr>)}</Table>;
 }
-const when=(v:string|null|undefined)=>v?new Date(v).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
-const num=(n:number|null)=>n===null?'—':n.toLocaleString('es-AR',{maximumFractionDigits:2});
-const estados:Record<string,string>={vigilando:'Vigilando',invalidada:'Invalidada',cancelada:'Cancelada'};
-function SeguimientoBoard({s}:{s:Seguimiento}) {
-  const u=s.ultima,met=s.entrada.find(e=>e.cumplida);
-  const ultima=!u?'Sin lecturas todavía':u.outcome==='failed'?'Falló la lectura · '+when(u.at):num(u.value)+' frente a '+num(u.threshold)+' · '+when(u.at);
-  const proxima=s.estado!=='vigilando'?'No se vigila más':s.mercado_abierto?'En rueda, cada 5 minutos':'Apertura del '+when(s.proxima);
-  const salud=[...s.huecos.fallas.map(f=>`Falló el ${f.dia}: ${f.motivo} (${f.veces} ${f.veces===1?'vez':'veces'})`),
-    ...(s.huecos.ruedas_sin_lectura_valida.length?['Ruedas sin lectura: '+s.huecos.ruedas_sin_lectura_valida.join(', ')]:[]),
-    ...s.reglas_que_no_corren.map(r=>'No se vigila: '+r.text)];
-  return <section className="lab-design-overview" aria-label="Seguimiento">
-    <dl className="lab-design-facts">{[
-      ['Estado',(estados[s.estado] || s.estado)+(met?' · entrada cumplida '+when(met.cuando):'')+(s.invalidacion.cumplida?' · invalidada '+when(s.invalidacion.cuando):'')],
-      ['Regla vigente','Versión '+s.version_activa+' · activada '+when(s.activada)],
-      ['Vigila',s.entrada.map(e=>e.vigila).join(' · ') || 'Sin regla de entrada vigilada'],
-      ['Última evaluación',ultima],['Próxima evaluación',proxima],
-    ].map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    {salud.length?<div className="lab-design-warning"><strong>Salud</strong><List items={salud}/></div>:<p>Salud: sin fallas ni ruedas sin lectura.</p>}
-  </section>;
-}
 export function LabStrategySheet({strategy}:{strategy:StrategyView|null}) {
   const c=strategy?.current;
   if(!c)return <section className="lab-shadow-draft"><h2>Diseño todavía sin guardar</h2><p>Este proyecto aún no tiene una propuesta canónica. Las definiciones aparecerán cuando se guarde una versión desde el chat.</p></section>;
@@ -77,7 +48,6 @@ export function LabStrategySheet({strategy}:{strategy:StrategyView|null}) {
   const pending=Array.from(new Set([...(c.pending || []),...(strategy?.log?.open || []).map(v=>v.words)]));
   const ev=c.evaluation_plan;
   return <div className="lab-strategy-sheet">
-    {strategy?.seguimiento&&<SeguimientoBoard s={strategy.seguimiento}/>}
     <div className="lab-design-identity"><span>Versión {c.ref.split('/').pop()}</span><span>{c.approved?'Aprobada para SHADOW Dev':'Propuesta sin aprobar'}</span><span className="lab-design-attention">Definiciones pendientes</span></div>
     {!!strategy?.newer_than_approved?.length&&<p className="lab-design-warning">Hay propuestas posteriores sin aprobar: {strategy.newer_than_approved.join(', ')}. Se muestra la versión aprobada.</p>}
     <section className="lab-design-overview" aria-label="Definición de la estrategia">
