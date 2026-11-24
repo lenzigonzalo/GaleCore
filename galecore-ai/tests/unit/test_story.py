@@ -263,3 +263,40 @@ def test_a_sign_flip_a_big_move_or_a_near_release_escalate():
 
 def test_the_first_pack_has_no_previous_and_only_the_calendar_can_escalate():
     assert story.escalation_reason({"since_previous": None, "calendar": {}}, ESC_DAY) is None
+
+
+# ── galecore get: an undeclared parameter is not an API error (BF-0016) ──
+
+
+def _galecore_get(monkeypatch, tmp_path, capsys, capability, params):
+    import argparse
+
+    from galecore_ai.adapters import cli
+    from galecore_ai.application import gap_log
+
+    class Failing:
+        async def invoke(self, cap, p):
+            return CapabilityResult(cap, error="HTTP 500: ValidationException: Ticker requerido\n   at Stack.Trace", latency_ms=7)
+
+    monkeypatch.setenv("GALECORE_KNOWLEDGE_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "_build_dispatcher", lambda: Failing())
+    args = argparse.Namespace(galecore_command="get", capability=capability, symbol=None, out=None, keep=None,
+                              param=[f"{k}={v}" for k, v in params.items()])
+    try:
+        asyncio.run(cli._cmd_galecore(args))
+    except SystemExit as exc:
+        return exc.code, json.loads(capsys.readouterr().out), gap_log.items(tmp_path)
+    raise AssertionError("expected an exit")
+
+
+def test_galecore_get_with_an_undeclared_param_reports_it_and_writes_no_gap(monkeypatch, tmp_path, capsys):
+    code, out, gaps = _galecore_get(monkeypatch, tmp_path, capsys, "filings.sec_company", {"symbol": "AAPL"})
+    assert code == 3 and out["ok"] is False and out["error"] == "HTTP 500: ValidationException: Ticker requerido"
+    assert out["unknown_params"] == ["symbol"] and "Ticker" in out["accepted_params"] and "gap" not in out
+    assert gaps == []
+
+
+def test_galecore_get_failing_with_declared_params_still_notes_the_gap(monkeypatch, tmp_path, capsys):
+    code, out, gaps = _galecore_get(monkeypatch, tmp_path, capsys, "filings.sec_company", {"Ticker": "AAPL"})
+    assert code == 1 and out["gap"]["count"] == 1 and "unknown_params" not in out
+    assert len(gaps) == 1 and gaps[0]["need"] == "Error de API en filings.sec_company"

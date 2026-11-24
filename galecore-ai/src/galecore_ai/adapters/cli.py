@@ -854,10 +854,24 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
         params[key] = value
     result = await _build_dispatcher().invoke(args.capability, params)
     if not result.ok:
+        first_line = str(result.error).strip().splitlines()[0][:300] if result.error else ""   # no stack trace for the host
+        # BF-0016: a failed call with a parameter the contract does not declare is the caller's mistake, not an API error.
+        contract = next((c for c in KNOWN_CAPABILITIES if c.capability_id == args.capability), None)
+        if contract and contract.parameters:
+            from galecore_ai.capabilities.dispatcher import _ROUTE_TABLE
+            accepted = [p.name for p in contract.parameters]
+            declared = {n.lower() for n in accepted}
+            declared.add(str(_ROUTE_TABLE.get(args.capability, {}).get("source_param") or "").lower())
+            unknown = [k for k in params if k.lower() not in declared]
+            if unknown:
+                _json_out({"capability": args.capability, "ok": False, "error": first_line,
+                           "latency_ms": result.latency_ms, "unknown_params": unknown, "accepted_params": accepted,
+                           "hint": f"parámetro desconocido: {', '.join(unknown)}; esta capacidad acepta {', '.join(accepted)}"},
+                          exit_code=_EXIT_VALIDATION_ERROR)
+                return
         from galecore_ai.application import gap_log
         noted = gap_log.add(knowledge_dir(), need=f"Error de API en {args.capability}", kind="api_error",
                             why=str(result.error)[:300], instead="se siguió con lo disponible", project="")
-        first_line = str(result.error).strip().splitlines()[0][:300] if result.error else ""   # no stack trace for the host
         _json_out({"capability": args.capability, "ok": False, "error": first_line,
                    "latency_ms": result.latency_ms, "gap": {"id": noted["id"], "count": noted["count"]}}, exit_code=1)
         return
