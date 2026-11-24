@@ -113,6 +113,9 @@ function environment() {
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor',
     PYTHONPATH: path.join(ROOT, 'galecore-ai', 'src'), GALECORE_KNOWLEDGE_DIR: KB };
   if (fs.existsSync(venvScripts)) env.PATH = venvScripts + path.delimiter + (env.PATH || '');
+  // BF-0021: el CLI sólo acepta localhost o GALECORE_ALLOWED_BASE_URL; el Lab declara el host que usa, sin depender de
+  // que cada .env lo repita (BF-0018 movió la base al host público y el chat quedó bloqueado).
+  if (env.GALECORE_BASE_URL) env.GALECORE_ALLOWED_BASE_URL = env.GALECORE_BASE_URL;
   for (const k of Object.keys(env)) {
     if (['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'ANTHROPIC_BASE_URL', 'CLAUDECODE'].includes(k)) delete env[k];
     if (k.startsWith('CLAUDE_CODE_') && k !== 'CLAUDE_CODE_OAUTH_TOKEN') delete env[k];
