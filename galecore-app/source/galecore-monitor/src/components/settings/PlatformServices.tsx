@@ -3,6 +3,7 @@ import { useStrategySwitchStore, useSwitchEntry } from '../../store/useStrategyS
 import { useCanManagePlatform } from '../../store/useCurrentUserStore';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { fetchSpace } from '../../api/space';
+import { CLOCK_TZ } from '../../utils/chartTime';
 
 /**
  * Configuración → Plataforma (owner 17/10; WS-0057 A, 21/10): lo que GaleCore corre solo, para todos. Se muestra el
@@ -21,9 +22,9 @@ function fmt(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const day = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
-  const date = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-  return `${day} ${date}, ${d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`;
+  const day = d.toLocaleDateString('es-AR', { timeZone: CLOCK_TZ, weekday: 'short' }).replace('.', '');
+  const date = d.toLocaleDateString('es-AR', { timeZone: CLOCK_TZ, day: '2-digit', month: '2-digit' });
+  return `${day} ${date}, ${d.toLocaleTimeString('es-AR', { timeZone: CLOCK_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`;
 }
 
 function State({ tone, text, detail }: { tone: 'good' | 'off' | 'warn' | 'unknown'; text: string; detail?: string }) {
@@ -51,7 +52,7 @@ function AdminAction({ endpoint }: { endpoint: string }) {
   </span>;
 }
 
-interface SupervisorPiece { state?: string; last_run?: { at?: string; result?: string } | null; history?: { at?: string; result?: string }[] }
+interface SupervisorPiece { state?: string; last_run?: { at?: string; result?: string; failed?: boolean } | null; history?: { at?: string; result?: string; failed?: boolean }[] }
 
 function SupervisorState() {
   const [piece, setPiece] = useState<SupervisorPiece | null | undefined>(undefined);
@@ -68,7 +69,7 @@ function SupervisorState() {
   if (piece === undefined) return <State tone="unknown" text="…" />;
   const last = piece?.last_run ?? piece?.history?.[0];
   if (!last?.at) return <State tone="unknown" text="Sin vueltas publicadas" />;
-  const ok = last.result === 'OK';
+  const ok = last.failed !== true;
   return <State tone={ok ? 'good' : 'warn'} text={ok ? 'Al día' : 'Última vuelta incompleta'} detail={fmt(last.at)} />;
 }
 

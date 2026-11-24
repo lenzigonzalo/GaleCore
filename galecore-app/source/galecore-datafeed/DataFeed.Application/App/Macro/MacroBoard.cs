@@ -90,7 +90,7 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
     : IRequestHandler<MacroBoardRequest, MacroBoardResponse>
 {
     // Cada fila del panel se nombra por su fuente: fut: futuro (contrato vigente), eq: acción o ETF (DXLink),
-    // ser: serie del snapshot Macro (Tesoro, FRED, CBOE), rel: cociente (desempeño relativo).
+    // ser: serie del snapshot Macro (Tesoro, FRED, CBOE), idx: índice de DXLink en vivo (VIX; cae a la serie CBOE si no hay velas), rel: cociente (desempeño relativo).
     private record Item(string Key, string Name);
     private record Group(string Name, Item[] Items, bool SortByMonth = false, bool ByValueAdded = false);
     private record Section(string Question, Group[] Groups);
@@ -116,6 +116,7 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
     private static Item F(string code, string name) => new("fut:" + code, name);
     private static Item E(string symbol, string name) => new("eq:" + symbol, name);
     private static Item S(string id, string name) => new("ser:" + id, name);
+    private static Item X(string id, string name) => new("idx:" + id, name);
     private static Item R(string id) => new("rel:" + id, Relatives.First(r => r.Id == id).Name);
 
     /// <summary>
@@ -137,7 +138,7 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
             {
                 new Group("Acciones", new[] { F("ES", "S&P 500"), F("NQ", "Nasdaq 100"), F("RTY", "Russell 2000"), F("YM", "Dow Jones") }),
                 new Group("Crédito", new[] { S("BAMLH0A0HYM2", "Spread high yield"), S("BAMLC0A0CM", "Spread grado de inversión") }),
-                new Group("Volatilidad", new[] { S("VIX", "VIX"), F("VX", "VIX futuro"), S("VVIX", "VVIX"), S("SKEW", "SKEW") }),
+                new Group("Volatilidad", new[] { X("VIX", "VIX"), F("VX", "VIX futuro"), S("VVIX", "VVIX"), S("SKEW", "SKEW") }),
             }),
             new Section("¿Qué descuentan las tasas?", new[]
             {
@@ -177,12 +178,12 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
             }),
         }),
     };
-    private static readonly string[] StripKeys = { "fut:ES", "ser:UST10", "ser:" + Dollar, "fut:GC", "fut:CL", "ser:VIX" };
+    private static readonly string[] StripKeys = { "fut:ES", "ser:UST10", "ser:" + Dollar, "fut:GC", "fut:CL", "idx:VIX" };
 
     /// <summary>El resumen: unas filas por pregunta; en «quién lidera» suma el mejor y el peor sector y quien más mueve.</summary>
     private static readonly (string Question, string DetailTab, string[] Keys)[] Summary =
     {
-        ("¿Hay apetito por riesgo?", "riesgo", new[] { "fut:ES", "ser:BAMLH0A0HYM2", "ser:VIX" }),
+        ("¿Hay apetito por riesgo?", "riesgo", new[] { "fut:ES", "ser:BAMLH0A0HYM2", "idx:VIX" }),
         ("¿Qué descuentan las tasas?", "riesgo", new[] { "ser:UST10", "ser:DFII10", "ser:T10YIE" }),
         ("¿Quién lidera?", "liderazgo", new[] { "rel:RSP_SPY", "rel:SMH_SPY", "rel:AI_SPY" }),
         ("¿Lo confirman los demás mercados?", "mercados", new[] { "ser:" + Dollar, "fut:HG", "fut:GC", "fut:CL" }),
@@ -222,6 +223,7 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
         var streamer = new Dictionary<string, string>();
         foreach (var (code, item) in contracts) streamer["fut:" + code] = item.StreamerSymbol!;
         foreach (var e in equities) streamer["eq:" + e] = e;
+        foreach (var i in items.Where(i => i.Key.StartsWith("idx:"))) streamer[i.Key] = i.Key[4..];
         var capsTask = MarketCapsAsync(missing, ct);
         var daily = await DailyAsync(streamer, missing, ct);
         var caps = await capsTask;
@@ -238,6 +240,14 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
             var kind = item.Key[..3]; var id = item.Key[4..];
             if (kind == "eq:") { kind = "eq"; id = item.Key[3..]; }
             if (kind == "ser" && id == Dollar) return dollar;
+            if (kind == "idx")
+            {
+                // DXLink en vivo; sin velas, la serie diaria de CBOE (cierre anterior) como respaldo.
+                var live = Daily(item.Key);
+                if (live.Count > 0) return MacroBoardMath.Row(id, item.Name, id, "pts", "pts", 1, live, "dxfeed");
+                missing.Add($"{item.Name} (DXLink): sin velas diarias; se usa la serie de CBOE (cierre anterior).");
+                return Build(S(id, item.Name));
+            }
             if (kind == "ser")
             {
                 definitions.TryGetValue(id, out var d);
