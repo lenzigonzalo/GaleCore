@@ -13,6 +13,10 @@ The VPS has little memory, so the runs of all the users share a few places (`GAL
 each is a file created with O_EXCL in `GALECORE_TASKS_SLOTS_DIR`, broken when older than LOCK_STALE_MINUTES like
 run.lock. A slot that waited VPS_BUSY_MINUTES for a place is not run late: it is recorded as «VPS ocupado». If the
 runner itself was down nothing is recorded: `tasks.freshness` says MISSED.
+
+The Lab chat has priority (BF-0020): it never takes a place nor waits. It leaves a `chat-<user>.lock` in the same
+directory, touched while it runs, and no run starts while any of them is younger than CHAT_QUIET_MINUTES: the tasks wait
+for the VPS to be quiet, with the same VPS_BUSY_MINUTES limit.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ from galecore_ai.contracts.task import Schedule
 MAX_PARALLEL_ENV = "GALECORE_TASKS_MAX_PARALLEL"
 SLOTS_DIR_ENV = "GALECORE_TASKS_SLOTS_DIR"
 TICK_SECONDS = 60
+CHAT_QUIET_MINUTES = 5         # the Lab's CHAT_QUIET_MIN: a chat marker younger than this holds every run back
 CURATION_TASK = "curaduria-memoria"
 CURATION_OBJECTIVE = "Poner al día la memoria y proponer qué quedó viejo; no aplica nada sin tu ok"
 
@@ -64,6 +69,18 @@ def acquire_place(directory: Path, places: int, now: datetime) -> Path | None:
                     break
                 path.unlink(missing_ok=True)   # its run died holding it
     return None
+
+
+def chat_active(directory: Path, now: datetime) -> bool:
+    """Whether a Lab chat of any user ran on this VPS in the last CHAT_QUIET_MINUTES (its `chat-*.lock` marker)."""
+    for path in directory.glob("chat-*.lock") if directory.is_dir() else []:
+        try:
+            age = now - datetime.fromtimestamp(path.stat().st_mtime, UTC)
+        except FileNotFoundError:
+            continue
+        if age < timedelta(minutes=CHAT_QUIET_MINUTES):
+            return True
+    return False
 
 
 def _anchor(task: t.TaskDefinition, log: list[dict]) -> datetime:
@@ -141,7 +158,7 @@ def tick(kb: KnowledgeBase, now: datetime | None = None, *, directory: Path | No
                               slot=iso)
                 done.append({"task": task_id, "slot": iso, "status": "SKIPPED", "reason_code": "vps_busy", **ev})
             continue                                                               # else the runner was down: MISSED
-        place = acquire_place(directory, places, now)
+        place = None if chat_active(directory, fixed or datetime.now(UTC)) else acquire_place(directory, places, now)
         if place is None:
             marker.write_text(iso, encoding="utf-8")
             continue

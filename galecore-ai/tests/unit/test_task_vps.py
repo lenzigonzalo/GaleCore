@@ -3,6 +3,7 @@
 # ruff: noqa: F811
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -155,6 +156,23 @@ def test_full_places_wait_and_after_30_minutes_the_slot_is_vps_busy(env, tmp_pat
     fr = t.freshness(t.load(kb, "seguimiento-spy"), t.events(kb, "seguimiento-spy"), _ny(2026, 9, 28, 17, 41))
     assert fr["state"] == "MISSED" and fr["detail"] == "no corrió: VPS ocupado"
     assert svc.tick(kb, _ny(2026, 9, 28, 17, 45), directory=places, places=1, runner=runner) == []     # served: not again
+
+
+def test_a_lab_chat_holds_the_runs_back_until_the_vps_is_quiet(env, tmp_path):
+    """BF-0020: the chat never takes a place; its marker makes the tasks wait CHAT_QUIET_MINUTES after it."""
+    kb, sch, _ = env
+    _to_vps(kb, sch)
+    places = tmp_path / "places"
+    places.mkdir()
+    mark = places / "chat-otro.lock"                                      # another user's chat, last touched 17:05
+    mark.touch()
+    os.utime(mark, (_ny(2026, 9, 28, 17, 5).timestamp(),) * 2)
+    runner = lambda **kw: {"status": "OK"}
+    assert svc.chat_active(places, _ny(2026, 9, 28, 17, 9))
+    assert svc.tick(kb, _ny(2026, 9, 28, 17, 6), directory=places, places=1, runner=runner) == []     # waits
+    assert not list(places.glob("place-*.lock"))                                                       # took no place
+    done = svc.tick(kb, _ny(2026, 9, 28, 17, 10), directory=places, places=1, runner=runner)          # 5 min quiet
+    assert [d["status"] for d in done] == ["OK"]
 
 
 def test_a_down_runner_is_missed_without_inventing_a_reason(env, tmp_path):

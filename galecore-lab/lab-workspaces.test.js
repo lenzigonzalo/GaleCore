@@ -585,7 +585,7 @@ test('WS-0106: /providers/auth re-resuelve binarios y login de Codex desde el La
 
 test('WS-0106: abrir el Lab lanza la curaduría una vez por hora, sólo en el servidor y nunca al arrancar',async t=>{
  const {base,kb,local}=setup(t);let clock=1e12;const calls=[];
- const make=curation=>createWorkspaces({root:base,kb,local,binaries:{},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],autoSync:true,curation,now:()=>clock,execute:(bin,args,o,cb)=>{calls.push(args.slice(-3));cb(null,'{"status":"SERVED"}');}});
+ const make=curation=>createWorkspaces({root:base,kb,local,binaries:{},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],autoSync:true,curation,curationDelayMs:0,now:()=>clock,execute:(bin,args,o,cb)=>{calls.push(args.slice(-3));cb(null,'{"status":"SERVED"}');}});
  const served=()=>calls.filter(a=>a.join(' ')==='task serve --on-use').length;
  const service=make(true);
  assert.equal(served(),0);                                   // el arranque no es uso
@@ -593,4 +593,23 @@ test('WS-0106: abrir el Lab lanza la curaduría una vez por hora, sólo en el se
  clock+=30*60*1000;await route(service,'GET','/workspaces');assert.equal(served(),1);   // antes de 1 h: no relanza
  clock+=31*60*1000;await route(service,'GET','/workspaces');assert.equal(served(),2);
  const pc=make(false);await route(pc,'GET','/workspaces');assert.equal(served(),2);      // en la PC no corre
+});
+
+test('BF-0020: en el VPS el chat nunca se rechaza aunque una tarea ocupe el lugar; su marca frena la curaduría',async t=>{
+ const {base,kb,local}=setup(t);const {EventEmitter}=require('events');const slots=path.join(base,'slots');fs.mkdirSync(slots);
+ const old=process.env.GALECORE_TASKS_SLOTS_DIR;process.env.GALECORE_TASKS_SLOTS_DIR=slots;t.after(()=>{if(old===undefined)delete process.env.GALECORE_TASKS_SLOTS_DIR;else process.env.GALECORE_TASKS_SLOTS_DIR=old;});
+ fs.writeFileSync(path.join(slots,'place-0.lock'),'');                     // una tarea de fondo ocupa el único lugar
+ fs.mkdirSync(path.join(base,'galecore-ai'));fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo de test');
+ let spawned=0;const spawnProcess=()=>{spawned++;const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
+ const calls=[];const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess,autoSync:true,curation:true,curationDelayMs:0,execute:(bin,args,o,cb)=>{calls.push(args.slice(-3).join(' '));cb(null,'{"status":"SERVED","runs":[]}');}});
+ const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ const sent=(await route(service,'POST','/chats/'+chat.id+'/messages',{text:'hola'})).value;
+ assert.notEqual(sent.state,'failed');assert.ok(!sent.error);
+ await new Promise(r=>setTimeout(r,200));assert.equal(spawned,1);
+ const marks=fs.readdirSync(slots).filter(n=>/^chat-.+\.lock$/.test(n));assert.equal(marks.length,1);
+ assert.ok(fs.existsSync(path.join(slots,'place-0.lock')));               // no tocó el lugar de la tarea
+ await route(service,'GET','/workspaces');assert.equal(calls.filter(c=>c==='task serve --on-use').length,0);   // chat reciente: espera
+ const past=(Date.now()-6*60000)/1000;fs.utimesSync(path.join(slots,marks[0]),past,past);
+ const quiet=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],autoSync:true,curation:true,curationDelayMs:0,execute:(bin,args,o,cb)=>{calls.push(args.slice(-3).join(' '));cb(null,'{"status":"SERVED","runs":[]}');}});
+ await route(quiet,'GET','/workspaces');assert.equal(calls.filter(c=>c==='task serve --on-use').length,1);     // 5 min sin chat: corre
 });
