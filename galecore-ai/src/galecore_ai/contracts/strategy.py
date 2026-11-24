@@ -26,6 +26,7 @@ from enum import Enum
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from galecore_ai.contracts.regime_record import RecordHost
+from galecore_ai.contracts.supervision import REMINDERS, WatchCondition, WatchMetric
 
 STRATEGY_SCHEMA_VERSION = "1"
 STRATEGY_PROVENANCE = "HOST_DECLARED"
@@ -58,6 +59,19 @@ REQUIRED_BLOCKS = (Block.ENTRY, Block.CONSTRUCTION, Block.SIZING, Block.MONITORI
                    Block.EXIT, Block.INVALIDATION)
 
 
+class Stage(str, Enum):
+    """How far the ficha is (WS-0107). A ficha is saved at any stage; SHADOW needs the complete one."""
+
+    IDEA = "idea"                # thesis + symbol
+    HYPOTHESIS = "hypothesis"    # + why it would happen and what invalidates it
+    RULES = "rules"              # + entry, invalidation and monitoring rules
+    READY = "ready"              # rules accepted by the trader (Seguimiento)
+    COMPLETE = "complete"            # complete: every block and the evaluation plan (what existed before stages)
+
+
+STAGED_REQUIRED_BLOCKS = (Block.ENTRY, Block.INVALIDATION, Block.MONITORING)
+
+
 class Basis(str, Enum):
     GROUNDED = "grounded"                    # backed by a cited source (research, evidence, file)
     HYPOTHESIS = "hypothesis"                # what the strategy bets on; the evaluation plan tests it
@@ -88,6 +102,33 @@ class RuleRuntime(BaseModel):
         return self
 
 
+SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.]{0,9}$")
+WATCHABLE_BLOCKS = ("entry", "invalidation")
+
+
+class RuleWatch(BaseModel):
+    """WS-0107: the observable condition of an entry or invalidation rule, the one the supervisor can read from
+    GaleCore (symbol, metric, above/below, level). A rule without it is valid but does not run."""
+
+    model_config = {"extra": "forbid"}
+
+    symbol: str
+    metric: WatchMetric = WatchMetric.PRICE
+    condition: WatchCondition
+    threshold: float
+
+    @model_validator(mode="after")
+    def _watchable(self) -> RuleWatch:
+        self.symbol = self.symbol.strip().upper()
+        if not SYMBOL_RE.match(self.symbol):
+            raise ValueError(f"symbol {self.symbol!r}: a ticker such as XLE")
+        if self.metric in REMINDERS:
+            raise ValueError(f"{self.metric.value} is a reminder, not a market condition")
+        if self.threshold != self.threshold or self.threshold in (float("inf"), float("-inf")):
+            raise ValueError("the level is a finite number")
+        return self
+
+
 class Rule(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -99,11 +140,14 @@ class Rule(BaseModel):
     parameter: str = ""          # value and unit when the rule has one (e.g. "50 % del crédito")
     rationale: str = ""          # why this value or rule; what would found a pending parameter
     runtime: RuleRuntime
+    watch: RuleWatch | None = None   # WS-0107: only entry and invalidation rules; absent in rules stored before
 
     check_not_blank = field_validator("id", "text")(_non_blank)
 
     @model_validator(mode="after")
     def _basis_needs(self) -> Rule:
+        if self.watch is not None and self.block.value not in WATCHABLE_BLOCKS:
+            raise ValueError(f"rule {self.id}: only entry and invalidation rules carry a watch condition")
         if self.basis == Basis.GROUNDED and not self.sources:
             raise ValueError(f"rule {self.id}: a grounded rule cites at least one source")
         if self.basis in (Basis.PENDING_PARAMETER, Basis.DESIGN_CHOICE) and not self.rationale.strip():
@@ -115,12 +159,12 @@ class Hypothesis(BaseModel):
     model_config = {"extra": "forbid"}
 
     mechanism: str
-    expected_result: str
-    capture: str
+    expected_result: str = ""    # may be missing before the SHADOW stage
+    capture: str = ""
     failure_conditions: list[str]
     sources: list[str] = Field(default_factory=list)
 
-    check_not_blank = field_validator("mechanism", "expected_result", "capture")(_non_blank)
+    check_not_blank = field_validator("mechanism")(_non_blank)
 
     @field_validator("failure_conditions")
     @classmethod
@@ -257,7 +301,37 @@ class ManagementStep(BaseModel):
 
 
 MANAGED_BLOCKS = (Block.EXIT, Block.ADJUSTMENT)
-PROPOSAL_FIELDS_ADDED = ("parameters", "management", "change", "simulated_amount_usd", "limits")  # WS-0016; WS-0043 (1e); WS-0058
+PROPOSAL_FIELDS_ADDED = ("parameters", "management", "change", "simulated_amount_usd", "limits",
+                         "thesis", "symbol", "horizon")  # WS-0016; WS-0043 (1e); WS-0058; WS-0107
+
+
+def undefined(content: ProposalContent) -> list[str]:
+    """What a ficha still lacks for Seguimiento, short and in Spanish (not an error: the stage allows it)."""
+    if content.stage == Stage.COMPLETE:
+        return []
+    out = []
+    if not content.horizon.strip():
+        out.append("horizonte")
+    present = {r.block for r in content.rules}
+    if content.hypothesis is None:
+        out += ["por qué pasaría", "qué la invalida"]
+    elif Block.INVALIDATION not in present:
+        out.append("regla de invalidación")
+    if Block.ENTRY not in present:
+        out.append("aviso de entrada")
+    if Block.MONITORING not in present:
+        out.append("qué se vigila")
+    return out
+
+
+def missing_for_shadow(content: ProposalContent) -> list[str]:
+    """What SHADOW still needs: the Seguimiento gaps plus the blocks and plan only a simulation requires."""
+    present = {r.block for r in content.rules}
+    extra = [label for b, label in ((Block.CONSTRUCTION, "instrumento"), (Block.SIZING, "tamaño"),
+                                    (Block.EXIT, "salida"), (Block.ADJUSTMENT, "ajuste")) if b not in present]
+    if content.evaluation_plan is None:
+        extra.append("plan de evaluación")
+    return undefined(content) + extra
 
 
 def design_gaps(content: ProposalContent) -> list[str]:
@@ -315,11 +389,15 @@ class ProposalContent(BaseModel):
     name: str
     version: str
     display_name: str
-    purpose: str
-    research_refs: list[str]
-    hypothesis: Hypothesis
-    rules: list[Rule]
-    evaluation_plan: EvaluationPlan
+    purpose: str = ""            # the stages before SHADOW may leave these out (see _complete)
+    research_refs: list[str] = Field(default_factory=list)
+    hypothesis: Hypothesis | None = None
+    rules: list[Rule] = Field(default_factory=list)
+    evaluation_plan: EvaluationPlan | None = None
+    stage: Stage = Stage.COMPLETE                                 # WS-0107; what was stored before is complete
+    thesis: str = ""                                            # WS-0107: the trader's words (idea stage)
+    symbol: str = ""
+    horizon: str = ""                                           # free text, e.g. "semanas"
     owner_decisions: list[OwnerDecision] = Field(default_factory=list)
     pending: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
@@ -331,7 +409,7 @@ class ProposalContent(BaseModel):
     simulated_amount_usd: float | None = Field(default=None, gt=0)
     limits: StrategyLimits | None = None   # WS-0058: this strategy's own limits, declared when its design closes
 
-    check_not_blank = field_validator("display_name", "purpose")(_non_blank)
+    check_not_blank = field_validator("display_name")(_non_blank)
 
     @field_validator("name")
     @classmethod
@@ -349,17 +427,31 @@ class ProposalContent(BaseModel):
 
     @model_validator(mode="after")
     def _complete(self) -> ProposalContent:
-        if not self.research_refs:
-            raise ValueError("a proposal comes from at least one investigation (research_refs)")
         ids = [r.id for r in self.rules]
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         if dupes:
             raise ValueError(f"duplicate rule ids: {dupes}")
         present = {r.block for r in self.rules}
-        missing = [b.value for b in REQUIRED_BLOCKS if b not in present]
-        if missing:
-            raise ValueError(f"every block needs at least one rule (an absent one is a not-applicable rule "
-                             f"that says why): missing {missing}")
+        if self.stage == Stage.COMPLETE:
+            if not self.research_refs:
+                raise ValueError("a proposal comes from at least one investigation (research_refs)")
+            if not self.purpose.strip() or self.hypothesis is None or self.evaluation_plan is None:
+                raise ValueError("a complete proposal has purpose, hypothesis and evaluation_plan")
+            if not (self.hypothesis.expected_result.strip() and self.hypothesis.capture.strip()):
+                raise ValueError("a complete hypothesis says expected_result and capture")
+            missing = [b.value for b in REQUIRED_BLOCKS if b not in present]
+            if missing:
+                raise ValueError(f"every block needs at least one rule (an absent one is a not-applicable rule "
+                                 f"that says why): missing {missing}")
+        else:
+            if not (self.thesis.strip() and self.symbol.strip()):
+                raise ValueError(f"stage {self.stage.value}: thesis and symbol are required")
+            if self.stage != Stage.IDEA and self.hypothesis is None:
+                raise ValueError(f"stage {self.stage.value}: hypothesis (mechanism and failure_conditions) is required")
+            if self.stage in (Stage.RULES, Stage.READY):
+                missing = [b.value for b in STAGED_REQUIRED_BLOCKS if b not in present]
+                if missing:
+                    raise ValueError(f"stage {self.stage.value}: needs rules for blocks {missing}")
         known = set(ids)
         unknown = sorted({rid for p in self.parameters for rid in p.rules} - known)
         unknown += sorted({rid for s in self.management for rid in s.rules} - known)
@@ -482,6 +574,11 @@ class StrategyDocument(BaseModel):
         for added in PROPOSAL_FIELDS_ADDED:  # absent in versions stored before them: their hash must not change
             if not data["content"].get(added):
                 data["content"].pop(added, None)
+        for rule in data["content"].get("rules", []):    # WS-0107: rules stored before have no watch
+            if not rule.get("watch"):
+                rule.pop("watch", None)
+        if data["content"].get("stage") == Stage.COMPLETE.value:   # stored before stages: same bytes, same hash
+            data["content"].pop("stage")
         return data
 
 

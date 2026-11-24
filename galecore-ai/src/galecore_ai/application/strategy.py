@@ -42,9 +42,11 @@ from galecore_ai.contracts.strategy import (
     CritiqueVerdict,
     ProposalContent,
     RuntimeStatus,
+    Stage,
     StrategyDocument,
     compute_document_hash,
     design_gaps,
+    missing_for_shadow,
     other_version_mentions,
 )
 
@@ -260,7 +262,7 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str,
 
 def _check_refs(content: ProposalContent, kb: KnowledgeBase) -> list[str]:
     problems = []
-    refs = list(content.research_refs) + list(content.hypothesis.sources)
+    refs = list(content.research_refs) + (list(content.hypothesis.sources) if content.hypothesis else [])
     refs += [s for r in content.rules for s in r.sources]
     for ref in dict.fromkeys(refs):
         try:
@@ -301,12 +303,21 @@ def _change_problems(content: ProposalContent, kb: KnowledgeBase) -> list[str]:
 
 
 def save_proposal(*, kb: KnowledgeBase, prompt: str, host: RecordHost, content: ProposalContent,
-                  spec_json: str, spec_file: str, now: datetime | None = None,
+                  spec_json: str | None = None, spec_file: str | None = None, now: datetime | None = None,
                   checker: SpecChecker | None = None) -> tuple[StrategyDocument, str]:
     """Check and store a version. An INVALID check, an unresolved reference or a version without its parameter
-    table and management tree is refused, not stored."""
-    problems = _check_refs(content, kb) + design_gaps(content) + _change_problems(content, kb)
-    report = check_proposal(content, spec_json, spec_file, checker)
+    table and management tree is refused, not stored. A ficha before the SHADOW stage (WS-0107) has no spec yet:
+    it is stored with an empty one and what it lacks is listed (``undefined``), not refused."""
+    if content.stage != Stage.COMPLETE:
+        spec_json, spec_file = "{}", f"{content.name}.json"
+        problems = _check_refs(content, kb)
+        report = CheckReport(verdict="NO_SPEC", errors=[], declared_gaps=[], coverage={},
+                             runtime_reference=RUNTIME_REFERENCE)
+    else:
+        if spec_json is None or spec_file is None:
+            raise KnowledgeError("proposal refused", ["a complete proposal needs its spec (--spec)"])
+        problems = _check_refs(content, kb) + design_gaps(content) + _change_problems(content, kb)
+        report = check_proposal(content, spec_json, spec_file, checker)
     if report.verdict == "INVALID" or problems:
         raise KnowledgeError("proposal refused", problems + report.errors)
     now = now or datetime.now(UTC)
@@ -345,6 +356,9 @@ def approve(*, kb: KnowledgeBase, key: str, spec_hash: str | None = None, owner_
         raise KnowledgeError(f"strategy:{key}: the approved hash {spec_hash} is not this version's {doc.spec_hash}")
     if doc.check.verdict == "INVALID":
         raise KnowledgeError(f"strategy:{key}: an INVALID proposal cannot be approved")
+    if doc.content.stage != Stage.COMPLETE:
+        raise KnowledgeError(f"strategy:{key}: está en etapa {doc.content.stage.value}; para SHADOW falta definir",
+                             missing_for_shadow(doc.content))
     if require_critique:
         review = load_critique(kb, key)
         if problem := critique_problem(review, doc):

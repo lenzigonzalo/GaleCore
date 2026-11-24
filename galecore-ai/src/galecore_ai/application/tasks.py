@@ -32,7 +32,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from galecore_ai.application import model_run
+from galecore_ai.application import market_clock, model_run
 from galecore_ai.application.catalog_check import CODE_RUNNERS, cli_commands
 from galecore_ai.application.followup import has_news as followup_news
 from galecore_ai.application.followup import history as followup_history
@@ -77,7 +77,8 @@ AUTH_PATTERNS = ("Invalid API key", "Please run /login", "OAuth token has expire
 PLAN_LIMIT_PATTERNS = ("usage limit", "limit reached", "rate_limit", "hit your limit")
 REASON_TEXT = {"auth": "no corrió: el login del motor venció, hay que volver a cargarlo",
                "plan_limit": "no corrió: se agotó el límite del plan del motor",
-               "vps_busy": "no corrió: VPS ocupado"}
+               "vps_busy": "no corrió: VPS ocupado",
+               "market_closed": "no correspondía (mercado cerrado)"}
 VPS_BUSY_MINUTES = 30        # a due slot that waited this long for a free place is not run late
 
 
@@ -319,20 +320,21 @@ MISSED_GRACE = timedelta(minutes=30)
 
 
 def _fires_on(schedule: Schedule, day) -> bool:
+    """`daily`, `days` and `every_minutes` are the user's explicit choice; weekdays and market_hours skip NYSE holidays."""
     if schedule.frequency == "days":
         return WEEKDAYS[day.weekday()] in schedule.days
-    return schedule.frequency == "daily" or day.weekday() < 5
+    if schedule.frequency == "daily":
+        return True
+    return market_clock.session(day) is not None
 
 
 def _slots(schedule: Schedule, day) -> list[datetime]:
-    """When the schedule fires on `day`: one time, or every N minutes of the session (market_hours); none for on_use."""
+    """When the schedule fires on `day`: one time, or every N minutes of the real session (market_hours); none for on_use."""
     if schedule.frequency == "on_use" or not _fires_on(schedule, day):
         return []
     if schedule.frequency != "market_hours":
         return [_occurrence(schedule, day)]
-    tz = ZoneInfo(schedule.timezone)
-    (oh, om), (ch, cm) = ((int(x) for x in t.split(":")) for t in (MARKET_OPEN, MARKET_CLOSE))
-    at, close = (datetime(day.year, day.month, day.day, h, m, tzinfo=tz) for h, m in ((oh, om), (ch, cm)))
+    at, close = market_clock.session(day)       # 13:00 on an early close
     out = []
     while at < close:
         out.append(at)
@@ -341,9 +343,8 @@ def _slots(schedule: Schedule, day) -> list[datetime]:
 
 
 def in_session(schedule: Schedule, now: datetime) -> bool:
-    """Inside 09:30-16:00 New York on a weekday (holidays are not known: a declared limit)."""
-    ny = now.astimezone(ZoneInfo(schedule.timezone))
-    return ny.weekday() < 5 and MARKET_OPEN <= ny.strftime("%H:%M") < MARKET_CLOSE
+    """Inside the regular US session now (NYSE holidays and 13:00 early closes included)."""
+    return market_clock.status(now).state == "open"
 
 
 def _occurrence(schedule: Schedule, day) -> datetime:

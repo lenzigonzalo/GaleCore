@@ -1,6 +1,6 @@
 ---
 name: strategy-design
-version: 2.4.0
+version: 2.6.1
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Parte A (método): convierte una idea y su investigación en una estrategia completa (hipótesis, reglas por bloque,
@@ -20,9 +20,11 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
 [method.md](method.md); el Lab lo carga en los turnos de idea o de proyecto de estrategia.
 
 ## Cuándo se usa
-- **Consulta de operar ahora** («quiero vender prima en QQQ, ¿armo algo?», fuera de un proyecto): se responde en un
-  turno (paso A-1); se diseña sólo si el owner dice que sí.
-- **Diseño guiado** («quiero desarrollar una estrategia… guiame», o dentro de un proyecto de estrategia): pasos A0-A10.
+- **Idea de trade** (default cuando el trader quiere entrar, salir o apostar a algo: «quiero entrar en NVDA»): ficha
+  por etapas, de a poco; ver «Idea de trade» en Pasos.
+- **Consulta de operar ahora** (sólo si pide estructuras: «¿cómo lo armo?», «comparame estructuras»): paso A-1.
+- **Diseño completo** (sólo si lo pide: «llevala a SHADOW», «diseñala completa», «desarrollá una estrategia… guiame», o
+  dentro de un proyecto de estrategia): pasos A0-A10.
 - **Aprobar y desplegar** una versión ya criticada: Parte B.
 
 ## Qué necesita
@@ -39,8 +41,32 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
 
 ## Pasos
 
+### Idea de trade (default; ficha por etapas)
+- **Primer turno:** un solo comando, `strategy save` en etapa `idea` (`stage`, `thesis` con sus palabras, `symbol`,
+  `horizon` si lo dijo; sin `--spec`; forma exacta en `schema proposal`). Decirlo en una línea («Lo anoto como idea:
+  <activo> · <nombre corto>») y seguir conversando la idea. Sin `kb search`, `analyze pack`, `story pack`, cadenas ni
+  tablas, salvo que pida un dato: entonces un solo `galecore get`.
+- **Una pregunta por turno, en orden:** tesis → por qué pasaría y qué la invalida (`hypothesis`) → qué dispara el aviso y
+  qué se vigila (`rules`). Antes de proponer una regla, decir si GaleCore la puede vigilar, con qué dato y cada cuánto; si
+  el trader no sabe, proponer con un dato y marcarlo como propuesta. Guardar una versión al cambiar de etapa.
+- **Nunca** stop, tamaño, take profit, instrumento ni % de riesgo hasta que el trader los pida o quiera simular u operar.
+- Mostrar la ficha entera sólo al cambiar de etapa o si la pide: pocas líneas, lo faltante como «sin definir».
+- **Reglas vigilables (etapa `rules`):** cada regla `entry` e `invalidation` se guarda en la ficha con su `watch`
+  (`symbol`, `metric` price|gamma_zero|call_wall|put_wall|iv_rank, `condition` above|below, `threshold`) y
+  `runtime` soportado con `spec_paths: ["supervisor.watch"]`. La que GaleCore no puede leer va sin `watch` y con runtime
+  no soportado y su motivo («serie de WTI vacía en GaleCore»): se muestra, no corre.
+- **Aceptar y activar:** cuando las reglas están, guardar la versión en etapa `ready`, mostrar la ficha corta (tesis,
+  por qué, invalida, aviso, qué vigila y cada cuánto: «regla en código, 0 tokens»; lo que no corre y por qué; «Sin
+  definir tamaño · salida · instrumento») y preguntar sólo «¿La activo?», y terminar el turno ahí. «Avisame», «dale
+  con eso» o elegir una regla no son el sí: el sí responde a «¿La activo?» con la ficha ya mostrada. Con su sí, `strategy activate <nombre> --mode
+  seguimiento --prompt "<pedido>" --text "<sus palabras>"`. **Nunca `supervise watch` para una estrategia**: los avisos
+  de una ficha los crea `activate`, y sólo después del sí. Un cambio de reglas es una versión nueva y se activa de nuevo
+  (cancela los avisos de la anterior).
+- **«¿Por qué no entré?» / cierre:** `strategy explain <nombre>`; contestar con lo que devuelve (si se dio y cuándo, qué
+  tan cerca llegó, huecos y fallas del sistema, versiones), sin completar lo que no dice.
+
 ### Parte A — método (trabajo del modelo)
-- **A-1. Consulta de operar ahora:** veredicto primero y coherente, «armalo» o «esperá», con el evento o número que lo
+- **A-1. Estructuras (sólo si el trader las pide):** veredicto primero y coherente, «armalo» o «esperá», con el evento o número que lo
   decide. Comparar 2-3 estructuras en una tabla con la cadena de hoy (no la de una investigación guardada): crédito,
   riesgo máximo contra el tope y qué le pide a la tesis; riesgo abierto y el tope de las otras posiciones en una
   línea, no como filas. Nunca desplegar ni guardar una versión en una consulta; la pregunta de cierre ofrece diseñarla.
@@ -48,33 +74,26 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   JSON por stdin (subyacente; por estructura patas, crédito o débito, llenado y riesgo; ver el encabezado del script). Si
   un número no coincide, corregir con el valor de GaleCore y decirlo en una línea; una estructura sin cotización usable
   sale de la tabla con el motivo. El script no cubre ex-dividendo ni asignación anticipada.
-- **Diseño guiado: entender antes de armar** (owner 18/10, orden en method.md): qué se captura y por qué existe,
-  qué universo y qué lo mueve hoy (tasas, balances, flujos, GEX), régimen de hoy y eventos dentro del plazo con 2-3
-  escenarios, evidencia en la historia y la crítica (cuándo falla, qué la rompe, si tiene sentido ahora), cruzando lo
-  que GaleCore ya sirve. Recién después reglas, ejecución (compra/venta, deslizamiento, costos) y evaluación; en opciones,
-  plazo, delta y ancho se derivan de eso; en acciones, la señal de entrada y de salida; nunca son la apertura. Decir dónde la meta no cierra; sin veredicto de abrir o
-  esperar hoy, y la cartera queda afuera salvo que el owner la traiga. Un paso por turno salvo que la idea esté clara;
-  no abrir con el nombre del paso. Lo que el trader tiene en Memoria informa, no restringe una idea que se está pensando (owner 16/10): un
-  choque con eso se menciona una vez, cuando la idea pasa a reglas, nunca de entrada.
-- **A0. No quedarse en preguntas.** Si la idea está clara o el owner deja la elección («proponela vos»), diseñarla
-  completa: elegir los valores, marcar cada `design_choice` o hipótesis con su motivo y correr A1-A9 en el mismo turno
+- **Diseño guiado: entender antes de armar** (orden en method.md): qué se captura y por qué existe, universo y qué lo
+  mueve hoy (tasas, balances, flujos, GEX), régimen y eventos dentro del plazo con 2-3 escenarios, evidencia en la historia
+  y crítica (cuándo falla, qué la rompe). Recién después reglas, ejecución y evaluación; plazo, delta y ancho (en acciones,
+  la señal) se derivan de eso, nunca son la apertura. Sin veredicto de abrir o esperar hoy; la cartera queda afuera salvo
+  que el owner la traiga. Lo que el trader tiene en Memoria informa, no restringe: un choque se menciona una vez, al pasar
+  a reglas.
+- **A0. No quedarse en preguntas** (sólo con diseño completo pedido; una idea de trade no corre A1-A9). Si el owner deja
+  la elección («proponela vos»), diseñarla completa: elegir los valores, marcar cada `design_choice` o hipótesis con su motivo y correr A1-A9 en el mismo turno
   (investigación → check → save → crítica → ficha → controles). Las decisiones del owner van al final, cada una con tu
   recomendación. No guardar versión, y decirlo, sólo si choca con algo de su Memoria o ningún dato la sostiene: «descartada» o
   «pendiente», con el motivo y qué la cambiaría.
-- **A1. Recuperar y memoria.** En la aclaración (primer mensaje ambiguo) no buscar: preguntar. Buscar cuando se busca o
-  cuando el owner nombra trabajo anterior. Las propuestas existentes son antecedentes, nunca aprobadas ni desplegadas
-  por suposición. En un proyecto del Lab, su investigación es la que `kb search` muestra con ese `project`; guardarla
-  con slug que termina en el nombre del proyecto (`--slug <tema>-<proyecto>`); la de otro proyecto se cita, no se
-  revisa como propia. Memoria del proyecto (`memory/`): pocas páginas por tema (hipotesis-y-reglas.md,
-  decisiones-y-pendientes.md, datos-que-faltan.md), cada una el estado neto, reescrita (nunca agregada ni por fecha),
-  corta, apuntando a los registros; una línea por página en `memory/README.md`. El mapa (`memory/mapa-<tema>.md`,
-  formato en method.md) se reescribe en cada turno que cambia la idea, también antes de que exista el proyecto; es lo
-  que el owner ve al lado del chat. La memoria orienta, no decide. «Me quedo con la mejor» = la que recomendaste:
-  registrarla. Ofrecer en una línea el contexto del instrumento (no correrlo sin pedido) y citarlo si se usa.
-- **Nombre de la estrategia y proyecto del Lab.** Lo normal es que la estrategia lleve el nombre del proyecto. Si al guardar la primera
-  versión el nombre cambia (p. ej. el proyecto nació como SPY y la estrategia es de SPX), vinculá el proyecto desde su carpeta con
-  `python <raíz>/lab/mark_strategy.py <nombre-de-la-estrategia>`; sin eso, Estrategias muestra el proyecto aparte y
-  no se ve el diseño de la estrategia desde su proyecto. Decirlo en una línea.
+- **A1. Recuperar y memoria.** En la aclaración (primer mensaje ambiguo) no buscar: preguntar. Buscar cuando el owner
+  nombra trabajo anterior; esas propuestas son antecedentes, nunca aprobadas ni desplegadas por suposición. En un proyecto
+  del Lab, su investigación es la que `kb search` muestra con ese `project`; guardarla con `--slug <tema>-<proyecto>`; la
+  de otro proyecto se cita. Memoria del proyecto (`memory/`): pocas páginas por tema (hipotesis-y-reglas.md,
+  decisiones-y-pendientes.md, datos-que-faltan.md), estado neto reescrito, una línea por página en `memory/README.md`. El
+  mapa (`memory/mapa-<tema>.md`, formato en method.md) se reescribe en cada turno que cambia la idea. La memoria orienta,
+  no decide. «Me quedo con la mejor» = la que recomendaste: registrarla.
+- **Nombre y proyecto del Lab.** Si al guardar la primera versión el nombre difiere del proyecto (SPY → SPX), vincularlo con
+  `python <raíz>/lab/mark_strategy.py <nombre>` desde su carpeta, y decirlo en una línea.
 - **Monto y límites propios.** Cada estrategia es distinta y declara los suyos al cerrar el diseño: `simulated_amount_usd` y
   `limits` (% de ese monto: `max_drawdown_pct`, que es su corte automático R2; `max_risk_per_trade_pct`,
   `max_open_risk_pct`, `reserve_pct`, `max_bet_pct`; y para evaluarla `target_annual_return_pct`,
@@ -89,19 +108,16 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   pending_parameter (qué la fundaría), owner_decision o design_choice (por qué). Un default heredado no es grounded.
   Cada regla mapeada al runtime: supported, unsupported (fuera de la spec, declarada) o not_applicable. Nunca borrar
   una regla, relajar un umbral ni agregar un campo sólo para pasar `strategy check`.
-- **Piezas del runtime** (no hay un menú de familias: se arma con bloques; lo que vale, y lo que GaleCore ejecuta hoy,
-  es lo que devuelve `strategy check`, que se lo pregunta a GaleCore; una investigación o un faltante anterior pueden
-  haber quedado viejos). Patas con su selector de strike (delta, puntos
-  o % desde el spot, puntos desde el strike más cercano al precio, strike fijo, desplazamiento desde otra pata) y vencimiento, incluido 0DTE; ejecución (llenado a
-  natural, medio o medio con deslizamiento, y costos); condiciones de entrada y salida (una métrica contra un umbral o
-  contra otra métrica, medias móviles); eventos por tipo, símbolo y ventana (entrada y salida); ventana de entrada y
-  límites de operaciones; salidas por tiempo, por evento o por % del costo o del crédito; límites de riesgo y frenos
-  por pérdida; tamaño (`sizing` FIXED con `fixed_contracts`, o RISK_BASED: los contratos que entran en el tope por
-  apuesta, con `risk_limits.simulated_capital_usd`; en acciones `fixed_contracts` son acciones); capital simulado. Si algo no figura entre lo ejecutado, es un hueco declarado (`unsupported`), no una
-  regla en la spec. El capital simulado se escribe en la spec, en `risk_limits.simulated_capital_usd`, con el mismo
-  monto que `simulated_amount_usd` del diseño (un solo monto): si no coinciden o falta, `strategy controls` no
-  recomienda aprobar. Las rutas de las reglas `supported` (`spec_paths`) se copian de `executed_paths`, tal como las
-  devuelve el check (con índices, como `candidate_construction.legs[0].strike_selection.target_delta`).
+- **Piezas del runtime** (sin menú de familias: lo que GaleCore ejecuta hoy lo devuelve `strategy check`). Patas con
+  selector de strike (delta, puntos o % desde el spot, desde el strike más cercano, fijo, desplazamiento desde otra pata)
+  y vencimiento, incluido 0DTE; ejecución (natural, medio, medio con deslizamiento, costos); condiciones de entrada y
+  salida (métrica contra umbral o contra otra métrica, medias móviles); eventos por tipo, símbolo y ventana; ventana de
+  entrada y límites de operaciones; salidas por tiempo, evento o % del costo o crédito; límites de riesgo y frenos por
+  pérdida; tamaño (`sizing` FIXED con `fixed_contracts`, o RISK_BASED con `risk_limits.simulated_capital_usd`; en
+  acciones `fixed_contracts` son acciones). Lo que no figura es un hueco declarado (`unsupported`), no una regla en la
+  spec. `risk_limits.simulated_capital_usd` lleva el mismo monto que `simulated_amount_usd` (si no coinciden o falta,
+  `strategy controls` no recomienda aprobar). Los `spec_paths` de las reglas `supported` se copian de `executed_paths`
+  del check (con índices, como `candidate_construction.legs[0].strike_selection.target_delta`).
 - **A5.** `parameters`: una fila por valor (valor, unidad, rango, de qué depende, qué dato lo fundaría, estado, reglas
   que lo usan). `management`: objetivo, stop, tiempo, roll/ajuste, kill switch y revisión como disparador → acción
   nombrando sus reglas; «nada» es una acción válida.
@@ -118,12 +134,11 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   cerrada. Veredicto: seguir, revisar o descartar. `strategy critique --ref <ref> < {content: {verdict, missing,
   biases, alternative_explanation, why_not, shutdown_criteria, closed_trade_review, evidence_refs}, ...}` (la
   aprobación lo exige). Para una idea sin versión, la misma crítica en la respuesta.
-- **A9.** Mostrar `strategy sheet --ref <ref>` y las decisiones concretas que necesitás, sin reescribir sus números;
-  decir en palabras cuándo encaja cada estructura (las desplegables: `state` → `estructuras_ejecutables`). Después
-  `strategy controls --ref <ref>` con su tabla tal como viene: cada regla por clase (ejecutada / vigilada por el
-  supervisor, que avisa y nunca bloquea / sólo declarada / no aplica) y los controles indispensables con su estado. Lo
-  que no está en las filas ejecutadas no se ejecuta. Recomendar aprobar sólo con `recomendar_aprobacion` en true; si
-  no, decir que no se recomienda y por qué (`motivo`). El owner igual puede aprobar.
+- **A9.** Mostrar `strategy sheet --ref <ref>` y las decisiones que necesitás, sin reescribir sus números; decir cuándo
+  encaja cada estructura (`state` → `estructuras_ejecutables`). Después `strategy controls --ref <ref>` con su tabla tal
+  como viene (cada regla por clase y los controles indispensables con su estado); lo que no está en las filas ejecutadas
+  no se ejecuta. Recomendar aprobar sólo con `recomendar_aprobacion` en true; si no, decir por qué (`motivo`). El owner
+  igual puede aprobar.
 - **A10. Qué invalida la tesis:** de las condiciones de falla y la crítica, proponer las observables como un número
   que sirve GaleCore (precio, gamma cero, call/put wall, IV rank) y un nivel; con palabras del owner, registrar cada
   una con `supervise watch --symbol SPY --metric <m> --below|--above <nivel> --thesis "..." --strategy <nombre>
@@ -133,12 +148,10 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
 - **B1. Aprobación:** sólo con las palabras explícitas del owner para ese nombre y versión → `strategy approve --ref
   <ref> --owner-words "<su sí>"` (usa el hash guardado; nunca pedirlo ni mostrarlo). Cubre SHADOW en el GaleCore de este Lab.
   No hay que copiar la spec a ningún lado: el despliegue (B2) la registra por la API.
-- **B2. Despliegue:** si el owner pide desplegar esa versión aprobada en SHADOW → `strategy deploy --ref <ref>`:
-  chequea la aprobación, sube la spec guardada y despliega en el GaleCore de este Lab (el Lab de producción, en producción), sin pasos a mano. Mostrale la instancia
-  (`instance_id`, y si reemplazó otra versión) y dónde seguirla: Estrategias → SHADOW en la plataforma. Nunca sin una
-  aprobación explícita de esa versión; si GaleCore lo rechaza (otra versión corriendo, sin persistencia), decíselo
-  con sus palabras. Nunca PAPER ni LIVE. (`galecore_dev.py deploy` y `strategy deploy-check` siguen
-  siendo la vía manual.)
+- **B2. Despliegue:** si el owner pide desplegar esa versión aprobada en SHADOW → `strategy deploy --ref <ref>`: chequea
+  la aprobación, sube la spec guardada y despliega en el GaleCore de este Lab, sin pasos a mano. Mostrá la instancia
+  (`instance_id`, y si reemplazó otra) y dónde seguirla: Estrategias → SHADOW. Nunca sin aprobación explícita de esa
+  versión; si GaleCore lo rechaza, decíselo con sus palabras. Nunca PAPER ni LIVE.
 - **B3. Frenar y esperar al owner** antes de tocar una instancia corriendo: su estado, posiciones abiertas y qué hace
   frenarla (dejan de entrar; lo abierto se sigue valuando). «Pausá esta estrategia» = `strategy stop --instance
   <id>`, nunca el interruptor de la plataforma (sólo para «pausá todo»). Reanudar = nuevo despliegue del mismo hash con
@@ -148,24 +161,24 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   nunca cambiar un umbral para forzar una entrada.
 
 ## Qué entrega
-- Consulta: veredicto en una línea («esperá: el FOMC del miércoles cae dentro del plazo») + tabla de 2-3 estructuras
-  (crédito, riesgo máximo contra el tope, qué le pide a la tesis) + la oferta de diseñarla.
+- Idea de trade: la línea «Lo anoto como idea» y una pregunta; la ficha corta al cambiar de etapa; en Reglas, «¿La activo?».
+- Estructuras pedidas: veredicto en una línea («esperá: el FOMC del miércoles cae dentro del plazo») + tabla de 2-3
+  estructuras (crédito, riesgo máximo contra el tope, qué le pide a la tesis) + la oferta de diseñarla.
 - Diseño: la versión guardada (`strategy:<nombre>/<versión>`), su crítica, la ficha de una página, la tabla de
-  controles y las decisiones del owner, cada una con recomendación. Al cerrar cada paso: el mapa y la página del tema
-  en `memory/` reescritos, y lo formal guardado (research save / strategy save / project add).
+  controles y las decisiones del owner, cada una con recomendación.
 - Aprobación: la pregunta exacta del owner («¿Activás <nombre> <versión> en SHADOW (simulado, sin dinero real)? sí /
   no») y, tras el despliegue, una evaluación real explicada.
 
 ## Errores a evitar
+- Veredicto, tabla de estructuras, stop, tamaño o «te recomiendo 2 %» ante una idea de trade antes de entenderla.
+- Abrir ficha en una charla, estudio o análisis, o terminarlos ofreciendo una.
 - Abrir con los parámetros (en opciones, delta, plazo o ancho; en acciones, la señal) antes de la tesis.
-- Usar la cadena de una investigación guardada como si fuera la de hoy.
-- Dar veredicto de operar hoy dentro de un diseño guiado.
+- Usar la cadena de una investigación guardada como la de hoy, o dar veredicto de operar hoy en un diseño guiado.
 - Tomar un «sí» ambiguo, o a otra versión, como aprobación.
 - Relajar una regla o un umbral para pasar el check o forzar una entrada.
 - Presentar fills de SHADOW como ejecuciones.
 
 ## Cómo responder
-Consulta de operar ahora («¿armo algo?», fuera de un proyecto): veredicto «armalo» o «esperá» con la cadena de hoy
-(no la de una investigación guardada), 2-3 estructuras contra el tope y la oferta de diseñarla. Idea o desarrollo: el
-método «Ideas y estrategias». Al cerrar cada paso, reescribir el mapa y la página del tema en `memory/` (estado neto,
-corto) y guardar lo formal (research save / strategy save / project add).
+Idea de trade: «Idea de trade» en Pasos. Estructuras pedidas: veredicto «armalo» o «esperá» con la cadena de hoy y 2-3
+estructuras contra el tope. Diseño: el método «Ideas y estrategias»; al cerrar cada paso, reescribir el mapa y la página
+del tema en `memory/` y guardar lo formal (research save / strategy save / project add).

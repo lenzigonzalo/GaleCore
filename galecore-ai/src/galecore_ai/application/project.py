@@ -241,7 +241,7 @@ def strategy_project(kb: KnowledgeBase, name: str, checker: controls.SpecChecker
             "ref": current["ref"], "approved": current["approval"] is not None,
             "approved_at": current["approval"].recorded_at.isoformat() if current["approval"] else None,
             "spec_hash": current["doc"].spec_hash, "display_name": c.display_name, "purpose": c.purpose,
-            "hypothesis": c.hypothesis.model_dump(mode="json"),
+            "hypothesis": c.hypothesis.model_dump(mode="json") if c.hypothesis else None,
             "rules": [{"id": r.id, "block": r.block.value, "text": r.text, "parameter": r.parameter,
                        "runtime": r.runtime.status.value} for r in c.rules],
             "declared_gaps": current["doc"].check.declared_gaps,

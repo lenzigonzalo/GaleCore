@@ -1,6 +1,26 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "2.6.1"
+    date: 2026-11-23
+    changes: >
+      Prueba XLE (WS-0107): activó en el mismo turno en que el trader eligió la regla. El sí responde a «¿La activo?»
+      con la ficha ya mostrada; «avisame» o elegir una regla no lo son.
+    feedback: []
+  - version: "2.6.0"
+    date: 2026-11-23
+    changes: >
+      En la etapa Reglas, las reglas de entrada e invalidación se guardan con su condición vigilable (o no vigilable con
+      su motivo); se muestra la ficha corta y se pregunta «¿La activo?»; con el sí, `strategy activate`, nunca
+      `supervise watch` para una estrategia. «¿Por qué no entré?» se contesta con `strategy explain` (WS-0107, prueba XLE:
+      el chat activó un aviso sin aceptación y sin atarlo a la ficha).
+    feedback: []
+  - version: "2.5.0"
+    date: 2026-11-23
+    changes: >
+      Ante una idea de trade el default es la ficha por etapas (idea, hipótesis, reglas), una pregunta por turno y sin
+      stop, tamaño ni estructuras; A-1 y A0-A10 sólo si el trader los pide (WS-0107, owner).
+    feedback: []
   - version: "2.4.0"
     date: 2026-11-01
     changes: >

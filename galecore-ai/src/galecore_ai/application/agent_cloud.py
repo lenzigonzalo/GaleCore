@@ -174,27 +174,39 @@ def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
              'Si la respuesta dice `"status":"paused"`, terminá acá: no instales nada, no corras nada y no reportes. '
              "Si dice `active` o el control falla, seguí.")
     step_install = f"{first + 1}. Instalá el harness: `{install}` (desde la raíz del repo)."
+    frequency = (piece.get("schedule_spec") or {}).get("frequency")
+    n = first + 2                                  # number of the next step; the market clock check takes one when present
+    step_clock = None
+    if frequency in ("weekdays", "market_hours"):  # the cron knows no NYSE holidays: the harness does (market_clock)
+        closed = ("cualquier `closed`" if frequency == "market_hours" else "`closed` con un `reason` que empieza con «feriado»")
+        step_clock = (f"{n}. Fijate si el mercado de EE. UU. corresponde hoy: `{src}python3 -m galecore_ai.adapters.cli clock` "
+                      f"imprime un JSON con `state` y `reason`. Si `state` es {closed}, reportá "
+                      f"`{src}python3 -m galecore_ai.adapters.cli agent report {key} --status skipped --reason-code market_closed "
+                      '--summary "Mercado cerrado: <reason>; no correspondía correr."` y terminá acá, sin hacer nada más. '
+                      "Si no, seguí.")
+        n += 1
     if skills:
         pulls = "\n".join(f"   - `{src}python3 -m galecore_ai.adapters.cli skill pull {shlex.quote(k)} /tmp/skills/{shlex.quote(k)}`"
                           for k in skills)
-        step2 = (f"{first + 2}. Traé cada skill, leé su `SKILL.md` y seguilo: los cálculos se corren con `skill run <clave> <script> …` "
+        step2 = (f"{n}. Traé cada skill, leé su `SKILL.md` y seguilo: los cálculos se corren con `skill run <clave> <script> …` "
                  "como diga la skill (el comando imprime un JSON con `ok`); no escribas ni muevas archivos fuera de /tmp.\n"
                  f"{pulls}\n   Con eso hacé la tarea. Si un comando falla, `ok` es false o no hay JSON: reportá `--status error`; "
                  "el resumen empieza con \"Sin evaluar:\" y dice el error en una línea; no repitas ni deduzcas conclusiones "
                  "de corridas anteriores.")
     else:
-        step2 = f"{first + 2}. Hacé esta tarea del usuario, {data}"
+        step2 = f"{n}. Hacé esta tarea del usuario, {data}"
     return "\n".join([
         "Sos un agente de GaleCore que corre solo en la nube. Seguí estos pasos en orden.",
         "",
         *([step1] if step1 else []),
         check,
         step_install,
+        *([step_clock] if step_clock else []),
         step2,
         "",
         f"Tarea: {str(piece.get('objective', '')).strip()}",
         "",
-        f"{first + 3}. {write}",
+        f"{n + 1}. {write}",
         f"`{src}python3 -m galecore_ai.adapters.cli agent report {key} --status ok|error|skipped --summary-file /tmp/resumen.md`",
         status,
     ])

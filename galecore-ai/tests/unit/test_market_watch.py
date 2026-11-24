@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from pydantic import ValidationError
 
+from galecore_ai.application import market_clock
 from galecore_ai.application import model_run as mr
 from galecore_ai.application import tasks as t
 from galecore_ai.contracts.task import Schedule
@@ -125,3 +126,46 @@ def test_a_scheduled_market_hours_run_outside_the_session_is_skipped(env):  # no
                 client=model_ok(output()))
     assert out["status"] == "SKIPPED" and "outside the US session" in out["reason"]
     assert t.in_session(MARKET, datetime(2026, 10, 2, 15, 0, tzinfo=UTC))          # Friday 11:00 New York
+
+
+# WS-0107: the schedule knows NYSE holidays and early closes (market_clock), not only weekdays.
+WEEKDAYS_9 = Schedule(frequency="weekdays", time="09:00", timezone=NY)
+DAILY_9 = Schedule(frequency="daily", time="09:00", timezone=NY)
+THANKSGIVING, AFTER_THANKSGIVING = date(2026, 11, 26), date(2026, 11, 27)   # holiday / 13:00 early close
+SATURDAY = date(2026, 11, 28)
+
+
+def test_a_nyse_holiday_fires_neither_weekdays_nor_market_hours_but_daily_does():
+    assert THANKSGIVING in market_clock.holidays(2026) and AFTER_THANKSGIVING in market_clock.early_closes(2026)
+    assert t._slots(WEEKDAYS_9, THANKSGIVING) == [] and t._slots(MARKET, THANKSGIVING) == []
+    assert t._slots(DAILY_9, THANKSGIVING) != []                      # an explicit choice of the user
+    assert t._slots(WEEKDAYS_9, SATURDAY) == [] and t._slots(MARKET, SATURDAY) == []
+    assert t._slots(WEEKDAYS_9, date(2026, 11, 25)) != []
+
+
+def test_market_hours_stops_at_the_real_early_close():
+    slots = t._slots(MARKET, AFTER_THANKSGIVING)
+    assert slots[0] == datetime(2026, 11, 27, 14, 30, tzinfo=UTC)     # 09:30 NY (EST)
+    assert slots[-1] == datetime(2026, 11, 27, 17, 30, tzinfo=UTC)    # 12:30 NY: the 13:00 slot is the close
+    assert len(slots) == 7
+    assert len(t._slots(MARKET, date(2026, 11, 25))) == 13            # a normal day runs to 15:30
+
+
+def test_a_holiday_is_not_a_missed_run():
+    thursday = datetime(2026, 11, 26, 20, 0, tzinfo=UTC)
+    assert t.last_due(WEEKDAYS_9, thursday) == datetime(2026, 11, 25, 14, 0, tzinfo=UTC)   # Wednesday's 09:00
+    assert t.next_due(WEEKDAYS_9, thursday) == datetime(2026, 11, 27, 14, 0, tzinfo=UTC)
+    assert t.last_due(MARKET, thursday) == datetime(2026, 11, 25, 20, 30, tzinfo=UTC)      # Wednesday 15:30
+    assert t.next_due(MARKET, thursday) == datetime(2026, 11, 27, 14, 30, tzinfo=UTC)
+
+
+def test_in_session_knows_holidays_and_early_closes():
+    assert not t.in_session(MARKET, datetime(2026, 11, 26, 15, 0, tzinfo=UTC))   # Thanksgiving 10:00 NY
+    assert t.in_session(MARKET, datetime(2026, 11, 27, 17, 0, tzinfo=UTC))       # Friday 12:00 NY
+    assert not t.in_session(MARKET, datetime(2026, 11, 27, 18, 30, tzinfo=UTC))  # Friday 13:30 NY, after the early close
+    assert not t.in_session(MARKET, datetime(2026, 11, 28, 15, 0, tzinfo=UTC))   # Saturday
+
+
+def test_market_closed_reads_as_not_due_and_is_not_a_failure():
+    assert t.reason_text({"reason_code": "market_closed"}) == "no correspondía (mercado cerrado)"
+    assert t.failure_code("Mercado cerrado: feriado (Acción de Gracias)") is None

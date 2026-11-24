@@ -119,6 +119,8 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
     known = {k.split("/")[0] for k in kb.strategies.versions()}
     if unknown := [x for x in strategies if x not in known]:
         raise KnowledgeError(f"no strategy named {unknown} in the knowledge base")
+    from galecore_ai.application import seguimiento
+    seguimiento.refuse_unactivated(kb, strategies)   # WS-0107: a ficha's avisos come from `strategy activate`
     if until is not None and until.tzinfo is None:
         until = until.replace(tzinfo=UTC)
     if until is not None and until <= now:
@@ -137,6 +139,18 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
                         words=f"Deja de servir «{rule.thesis}» si {describe(rule)} (lo vigila el supervisor: regla "
                               f"{rule.id}). Pedido: «{words}»")
     return rule
+
+
+def add_seguimiento(kb: KnowledgeBase, name: str, rule, role: str, *, words: str, prompt: str,
+                    now: datetime) -> WatchRule:
+    """WS-0107: the supervisor rule of one watchable ficha rule (``rule.watch``), tied to its strategy with its role.
+    Only `strategy activate` calls this, after the trader's acceptance."""
+    w = rule.watch
+    watch_rule = WatchRule(id=f"{now.date().isoformat()}-{w.symbol.lower()}-{w.metric.value}-{w.condition.value}-"
+                              f"{_fmt(w.threshold)}", created_at=now, symbol=w.symbol, metric=w.metric,
+                           condition=w.condition, threshold=w.threshold, words=words, prompt=prompt,
+                           strategies=[name], role=role)
+    return _store(kb, watch_rule, now)
 
 
 def _store(kb: KnowledgeBase, rule: WatchRule, now: datetime) -> WatchRule:
@@ -374,15 +388,31 @@ def _evaluation_alerts(rule: WatchRule, read, cache: dict, names: dict[str, str]
 
 
 def evaluate(kb: KnowledgeBase, read, now: datetime) -> tuple[list[Alert], list[str], int]:
-    """Check every active rule once. Returns (alerts to write, problems, rules checked). One read per source."""
+    """Check every active rule once. Returns (alerts to write, problems, rules checked). One read per source.
+
+    A rule of a strategy in Seguimiento (``role``) also leaves one line in its runs (WS-0107): not_met, met or failed.
+    A failed read raises a health alert (one per rule and day); a met invalidation stops the strategy's other rules."""
     met = _met(kb)
     active = [r for r in rules(kb) if status(kb, r, now, met) == "active"]
     cache: dict[str, object] = {}
     out, problems = [], []
-    from galecore_ai.application import supervisor
+    from galecore_ai.application import seguimiento, supervisor
     known = {a.key for a in supervisor.alerts(kb)}
     names: dict[str, str] = {}
+    stopped: set[str] = set()
+
+    def failed(rule: WatchRule, reason: str) -> None:
+        problems.append(f"regla {rule.id}: {reason}")
+        if rule.role:
+            seguimiento.note_run(kb, rule, now, "failed", None, reason)
+            alert = seguimiento.failure_alert(kb, rule, reason, now)
+            if alert.key not in known:
+                known.add(alert.key)
+                out.append(alert)
+
     for rule in active:
+        if rule.id in stopped:                       # its strategy was invalidated earlier in this pass
+            continue
         if rule.metric == WatchMetric.EVALUATION:    # fires per new evaluation, never ends (WS-0064)
             out.extend(_evaluation_alerts(rule, read, cache, names, known, now, problems))
             continue
@@ -399,7 +429,7 @@ def evaluate(kb: KnowledgeBase, read, now: datetime) -> tuple[list[Alert], list[
                     cache[path] = exc
             payload = cache[path]
             if isinstance(payload, Exception):
-                problems.append(f"regla {rule.id}: {str(payload)[:160]}")
+                failed(rule, str(payload)[:160])
                 continue
         if rule.metric == WatchMetric.DATE:
             value = float(now.astimezone(NEW_YORK).strftime("%Y%m%d%H%M" if rule.threshold > TIMED else "%Y%m%d"))
@@ -409,14 +439,19 @@ def evaluate(kb: KnowledgeBase, read, now: datetime) -> tuple[list[Alert], list[
         else:
             value = read_metric(payload, rule.metric)
         if value is None:
-            problems.append(f"regla {rule.id}: GaleCore no dio {METRIC_LABELS[rule.metric]} de "
-                            f"{rule.symbol or rule.instance_id[:8]}")
+            failed(rule, f"GaleCore no dio {METRIC_LABELS[rule.metric]} de {rule.symbol or rule.instance_id[:8]}")
             continue
         hit = value <= rule.threshold if rule.condition == WatchCondition.BELOW else value >= rule.threshold
+        seguimiento.note_run(kb, rule, now, "met" if hit else "not_met", value)
         if not hit:
             continue
         if rule.metric in REMINDERS:
             out.append(_reminder_alert(rule, now, path))
+            continue
+        if rule.role:
+            out.append(seguimiento.met_alert(kb, rule, value, now, path))
+            if rule.role == seguimiento.INVALIDATION:
+                stopped.update(seguimiento.invalidate(kb, rule, value, now))
             continue
         thesis = (f" Se cumple lo que invalida «{rule.thesis}»; dependen de esa tesis: {', '.join(rule.strategies)}."
                   if rule.thesis else "")

@@ -3,8 +3,12 @@
 Se carga en el turno que trabaja una idea o una estrategia (proyecto de estrategia o capacidad de diseño); el resto
 de las conversaciones no lo recibe (WS-0050).
 
-**Una idea o una estrategia** («quiero operar…», «guiame», o dentro de un proyecto de estrategia) no es una operación
-de hoy. Si el pedido es ambiguo (no dice qué capturar, sobre qué activos o en qué plazo), primero aclarar sin
+**Una idea de trade** («quiero entrar en NVDA», «creo que XLE rebota») va por el camino corto de la skill («Idea de
+trade»): se anota la ficha en etapa idea, una pregunta por turno, sin búsquedas ni tablas, sin stop ni tamaño (D-0017).
+Lo que sigue (aclarar, buscar en paralelo, las 8 partes) es para cuando el trader pide el diseño completo («guiame»,
+«diseñala completa», «llevala a SHADOW») o trabaja dentro de un proyecto de estrategia.
+
+**Una estrategia en diseño completo** no es una operación de hoy. Si el pedido es ambiguo (no dice qué capturar, sobre qué activos o en qué plazo), primero aclarar sin
 consultas: 2-3 preguntas cerradas en un bloque `opciones` sobre eso (no sobre reglas: estructura, frecuencia, filtro
 de entrada, y en opciones delta o ancho, salen de la tesis) y «Para responderte voy a buscar: <dato · para qué>», con el tiempo
 realista, cerrando con «¿lo busco?». Si ya es específico, o cuando responde, buscar todo de una vez, en paralelo. La
