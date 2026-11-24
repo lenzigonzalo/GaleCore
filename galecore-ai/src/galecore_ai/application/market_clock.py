@@ -66,7 +66,8 @@ def early_closes(year: int) -> set[date]:
     return {d for d in days if d.weekday() < 5 and d not in holidays(year)}
 
 
-def _session(day: date) -> tuple[datetime, datetime] | None:
+def session(day: date) -> tuple[datetime, datetime] | None:
+    """(open, close) in New York of that day's regular session; None on weekends and NYSE holidays (close 13:00 on early closes)."""
     if day.weekday() >= 5 or day in holidays(day.year):
         return None
     close = EARLY_CLOSE if day in early_closes(day.year) else CLOSE
@@ -107,7 +108,7 @@ class MarketStatus:
 def status(now: datetime | None = None) -> MarketStatus:
     now_utc = (now or datetime.now(UTC)).astimezone(UTC)
     ny = now_utc.astimezone(NEW_YORK)
-    today = _session(ny.date())
+    today = session(ny.date())
     state, reason, closes = "closed", "", None
     if today and today[0] <= ny < today[1]:
         state, reason, closes = "open", "sesión regular", today[1]
@@ -119,7 +120,7 @@ def status(now: datetime | None = None) -> MarketStatus:
         reason = "fin de semana"
     else:
         reason = f"feriado ({holidays(ny.year)[ny.date()]})"
-    last_close = next(s[1] for back in range(12) if (s := _session(ny.date() - timedelta(days=back))) and s[1] <= ny)
-    next_open = next(s[0] for ahead in range(12) if (s := _session(ny.date() + timedelta(days=ahead))) and s[0] > ny)
+    last_close = next(s[1] for back in range(12) if (s := session(ny.date() - timedelta(days=back))) and s[1] <= ny)
+    next_open = next(s[0] for ahead in range(12) if (s := session(ny.date() + timedelta(days=ahead))) and s[0] > ny)
     early = bool(today) and today[1].time() == EARLY_CLOSE
     return MarketStatus(now_utc, ny, state, reason, last_close, next_open, closes, early)

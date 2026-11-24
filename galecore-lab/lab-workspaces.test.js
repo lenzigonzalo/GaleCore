@@ -484,10 +484,10 @@ test('WS-0071 AC-3: el contexto del turno lista las estrategias del proyecto y p
  fs.writeFileSync(path.join(kb,'workspaces','argentina','workspace.json'),JSON.stringify({id:'argentina',label:'Argentina',strategies:['bonos_ar','evento_ar']}));
  const withTwo=await say('argentina');
  assert.match(withTwo,/Estrategias de este proyecto: bonos_ar, evento_ar\./);
- assert.match(withTwo,/«¿es una estrategia nueva de este proyecto o una de las que ya tiene \(bonos_ar, evento_ar\)\?»/);
+ assert.match(withTwo,/vinculala sin preguntar/);assert.doesNotMatch(withTwo,/¿es una estrategia nueva/);
  assert.match(withTwo,/mark_strategy\.py" <nombre>/);assert.doesNotMatch(withTwo,/\((analysis|strategy|personal)\)/);
  assert.doesNotMatch(withTwo,/reescribí/);assert.match(withTwo,/armame el mapa de/);assert.ok(withTwo.includes(path.join(base,'galecore-lab','skills','mapa','SKILL.md')));   // AC-4: el mapa es a pedido, no por turno
- const none=await say('brasil');assert.match(none,/Estrategias de este proyecto: ninguna todavía\./);assert.doesNotMatch(none,/o una de las que ya tiene/);
+ const none=await say('brasil');assert.match(none,/Estrategias de este proyecto: ninguna todavía\./);assert.doesNotMatch(none,/¿es una estrategia nueva/);
  assert.doesNotMatch(await say('personal'),/Estrategias de este proyecto/);
 });
 

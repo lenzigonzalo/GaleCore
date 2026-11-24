@@ -428,7 +428,10 @@ def test_versions_stored_without_the_new_fields_keep_their_hash(kb, research_ref
     _, path = stored(kb, research_ref, criticised=False)
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     del (data["content"]["parameters"], data["content"]["management"], data["content"]["change"],
-         data["content"]["simulated_amount_usd"], data["content"]["limits"])
+         data["content"]["simulated_amount_usd"], data["content"]["limits"], data["content"]["thesis"],
+         data["content"]["symbol"], data["content"]["horizon"], data["content"]["stage"])
+    for r in data["content"]["rules"]:   # WS-0107: rules stored before have no watch
+        del r["watch"]
     old = {k: v for k, v in data.items() if k != "content_hash"}
     from galecore_ai.contracts.strategy import compute_document_hash
     data["content_hash"] = compute_document_hash(old)   # the hash as the old contract computed it
@@ -957,3 +960,65 @@ def test_capital_sizes_each_strategy_with_its_own_amount(kb, research_ref):  # n
 
 
 
+
+
+# ── ficha por etapas (WS-0107) ───────────────────────────────────
+
+IDEA = {"name": "xle_rebote_petroleo", "version": "0.1.0", "display_name": "XLE · rebote del petróleo",
+        "stage": "idea", "symbol": "XLE", "horizon": "semanas",
+        "thesis": "Las energéticas cayeron más que el crudo; creo que rebotan"}
+RULE = {"id": "R1", "text": "x", "basis": "design_choice", "rationale": "r",
+        "runtime": {"status": "not_applicable", "note": "n"}}
+
+
+def staged(**changes) -> dict:
+    return {**IDEA, **changes}
+
+
+def test_an_idea_is_saved_without_spec_and_lists_what_is_undefined(kb):  # noqa: F811
+    from galecore_ai.contracts.strategy import undefined
+    idea = ProposalContent.model_validate(IDEA)
+    doc, _ = save_proposal(kb=kb, prompt="idea", host=HOST, content=idea, now=NOW)
+    assert doc.check.verdict == "NO_SPEC" and doc.content.stage.value == "idea"
+    assert "por qué pasaría" in undefined(idea) and "aviso de entrada" in undefined(idea) and "salida" not in undefined(idea)
+    assert "horizonte" not in undefined(idea)
+
+
+def test_an_idea_cannot_be_approved_for_shadow(kb):  # noqa: F811
+    save_proposal(kb=kb, prompt="idea", host=HOST, content=ProposalContent.model_validate(IDEA), now=NOW)
+    with pytest.raises(KnowledgeError, match="etapa idea") as exc:
+        approve(kb=kb, key="xle_rebote_petroleo/0.1.0", owner_words="Apruebo", host=HOST, now=NOW,
+                require_critique=False)
+    assert "tamaño" in json.dumps(exc.value.args, ensure_ascii=False)
+
+
+def test_idea_needs_thesis_and_symbol():
+    with pytest.raises(ValidationError, match="thesis and symbol"):
+        ProposalContent.model_validate(staged(symbol=""))
+
+
+def test_hypothesis_stage_needs_failure_conditions():
+    ok = {"mechanism": "sobreventa frente al crudo", "failure_conditions": ["el crudo pierde su mínimo"]}
+    ProposalContent.model_validate(staged(stage="hypothesis", hypothesis=ok))
+    with pytest.raises(ValidationError, match="failure_conditions"):
+        ProposalContent.model_validate(staged(stage="hypothesis", hypothesis={"mechanism": "m"}))
+    with pytest.raises(ValidationError, match="hypothesis"):
+        ProposalContent.model_validate(staged(stage="hypothesis"))
+
+
+def test_rules_stage_needs_entry_invalidation_and_monitoring():
+    hyp = {"mechanism": "m", "failure_conditions": ["f"]}
+    rules = [{**RULE, "id": f"R{i}", "block": b} for i, b in enumerate(("entry", "monitoring"))]
+    with pytest.raises(ValidationError, match="invalidation"):
+        ProposalContent.model_validate(staged(stage="rules", hypothesis=hyp, rules=rules))
+    rules.append({**RULE, "id": "R3", "block": "invalidation"})
+    assert ProposalContent.model_validate(staged(stage="rules", hypothesis=hyp, rules=rules)).stage.value == "rules"
+
+
+def test_a_complete_proposal_keeps_its_stage_and_hash():
+    p = proposal()
+    assert p.stage.value == "complete" and p.thesis == ""
+    data = proposal_data()
+    del data["rules"][0]
+    with pytest.raises(ValidationError, match="every block"):
+        ProposalContent.model_validate(data | {"rules": [r for r in data["rules"] if r["block"] != "exit"]})

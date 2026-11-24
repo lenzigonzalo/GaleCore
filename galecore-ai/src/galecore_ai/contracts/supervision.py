@@ -128,12 +128,13 @@ class WatchRule(BaseModel):
     strategies: list[str] = Field(default_factory=list)   # the strategies that depend on that thesis
     instance_id: str = ""                # WS-0023: the instance an OPEN_POSITIONS reminder counts
     decision: str = ""                   # WS-0023: the decision this reminder comes from (its words or project ref)
+    role: str = ""                       # WS-0107: "entry" | "invalidation" when it is a rule of a strategy in Seguimiento
     content_hash: str = ""
 
     def hashable_content(self) -> dict:
         data = self.model_dump(mode="json")
         data.pop("content_hash", None)
-        for added in ("thesis", "strategies", "instance_id", "decision"):   # absent in rules stored before WS-0016: their hash must not change
+        for added in ("thesis", "strategies", "instance_id", "decision", "role"):   # absent in rules stored before WS-0016: their hash must not change
             if not data.get(added):
                 data.pop(added, None)
         return data

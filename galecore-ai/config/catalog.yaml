@@ -169,11 +169,14 @@ entries:
   - id: strategy_design
     kind: strategy
     serves: >-
-      Desarrollar una estrategia completa desde su investigación (hipótesis, entrada, construcción,
+      Anotar una idea de trade por etapas (idea, hipótesis, reglas) sin saltar a estructuras ni riesgo, y
+      desarrollar una estrategia completa desde su investigación (hipótesis, entrada, construcción,
       sizing, monitoreo, ajustes, salidas, invalidación y plan de evaluación), mapear cada regla a lo
       que el runtime de GaleCore ejecuta, preparar la StrategySpec versionada con el hash de GaleCore,
       registrar la aprobación del owner de esa versión exacta y desplegarla en SHADOW de desarrollo.
     example_requests:
+      - Quiero entrar en NVDA, me parece que está sobrevendida
+      - Creo que XLE rebota
       - Desarrollá esta estrategia hasta SHADOW.
       - Quiero desarrollar una estrategia en SPY, guiame paso a paso
       - ¿Qué le falta a esta estrategia para correr en SHADOW y qué reglas no soporta GaleCore?
@@ -210,6 +213,8 @@ entries:
       - state
       - strategy controls --ref strategy:<name>/<version>
       - strategy diff --from strategy:<name>/<anterior> --ref strategy:<name>/<version>   # qué cambió y por qué
+      - strategy activate <name> --mode seguimiento --prompt "<pedido>" --text "<sí del trader>"   # ficha en etapa ready aceptada: crea los avisos de entrada e invalidación (regla en código, 0 tokens)
+      - strategy explain <name>   # «¿por qué no entré?»: si se dio, qué tan cerca llegó, huecos y fallas, versiones
       - supervise watch --symbol <SYM> --metric <m> --below|--above <nivel> --thesis "<tesis>" --strategy <name> --text "<owner>" --prompt "<pedido>"   # qué invalida la tesis; lo vigila el supervisor
       - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>
       - strategy deploy-check --ref strategy:<name>/<version> --galecore-hash <hash de App/Runtime/Specs/<name>>
