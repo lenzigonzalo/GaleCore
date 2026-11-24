@@ -11,7 +11,10 @@ const { execFile, spawn } = require('child_process');
 
 const CLI = 'python -m galecore_ai.adapters.cli agent';
 
-function createAgents({ root, environment, binary, execute = execFile, spawnProcess = spawn, intervalMs = 60000, timeoutMs = 300000 }) {
+// La skill va junto a este archivo: en la PC es galecore-lab/, en el VPS /srv/galecore/lab (no cuelga de root).
+const SKILL = path.join(__dirname, 'skills', 'agentes-nube', 'SKILL.md');
+
+function createAgents({ root, environment, binary, execute = execFile, spawnProcess = spawn, intervalMs = 60000, timeoutMs = 300000, skillFile = SKILL }) {
   let running = false;      // una aplicación a la vez
   let timer = null;
   const pending = () => new Promise(resolve => execute('python', ['-B', '-m', 'galecore_ai.adapters.cli', 'agent', 'pending'],
@@ -29,7 +32,7 @@ function createAgents({ root, environment, binary, execute = execFile, spawnProc
     }
   }
   const prompt = items => {
-    const skill = fs.readFileSync(path.join(root, 'galecore-lab', 'skills', 'agentes-nube', 'SKILL.md'), 'utf8');
+    const skill = fs.readFileSync(skillFile, 'utf8');
     return 'Seguí esta skill para aplicar los agentes en la nube pendientes.\n\n' + skill + '\n\nAplicá ahora la entrada 2 (aplicar pendientes) a estos agentes, uno por uno: ' + items.map(i => i.key).join(', ') + '.';
   };
   // 'idle' (nada para aplicar), 'busy' (ya hay una aplicación o no hay motor Claude), 'done' o 'failed' (el proceso salió con error o se pasó de tiempo).
@@ -39,8 +42,11 @@ function createAgents({ root, environment, binary, execute = execFile, spawnProc
     try {
       const items = await pending();
       if (!items.length) return 'idle';
+      // Cualquier falla (skill que no se lee, proceso que no arranca) termina en giveUp: el monitor la muestra.
       const outcome = await new Promise(resolve => {
-        const proc = spawnProcess(binary, ['-p', prompt(items), '--model', 'haiku', '--allowedTools', 'RemoteTrigger', `Bash(${CLI}:*)`, `PowerShell(${CLI}:*)`],
+        let text;
+        try { text = prompt(items); } catch { resolve('failed'); return; }
+        const proc = spawnProcess(binary, ['-p', text, '--model', 'haiku', '--allowedTools', 'RemoteTrigger', `Bash(${CLI}:*)`, `PowerShell(${CLI}:*)`],
           { cwd: root, env: environment(), windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'] });
         const stop = setTimeout(() => { try { proc.kill(); } catch { /* ya terminó */ } resolve('failed'); }, timeoutMs);
         proc.on('error', () => { clearTimeout(stop); resolve('failed'); });
