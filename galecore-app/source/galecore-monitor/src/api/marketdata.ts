@@ -163,6 +163,9 @@ export async function fetchEquityCandles(
 export interface MarketSummary {
   symbol: string; last: number | null; prevClose: number | null; change: number | null; changePct: number | null;
   volume: number | null; high: number | null; low: number | null; sessionDate: string | null;
+  // Fuera de la sesión regular: último de horario extendido y su variación contra el cierre (la API los calcula).
+  sessionOpen: boolean; extendedLast: number | null; extendedChange: number | null; extendedChangePct: number | null;
+  extendedAt: string | null; extendedSession: 'premarket' | 'afterhours' | null;
 }
 
 export async function fetchMarketSummary(symbol: string): Promise<MarketSummary> {

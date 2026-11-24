@@ -323,6 +323,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
     const stop = setVisibleInterval(load, 30_000);
     return () => { alive = false; stop(); };
   }, [active]);
+  // Fuera de la sesión regular el número grande es el cierre de la API (el mismo dato que el %), no el último trade del socket.
+  const closedLast = summary && summary.sessionOpen === false && summary.last != null ? summary.last : null;
   const change = summary?.change != null && summary.changePct != null ? { abs: summary.change, pct: summary.changePct } : null;
   const volume = summary?.volume != null ? (summary.volume >= 1e6 ? `${(summary.volume / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })} M` : summary.volume.toLocaleString('es-AR')) : '—';
   // Owner 06/11: las métricas de precio y gamma van en su pestaña (Métricas); Volatilidad conserva su franja.
@@ -402,9 +404,15 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
       <header className="market-symbol-header">
         <div className="market-symbol-price">
           <span className="market-active-symbol">{active || 'Mercado'}</span>
-          <strong>{hasPrice ? fmtPrice(ticker!.price) : '—'}</strong>
+          <strong>{closedLast != null ? fmtPrice(closedLast) : hasPrice ? fmtPrice(ticker!.price) : '—'}</strong>
           <span className={change && change.abs !== 0 ? (change.abs > 0 ? 'market-up' : 'market-down') : 'market-neutral'}
             title={change ? `${change.abs > 0 ? '+' : ''}${fmtPrice(change.abs)} en el día` : undefined}>{change ? fmtPct(change.pct) : ''}</span>
+          {summary?.extendedLast != null && (
+            <span className={'market-extended ' + (summary.extendedChange ? (summary.extendedChange > 0 ? 'market-up' : 'market-down') : 'market-neutral')}
+              title={`${summary.extendedSession === 'premarket' ? 'Pre-market' : 'After-hours'}${summary.extendedAt ? ` · ${fmtTime(new Date(summary.extendedAt))} ET` : ''}`}>
+              Fuera de hora {fmtPrice(summary.extendedLast)}{summary.extendedChangePct != null ? ` ${fmtPct(summary.extendedChangePct)}` : ''}
+            </span>
+          )}
           <span className="market-quote-detail" title={quoteTitle}>
             <span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : '—'}</b></span>
             <span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : '—'}</b></span>
