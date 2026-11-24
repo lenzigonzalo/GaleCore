@@ -10,34 +10,20 @@ const { codexConnectors, claudeConnectors, recordClaudeInit, listConnectors, kno
 const { authStatus, createCodexLogin, createClaudeLogin } = require('./provider-auth');
 const { permissionRules, saveUserRules, mergedSettings } = require('./lab-permissions');
 
-// WS-0088: semáforo compartido con las tareas del VPS. task_service.py (galecore-ai) usa archivos
-// `place-<n>.lock` con O_EXCL en GALECORE_TASKS_SLOTS_DIR; GALECORE_TASKS_MAX_PARALLEL fija cuántos
-// (default 1). Un lock más viejo que 30 min se considera muerto y se rompe (mismo que tasks.LOCK_STALE_MINUTES).
-// Sin la env: no estamos en el VPS y el semáforo no aplica (Lab local corre solo).
-const LAB_SLOT_STALE_MIN = 30;
-function acquireTaskSlot() {
-  const dir = process.env.GALECORE_TASKS_SLOTS_DIR;
-  if (!dir) return { held: null, skipped: true };
-  const places = Math.max(1, parseInt(process.env.GALECORE_TASKS_MAX_PARALLEL || '1', 10) || 1);
-  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* best effort */ }
-  for (let n = 0; n < places; n++) {
-    const p = path.join(dir, `place-${n}.lock`);
-    try {
-      fs.closeSync(fs.openSync(p, 'wx'));
-      return { held: p, skipped: false };
-    } catch (e) {
-      if (e.code !== 'EEXIST') continue;
-      try {
-        const ageMin = (Date.now() - fs.statSync(p).mtimeMs) / 60000;
-        if (ageMin >= LAB_SLOT_STALE_MIN) { fs.unlinkSync(p); n--; }
-      } catch { /* releasado entre stat/unlink: siguiente slot */ }
-    }
-  }
-  return { held: null, skipped: false };
+// BF-0020: el chat del Lab tiene prioridad sobre las tareas del VPS y nunca se rechaza. No ocupa un lugar del semáforo de
+// task_service.py: deja una marca `chat-<usuario>.lock` en GALECORE_TASKS_SLOTS_DIR, que toca al empezar, cada minuto
+// mientras corre y al terminar. Las tareas (de cualquier usuario) no arrancan si alguna marca tiene menos de
+// CHAT_QUIET_MIN (task_service.CHAT_QUIET_MINUTES): esperan a que el VPS quede 5 min sin chat. Sin la env (Lab local) no aplica.
+const CHAT_QUIET_MIN = 5;
+const chatMark = () => process.env.GALECORE_TASKS_SLOTS_DIR && path.join(process.env.GALECORE_TASKS_SLOTS_DIR, `chat-${os.userInfo().username}.lock`);
+function touchChatMark() {
+  const mark = chatMark(); if (!mark) return;
+  try { fs.mkdirSync(path.dirname(mark), { recursive: true }); fs.writeFileSync(mark, ''); } catch { /* best effort: el chat sigue */ }
 }
-function releaseTaskSlot(slotPath) {
-  if (!slotPath) return;
-  try { fs.unlinkSync(slotPath); } catch { /* best effort */ }
+function chatQuiet(at = Date.now()) {
+  const dir = process.env.GALECORE_TASKS_SLOTS_DIR; if (!dir) return true;
+  let names = []; try { names = fs.readdirSync(dir); } catch { return true; }
+  return !names.some(n => { if (!/^chat-.+\.lock$/.test(n)) return false; try { return at - fs.statSync(path.join(dir, n)).mtimeMs < CHAT_QUIET_MIN * 60000; } catch { return false; } });
 }
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
@@ -357,13 +343,22 @@ function permissionMode(provider, raw) {
   return PERMISSION_MODES[engine].includes(raw) ? raw : safe;
 }
 
-function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, refreshBinaries = () => {}, autoSync = false, curation = process.env.GALECORE_LAB_CURATION === '1', now = Date.now, request, sessionFile, update = () => null }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, refreshBinaries = () => {}, autoSync = false, curation = process.env.GALECORE_LAB_CURATION === '1', curationDelayMs = 5 * 60 * 1000, now = Date.now, request, sessionFile, update = () => null }) {
   const AUTO_SYNC_EVERY_MS = 12 * 60 * 60 * 1000; let lastAutoSync = 0;   // hora del último sync automático (arranque o apertura)
   // Curaduría de memoria (WS-0106): sólo en el Lab del servidor. Abrir el Lab la lanza en segundo plano; la regla real
   // (≥12 h desde la última, a lo sumo 2 por día) la decide `task serve --on-use` con los eventos guardados: acá sólo un
   // freno de 1 h para no lanzar procesos de más. El arranque no cuenta como uso.
-  const CURATION_EVERY_MS = 60 * 60 * 1000; let lastCuration = 0;
-  const curationNow = () => { lastCuration = now(); sharing.cli(['task', 'serve', '--on-use'], 30 * 60 * 1000).catch(() => {}); };   // 30 min: el lock de la tarea (LOCK_STALE_MINUTES)
+  // BF-0020: no arranca en el momento de abrir (el trader suele escribir enseguida) sino `curationDelayMs` después, y
+  // sólo con el VPS 5 min sin chat; si hay chat, reintenta cada minuto. Un error se anota en el log del Lab.
+  const CURATION_EVERY_MS = 60 * 60 * 1000; let lastCuration = 0, curationWaiting = false;
+  const curationTry = () => {
+    if (!chatQuiet(now())) { curationWaiting = true; setTimeout(curationTry, 60 * 1000).unref?.(); return; }
+    curationWaiting = false;
+    sharing.cli(['task', 'serve', '--on-use'], 30 * 60 * 1000)   // 30 min: el lock de la tarea (LOCK_STALE_MINUTES)
+      .then(r => { for (const x of r?.runs || []) if (x.status === 'ERROR' || x.status === 'FAILED') console.error('[curaduría]', JSON.stringify(x)); })
+      .catch(e => console.error('[curaduría] task serve --on-use falló:', e?.message || e));
+  };
+  const curationNow = () => { lastCuration = now(); if (curationWaiting) return; if (curationDelayMs > 0) setTimeout(curationTry, curationDelayMs).unref?.(); else curationTry(); };
   const autoSyncNow = () => { lastAutoSync = now(); sharing.syncAll(listProjects, { busy }).catch(() => {}); };
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
@@ -571,13 +566,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const mine=p.strategies||[];
     const resume=mine.length&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
     const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, vinculala sin preguntar: si es sobre lo mismo que una de las que ya tiene, seguí esa; si no, es nueva. Decilo en la misma línea en que la anotás y corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.'+' Si el trader pide un agente que corra solo («creame un agente que…»), aplicá la skill '+agentesSkill+'.'+' Si el trader pide una skill con código (un cálculo reutilizable), aplicá la skill '+codigoSkill+'.';
-    const job={proc:null,project:p.id,chat,asks:new Map(),slot:null};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
-    // WS-0088: el chat del Lab comparte el semáforo de corridas con las tareas del VPS (contrato con el owner 05/11).
-    // En Lab local, GALECORE_TASKS_SLOTS_DIR no está seteado y `skipped` vuelve true: no afecta.
-    const acquired = acquireTaskSlot();
-    if (!acquired.skipped && !acquired.held) { chat.error = 'El VPS está ocupado con una tarea. Volvé a mandar en un momento.'; chat.state = 'failed'; chat.activity = ''; saveChat(chat); jobs.delete(chat.id); return chat; }
-    job.slot = acquired.held;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);releaseTaskSlot(job.slot);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
+    // BF-0020: el chat nunca espera ni se rechaza; su marca frena las tareas de fondo mientras corre y 5 min después.
+    touchChatMark();job.mark=setInterval(touchChatMark,60*1000);job.mark.unref?.();
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);clearInterval(job.mark);touchChatMark();chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor
