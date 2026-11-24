@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { ConsolidatedPortfolio, PortfolioBroker, fetchConsolidatedPortfolio } from '../api/portfolio';
-import { fmtPrice } from '../utils/formatters';
-import './Resumen.css';
-import './Cartera.css';
+import { ConsolidatedPortfolio, PortfolioBroker, fetchConsolidatedPortfolio } from '../../api/portfolio';
+import { fmtPrice } from '../../utils/formatters';
+import './CarteraConsolidada.css';
 
 const DASH = '—';
 const ars = (n: number) => fmtPrice(n);   // mismo formato que el resto del monitor
@@ -32,7 +31,8 @@ function BrokerCard({ broker, total }: { broker: PortfolioBroker; total?: number
   </div>;
 }
 
-export function Cartera() {
+/** Cartera de todos los brokers en dólares (WS-0108), como sección de Inicio. Se lee al abrir Inicio y con Actualizar. */
+export function CarteraConsolidada() {
   const [data, setData] = useState<ConsolidatedPortfolio | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -48,9 +48,9 @@ export function Cartera() {
   const positions = [...(data?.positions ?? [])].sort((a, b) => (b.marketValueUsd ?? -Infinity) - (a.marketValueUsd ?? -Infinity));
   const cash = (data?.cash ?? []).filter(c => c.amount !== 0);
 
-  return <div className="rs ct">
-    <div className="rs-top">
-      <h1>Cartera</h1>
+  return <section className="ct" aria-label="Cartera de todos los brokers">
+    <div className="ct-top">
+      <h2>Todos los brokers</h2>
       <button className="ct-refresh" onClick={() => load()} disabled={loading}><RefreshCw size={15} className={loading ? 'spin' : ''} />Actualizar</button>
     </div>
     {error && <p className="rs-alert urgent"><AlertTriangle size={16} />No se pudo leer la cartera.</p>}
@@ -91,5 +91,5 @@ export function Cartera() {
         </table></div>
       </section>}
     </>}
-  </div>;
+  </section>;
 }

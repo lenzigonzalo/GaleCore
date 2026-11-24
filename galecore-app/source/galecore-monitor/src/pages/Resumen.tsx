@@ -6,6 +6,7 @@ import { AccountOverview, PositionLine, STRIKE_ALERT_KEY, StrikeAlertSettings, d
 import { fetchSpace } from '../api/space';
 import { readStrikeSettings, saveStrikeSettings } from '../components/settings/StrikeAlertForm';
 import { NetLiqChart } from '../components/account/NetLiqChart';
+import { CarteraConsolidada } from '../components/account/CarteraConsolidada';
 import type { Tab } from '../components/layout/TabNav';
 import './Resumen.css';
 import { setVisibleInterval } from '../utils/visibleInterval';
@@ -100,6 +101,7 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
     {error && !overview && <p className="rs-alert urgent" role="alert">{error}</p>}
     {!overview && !error && <p className="rs-empty">Leyendo la cuenta…</p>}
     {overview && <Overview o={overview} strike={strike} onStrike={setStrike} />}
+    <CarteraConsolidada />
   </div>;
 }
 

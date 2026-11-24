@@ -1,9 +1,9 @@
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import { Cartera } from './Cartera';
-import { fetchConsolidatedPortfolio } from '../api/portfolio';
+import { CarteraConsolidada } from './CarteraConsolidada';
+import { fetchConsolidatedPortfolio } from '../../api/portfolio';
 
-jest.mock('../api/portfolio');
+jest.mock('../../api/portfolio');
 const mocked = fetchConsolidatedPortfolio as jest.Mock;
 
 const data = {
@@ -25,7 +25,7 @@ const data = {
 beforeEach(() => { mocked.mockReset(); mocked.mockResolvedValue(data); });
 
 test('muestra total, cierre de IBKR, broker caído con su mensaje y efectivo sin convertir', async () => {
-  render(<Cartera />);
+  render(<CarteraConsolidada />);
   expect(screen.getByText('Leyendo la cartera…')).toBeInTheDocument();
   expect(await screen.findByText('$18,120.08')).toBeInTheDocument();
   expect(screen.getByText('Cierre del 20/11')).toBeInTheDocument();
@@ -41,7 +41,7 @@ test('muestra total, cierre de IBKR, broker caído con su mensaje y efectivo sin
 test('lee una vez al abrir y sin polling', async () => {
   jest.useFakeTimers();
   try {
-    render(<Cartera />);
+    render(<CarteraConsolidada />);
     await waitFor(() => expect(mocked).toHaveBeenCalledTimes(1));
     await act(async () => { jest.advanceTimersByTime(10 * 60_000); });
     expect(mocked).toHaveBeenCalledTimes(1);
@@ -50,6 +50,6 @@ test('lee una vez al abrir y sin polling', async () => {
 
 test('error de la API: una línea de aviso', async () => {
   mocked.mockRejectedValue(new Error('x'));
-  render(<Cartera />);
+  render(<CarteraConsolidada />);
   expect(await screen.findByText('No se pudo leer la cartera.')).toBeInTheDocument();
 });
