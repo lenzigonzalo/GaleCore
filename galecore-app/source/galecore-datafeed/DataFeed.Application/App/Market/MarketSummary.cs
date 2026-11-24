@@ -51,13 +51,17 @@ public class MarketSummaryHandler(IDxLinkStreamingService streaming) : IRequestH
         var extKey = symbol + "{=5m}";
         var now = DateTimeOffset.UtcNow;
         var extFrom = now.AddHours(-2).ToUnixTimeMilliseconds();
-        var candles = await streaming.RequestSnapshotAsync(new[] { (key, "Candle", (long?)from), (extKey, "Candle", (long?)extFrom) },
+        // Dos pedidos: el snapshot agrupa por símbolo sin el `{=...}`, así que en uno solo la diaria lo daba por completo
+        // antes de que llegaran las de 5m.
+        Task<IReadOnlyList<JObject>> Snapshot(string k, long since) => streaming.RequestSnapshotAsync(new[] { (k, "Candle", (long?)since) },
             isSymbolComplete: item => (((int?)item["eventFlags"] ?? 0) & 0x18) != 0, timeout: TimeSpan.FromSeconds(8), cancellationToken: ct);
-        // Se compara por prefijo por si DXLink devuelve el símbolo de la vela con otros atributos.
-        List<Day> Parse(string prefix) => candles.Where(c => ((string?)c["eventSymbol"])?.StartsWith(prefix, StringComparison.Ordinal) == true)
+        var dailyTask = Snapshot(key, from);
+        var extTask = Snapshot(extKey, extFrom);
+        await Task.WhenAll(dailyTask, extTask);
+        static List<Day> Parse(IReadOnlyList<JObject> candles) => candles
             .Select(c => new Day((long?)c["time"] ?? 0, Num(c["close"]), Num(c["high"]), Num(c["low"]), Num(c["volume"])))
             .Where(d => d.Time > 0 && d.Close is > 0).GroupBy(d => d.Time).Select(g => g.Last()).OrderBy(d => d.Time).ToList();
-        return MarketSummaryMath.Build(symbol, Parse(key), Parse(extKey), now);
+        return MarketSummaryMath.Build(symbol, Parse(dailyTask.Result), Parse(extTask.Result), now);
     }
 
     private static double? Num(JToken? t)
