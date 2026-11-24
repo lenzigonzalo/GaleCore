@@ -430,6 +430,8 @@ def test_versions_stored_without_the_new_fields_keep_their_hash(kb, research_ref
     del (data["content"]["parameters"], data["content"]["management"], data["content"]["change"],
          data["content"]["simulated_amount_usd"], data["content"]["limits"], data["content"]["thesis"],
          data["content"]["symbol"], data["content"]["horizon"], data["content"]["stage"])
+    for r in data["content"]["rules"]:   # WS-0107: rules stored before have no watch
+        del r["watch"]
     old = {k: v for k, v in data.items() if k != "content_hash"}
     from galecore_ai.contracts.strategy import compute_document_hash
     data["content_hash"] = compute_document_hash(old)   # the hash as the old contract computed it

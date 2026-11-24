@@ -1,6 +1,6 @@
 ---
 name: strategy-design
-version: 2.5.0
+version: 2.6.0
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Parte A (método): convierte una idea y su investigación en una estrategia completa (hipótesis, reglas por bloque,
@@ -51,6 +51,18 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   el trader no sabe, proponer con un dato y marcarlo como propuesta. Guardar una versión al cambiar de etapa.
 - **Nunca** stop, tamaño, take profit, instrumento ni % de riesgo hasta que el trader los pida o quiera simular u operar.
 - Mostrar la ficha entera sólo al cambiar de etapa o si la pide: pocas líneas, lo faltante como «sin definir».
+- **Reglas vigilables (etapa `rules`):** cada regla `entry` e `invalidation` se guarda en la ficha con su `watch`
+  (`symbol`, `metric` price|gamma_zero|call_wall|put_wall|iv_rank, `condition` above|below, `threshold`) y
+  `runtime` soportado con `spec_paths: ["supervisor.watch"]`. La que GaleCore no puede leer va sin `watch` y con runtime
+  no soportado y su motivo («serie de WTI vacía en GaleCore»): se muestra, no corre.
+- **Aceptar y activar:** cuando las reglas están, guardar la versión en etapa `ready`, mostrar la ficha corta (tesis,
+  por qué, invalida, aviso, qué vigila y cada cuánto: «regla en código, 0 tokens»; lo que no corre y por qué; «Sin
+  definir tamaño · salida · instrumento») y preguntar sólo «¿La activo?». Con su sí, `strategy activate <nombre> --mode
+  seguimiento --prompt "<pedido>" --text "<sus palabras>"`. **Nunca `supervise watch` para una estrategia**: los avisos
+  de una ficha los crea `activate`, y sólo después del sí. Un cambio de reglas es una versión nueva y se activa de nuevo
+  (cancela los avisos de la anterior).
+- **«¿Por qué no entré?» / cierre:** `strategy explain <nombre>`; contestar con lo que devuelve (si se dio y cuándo, qué
+  tan cerca llegó, huecos y fallas del sistema, versiones), sin completar lo que no dice.
 
 ### Parte A — método (trabajo del modelo)
 - **A-1. Estructuras (sólo si el trader las pide):** veredicto primero y coherente, «armalo» o «esperá», con el evento o número que lo
@@ -148,7 +160,7 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   nunca cambiar un umbral para forzar una entrada.
 
 ## Qué entrega
-- Idea de trade: la línea «Lo anoto como idea» y una pregunta; la ficha corta al cambiar de etapa.
+- Idea de trade: la línea «Lo anoto como idea» y una pregunta; la ficha corta al cambiar de etapa; en Reglas, «¿La activo?».
 - Estructuras pedidas: veredicto en una línea («esperá: el FOMC del miércoles cae dentro del plazo») + tabla de 2-3
   estructuras (crédito, riesgo máximo contra el tope, qué le pide a la tesis) + la oferta de diseñarla.
 - Diseño: la versión guardada (`strategy:<nombre>/<versión>`), su crítica, la ficha de una página, la tabla de

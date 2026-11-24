@@ -26,6 +26,7 @@ from enum import Enum
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from galecore_ai.contracts.regime_record import RecordHost
+from galecore_ai.contracts.supervision import REMINDERS, WatchCondition, WatchMetric
 
 STRATEGY_SCHEMA_VERSION = "1"
 STRATEGY_PROVENANCE = "HOST_DECLARED"
@@ -101,6 +102,33 @@ class RuleRuntime(BaseModel):
         return self
 
 
+SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.]{0,9}$")
+WATCHABLE_BLOCKS = ("entry", "invalidation")
+
+
+class RuleWatch(BaseModel):
+    """WS-0107: the observable condition of an entry or invalidation rule, the one the supervisor can read from
+    GaleCore (symbol, metric, above/below, level). A rule without it is valid but does not run."""
+
+    model_config = {"extra": "forbid"}
+
+    symbol: str
+    metric: WatchMetric = WatchMetric.PRICE
+    condition: WatchCondition
+    threshold: float
+
+    @model_validator(mode="after")
+    def _watchable(self) -> RuleWatch:
+        self.symbol = self.symbol.strip().upper()
+        if not SYMBOL_RE.match(self.symbol):
+            raise ValueError(f"symbol {self.symbol!r}: a ticker such as XLE")
+        if self.metric in REMINDERS:
+            raise ValueError(f"{self.metric.value} is a reminder, not a market condition")
+        if self.threshold != self.threshold or self.threshold in (float("inf"), float("-inf")):
+            raise ValueError("the level is a finite number")
+        return self
+
+
 class Rule(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -112,11 +140,14 @@ class Rule(BaseModel):
     parameter: str = ""          # value and unit when the rule has one (e.g. "50 % del crédito")
     rationale: str = ""          # why this value or rule; what would found a pending parameter
     runtime: RuleRuntime
+    watch: RuleWatch | None = None   # WS-0107: only entry and invalidation rules; absent in rules stored before
 
     check_not_blank = field_validator("id", "text")(_non_blank)
 
     @model_validator(mode="after")
     def _basis_needs(self) -> Rule:
+        if self.watch is not None and self.block.value not in WATCHABLE_BLOCKS:
+            raise ValueError(f"rule {self.id}: only entry and invalidation rules carry a watch condition")
         if self.basis == Basis.GROUNDED and not self.sources:
             raise ValueError(f"rule {self.id}: a grounded rule cites at least one source")
         if self.basis in (Basis.PENDING_PARAMETER, Basis.DESIGN_CHOICE) and not self.rationale.strip():
@@ -543,6 +574,9 @@ class StrategyDocument(BaseModel):
         for added in PROPOSAL_FIELDS_ADDED:  # absent in versions stored before them: their hash must not change
             if not data["content"].get(added):
                 data["content"].pop(added, None)
+        for rule in data["content"].get("rules", []):    # WS-0107: rules stored before have no watch
+            if not rule.get("watch"):
+                rule.pop("watch", None)
         if data["content"].get("stage") == Stage.COMPLETE.value:   # stored before stages: same bytes, same hash
             data["content"].pop("stage")
         return data

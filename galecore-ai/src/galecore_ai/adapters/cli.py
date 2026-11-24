@@ -1582,6 +1582,13 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                        "spec_hash": doc.spec_hash, "check": doc.check.verdict, "stage": content.stage.value,
                        "declared_gaps": doc.check.declared_gaps, "sin_definir": undefined(content),
                        "content_hash": doc.content_hash})
+        if args.strategy_command == "activate":   # WS-0107: the trader's yes starts the avisos of the ficha
+            from galecore_ai.application import seguimiento
+            out = seguimiento.activate(kb, args.name, words=args.text, prompt=args.prompt)
+            _json_out({**out, "publication": _publish_watches(kb)})
+        if args.strategy_command == "explain":
+            from galecore_ai.application import seguimiento
+            _json_out(seguimiento.explain(kb, args.name))
         key = strategy_key(args.ref)
         if args.strategy_command == "approve":
             approval, path = strategy_approve(kb=kb, key=key, spec_hash=args.spec_hash, owner_words=args.owner_words,
@@ -2167,6 +2174,15 @@ def build_parser() -> _JsonArgumentParser:
                                               "the exact content")
     p_st_save.add_argument("--spec", help="required unless the ficha is before the SHADOW stage")
     p_st_save.add_argument("--prompt", required=True, help="What the user asked")
+    p_st_act = st_sub.add_parser("activate", help="Start Seguimiento of a ficha in stage ready after the trader's yes: "
+                                                  "creates the avisos of its entry and invalidation rules (WS-0107)")
+    p_st_act.add_argument("name", help="Strategy name")
+    p_st_act.add_argument("--mode", choices=["seguimiento"], default="seguimiento")
+    p_st_act.add_argument("--text", required=True, help="The trader's acceptance, verbatim")
+    p_st_act.add_argument("--prompt", required=True, help="The trader's request")
+    p_st_exp = st_sub.add_parser("explain", help="«¿Por qué no entré?»: did the entry happen, how close it got, gaps "
+                                                 "and failures, versions (by code, from the runs)")
+    p_st_exp.add_argument("name", help="Strategy name")
     p_st_approve = st_sub.add_parser("approve", help="Record the owner's approval of an exact version and hash")
     p_st_approve.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_approve.add_argument("--spec-hash", dest="spec_hash", default=None,
