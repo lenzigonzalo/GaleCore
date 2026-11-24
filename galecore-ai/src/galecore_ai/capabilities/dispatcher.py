@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -165,6 +166,9 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
     "account.balances": {"method": "GET", "path": "/Data/Tastytrade/Account/Balances", "param_key": "", "source_param": ""},
     "account.positions": {"method": "GET", "path": "/Data/Tastytrade/Account/Positions", "param_key": "", "source_param": ""},
     "account.spreads": {"method": "GET", "path": "/Data/Tastytrade/Account/Spreads", "param_key": "", "source_param": ""},
+    # WS-0108: los brokers son de cada usuario; el endpoint pide la sesión del usuario (JWT), no la clave de API.
+    "account.portfolio": {"method": "GET", "path": "/Data/Portfolio/Consolidated", "param_key": "", "source_param": "",
+                          "user": True},
     "macro.board": {"method": "GET", "path": "/App/Macro/Board", "param_key": "", "source_param": ""},
     "macro.catalog": {"method": "GET", "path": "/App/Macro/Catalog", "param_key": "", "source_param": ""},
     "market_data.option_greeks": {
@@ -193,11 +197,13 @@ class CapabilityDispatcher:
         registry: CapabilityRegistry,
         api_key: str | None = None,
         timeout: float = 15.0,
+        user_auth: Callable[[], str] | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._registry = registry
         self._api_key = api_key
         self._timeout = timeout
+        self._user_auth = user_auth   # Authorization del usuario, para las rutas con "user" (WS-0108)
 
     async def invoke(
         self,
@@ -238,6 +244,14 @@ class CapabilityDispatcher:
         url = f"{self._base_url}{route['path']}"
         query_params = self._build_query_params(route, parameters)
         headers = self._build_headers()
+        if route.get("user"):
+            try:
+                if self._user_auth is None:
+                    raise RuntimeError("needs the user's GaleCore session")
+                headers["Authorization"] = self._user_auth()
+            except Exception as exc:  # noqa: BLE001 - login del usuario (SpaceError, red): un error, no una caída
+                return CapabilityResult(capability_id, error=f"{capability_id}: no user session ({exc})",
+                                        latency_ms=int((time.monotonic() - t0) * 1000))
 
         # Execute
         try:

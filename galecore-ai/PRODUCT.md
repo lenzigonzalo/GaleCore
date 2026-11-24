@@ -93,8 +93,9 @@ Pedidos que se resuelven con un comando, sin skill:
 
 ## Cuenta real
 
-`galecore get account.overview` y `account.spreads`, sólo lectura (Tastytrade). Todo número de ahí es «cuenta real» y
-va aparte de lo simulado, nunca sumado.
+`galecore get account.overview` y `account.spreads`, sólo lectura (Tastytrade). «¿Cómo está mi cartera?» con todos
+los brokers (Tastytrade, IBKR, IOL) en dólares: `galecore get account.portfolio`; IBKR es dato de cierre y un broker
+caído se dice, no se omite. Todo número de ahí es «cuenta real» y va aparte de lo simulado, nunca sumado.
 - **Sin topes:** la cuenta real se lee y se describe (valor, riesgo abierto, qué falta medir), sin chequearla contra
   límites. Un tope que el trader escribió en su Memoria sí cuenta, y se dice de dónde viene. `capital --real --symbol
   --width --credit [--contracts]` da la pérdida máxima de un candidato y su peso en la cuenta; lo que se opera en

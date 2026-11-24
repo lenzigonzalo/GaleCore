@@ -412,6 +412,18 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         returns="spreads[id, underlyingSymbol, expiration, structure, contracts, width, short/long put/call strikes, "
         "initialCredit, currentNetCredit, hasLiveQuote, maxProfit, maxLoss, pop, openPnl, dayPnl, greeks]",
     ),
+    # WS-0108: la cartera real de todos los brokers del usuario (Tastytrade, IBKR, IOL), en dólares.
+    CapabilityDefinition(
+        capability_id="account.portfolio",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="REAL portfolio across all the user's brokers (Tastytrade, IBKR, IOL; read-only), in USD: pesos at "
+        "the MEP sell rate; each broker with its own status (one down does not hide the others); IBKR is close-of-day "
+        "data (say so)",
+        parameters=[],
+        returns="asOf, totalUsd, fx[rate, asOf], brokers[id, name, status, message, isClose, reportDate, totalUsd, "
+        "warnings], positions[broker, account, symbol, description, type, quantity, averageCost, lastPrice, "
+        "marketValue, currency, marketValueUsd, pnl, pnlUsd], cash[broker, account, currency, amount, amountUsd], notes",
+    ),
     CapabilityDefinition(
         capability_id="macro.board",
         semantic_class=SemanticClass.PURE_QUERY,

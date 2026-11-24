@@ -1,0 +1,16 @@
+.ct-refresh { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; font-size:var(--font-body); color:var(--text-primary); background:var(--bg-tertiary); border:1px solid var(--border-light); border-radius:6px; cursor:pointer; }
+.ct-refresh:disabled { opacity:.6; cursor:default; }
+.ct-refresh .spin { animation:ct-spin 1s linear infinite; }
+@keyframes ct-spin { to { transform:rotate(360deg); } }
+.ct-brokers { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin:20px 0 24px; }
+.ct-broker { min-width:0; }
+.ct-broker.failed { border-color:var(--yellow-border); }
+.ct-broker-head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.ct-close { font-size:var(--font-label); font-weight:600; padding:2px 8px; border-radius:4px; background:var(--yellow-muted); color:var(--yellow-gc); white-space:nowrap; }
+.ct-broker-total { display:flex; align-items:baseline; justify-content:space-between; margin-top:10px; font-variant-numeric:tabular-nums; }
+.ct-broker-total strong { font-size:26px; font-weight:600; }
+.ct-broker-total span { font-size:var(--font-body); color:var(--text-secondary); }
+.ct-warn { display:flex; align-items:flex-start; gap:6px; margin:10px 0 0; font-size:14px; color:var(--yellow-gc); }
+.ct-warn svg { flex:0 0 14px; margin-top:3px; }
+.ct-section { margin-bottom:24px; }
+.ct-desc { font-size:13px; color:var(--text-secondary); margin-top:2px; }

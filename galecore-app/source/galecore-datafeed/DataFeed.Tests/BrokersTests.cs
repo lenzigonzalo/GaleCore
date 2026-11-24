@@ -1103,7 +1103,8 @@ public class BrokersTests
     public void Consolidada_tastytrade_corto_tiene_valor_y_pnl_con_signo()
     {
         var (balances, positions) = TastyData("Short");
-        var data = PortfolioConsolidator.FromTastytrade(new BrokerView { Id = "tastytrade", Name = "Tastytrade" }, balances, positions, null);
+        var now = new DateTime(2026, 11, 24, 2, 0, 0, DateTimeKind.Utc);
+        var data = PortfolioConsolidator.FromTastytrade(new BrokerView { Id = "tastytrade", Name = "Tastytrade" }, balances, positions, null, now);
 
         var p = Assert.Single(data.Positions);
         Assert.Equal(-5000m, p.MarketValue);
@@ -1111,7 +1112,7 @@ public class BrokersTests
         Assert.Equal(-500m, p.Pnl); // (500 - 450) x 10 x -1
         Assert.Equal(450m, p.AverageCost);
         Assert.Equal(-4000m, data.Slice.TotalUsd); // -5000 + 1000 de saldo
-        Assert.Equal(DateTimeKind.Utc, data.Slice.AsOf!.Value.Kind);
+        Assert.Equal(now, data.Slice.AsOf); // la hora de la consulta, no el updated-at del saldo
     }
 
     [Theory]

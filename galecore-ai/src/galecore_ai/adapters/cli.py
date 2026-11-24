@@ -221,7 +221,13 @@ def _build_dispatcher() -> CapabilityDispatcher:
     registry.register_many(KNOWN_CAPABILITIES)
 
     timeout = int(os.environ.get("GALECORE_TIMEOUT_SECONDS", "120"))
-    return CapabilityDispatcher(base_url=base_url, registry=registry, api_key=api_key, timeout=timeout)
+
+    def user_auth() -> str:   # WS-0108: capacidades con datos del usuario (sus brokers) van con su sesión
+        from galecore_ai.adapters.galecore_space import SpaceClient
+        return SpaceClient(base_url=base_url).authorization()
+
+    return CapabilityDispatcher(base_url=base_url, registry=registry, api_key=api_key, timeout=timeout,
+                                user_auth=user_auth)
 
 
 def _build_store() -> FileSnapshotStore:

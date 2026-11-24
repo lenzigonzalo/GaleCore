@@ -7,6 +7,7 @@ import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
 import { DESTINATIONS } from './components/layout/navigation';
 import { Resumen } from './pages/Resumen';
+import { Cartera } from './pages/Cartera';
 import { Macro } from './pages/Macro';
 import { Argentina } from './pages/Argentina';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
@@ -153,6 +154,7 @@ function Dashboard({ onLogout, userId }: DashboardProps) {
         <main className={"dashboard-main flex-1 " + (isLabWorkspace ? "lab-dashboard-main" : "overflow-auto")} style={{ position: 'relative' }}>
           <>
           {tab === 'inicio' && <Resumen onNavigate={setTab} />}
+          {tab === 'cartera' && <Cartera />}
 
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}

@@ -141,6 +141,35 @@ class TestDispatcherHTTP:
         assert result.latency_ms >= 0
 
 
+class TestUserScopedRoute:
+    """WS-0108: account.portfolio son los brokers del usuario; va con su sesión, no con la clave de API."""
+
+    @pytest.mark.asyncio
+    async def test_sends_user_authorization(self, monkeypatch):
+        seen = {}
+
+        async def fake_get(self, url, params=None, headers=None):
+            seen.update(url=url, headers=headers)
+            return httpx.Response(200, json={"totalUsd": 1.0}, request=httpx.Request("GET", url))
+
+        monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+        d = CapabilityDispatcher(base_url="http://localhost:5000", registry=_registry_with_known(),
+                                 user_auth=lambda: "Bearer tok")
+        result = await d.invoke("account.portfolio", {})
+        assert result.ok and result.data == {"totalUsd": 1.0}
+        assert seen["url"].endswith("/Data/Portfolio/Consolidated")
+        assert seen["headers"]["Authorization"] == "Bearer tok"
+
+    @pytest.mark.asyncio
+    async def test_without_session_is_an_error_not_a_raise(self):
+        def no_session() -> str:
+            raise RuntimeError("no credentials")
+
+        d = CapabilityDispatcher(base_url="http://localhost:5000", registry=_registry_with_known(), user_auth=no_session)
+        result = await d.invoke("account.portfolio", {})
+        assert not result.ok and "no credentials" in result.error
+
+
 class TestCapabilityResult:
     @pytest.mark.asyncio
     async def test_ok_result(self):

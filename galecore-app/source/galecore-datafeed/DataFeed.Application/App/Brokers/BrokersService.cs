@@ -456,7 +456,7 @@ namespace DataFeed.Application.App.Brokers
                     case Tastytrade:
                         if (_tastytradePortfolio == null) return new Fetch(broker, "error", "No disponible en este servidor.", null);
                         var (balances, positions) = await _tastytradePortfolio(ct);
-                        return new Fetch(broker, "ok", null, fx => PortfolioConsolidator.FromTastytrade(broker, balances, positions, fx));
+                        return new Fetch(broker, "ok", null, fx => PortfolioConsolidator.FromTastytrade(broker, balances, positions, fx, _now()));
                     case Iol:
                         var iol = await GetIolPortfolioAsync(userId, ct);
                         return new Fetch(broker, "ok", null, fx => PortfolioConsolidator.FromIol(broker, iol, fx));

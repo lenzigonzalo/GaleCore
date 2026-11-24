@@ -1,4 +1,3 @@
-using System.Globalization;
 using DataFeed.Application.Data.Tastytrade.AccountBalances;
 using DataFeed.Application.Data.Tastytrade.AccountPositions;
 using Newtonsoft.Json;
@@ -118,11 +117,12 @@ namespace DataFeed.Application.App.Brokers
 
         // ── por broker ────────────────────────────────────────────────────────────────────────────────────────
 
-        public static SliceData FromTastytrade(BrokerView broker, AccountBalancesResponse balances, AccountPositionsResponse positions, FxView? fx)
+        /// <param name="asOf">Hora de la consulta: es dato en vivo. El updated-at del saldo marca su último cambio (una cuenta
+        /// sin movimientos lo tiene viejo) y se leía como dato atrasado.</param>
+        public static SliceData FromTastytrade(BrokerView broker, AccountBalancesResponse balances, AccountPositionsResponse positions, FxView? fx, DateTime asOf)
         {
             var slice = NewSlice(broker, "Tastytrade");
-            slice.AsOf = DateTime.TryParse(balances.UpdatedAt, CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at) ? at : null;
+            slice.AsOf = DateTime.SpecifyKind(asOf, DateTimeKind.Utc);
             var rows = new List<(ConsolidatedPositionView View, decimal? Rate)>();
             foreach (var p in positions.Positions ?? new List<AccountPositionDto>())
             {
