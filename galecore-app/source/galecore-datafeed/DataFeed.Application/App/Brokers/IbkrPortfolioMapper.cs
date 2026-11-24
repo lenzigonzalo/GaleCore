@@ -21,6 +21,8 @@ namespace DataFeed.Application.App.Brokers
         public string? PutCall { get; set; }
         public decimal? Strike { get; set; }
         public string? Expiry { get; set; }
+        /// <summary>Cuántas unidades de la moneda base vale una de la moneda de la posición (reporte Flex).</summary>
+        public decimal? FxRateToBase { get; set; }
     }
 
     public sealed class IbkrBalanceView
@@ -85,6 +87,7 @@ namespace DataFeed.Application.App.Brokers
                         PutCall = p.PutCall,
                         Strike = p.Strike,
                         Expiry = p.Expiry,
+                        FxRateToBase = p.FxRateToBase,
                     });
                 }
                 foreach (var c in s.Cash)

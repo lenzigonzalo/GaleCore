@@ -1,6 +1,9 @@
 using System.Net;
 using System.Text.Json;
 using DataFeed.Application.App.Brokers;
+using DataFeed.Application.Data.Argentina;
+using DataFeed.Application.Data.Tastytrade.AccountBalances;
+using DataFeed.Application.Data.Tastytrade.AccountPositions;
 using DataFeed.Infrastructure.Providers;
 using DataFeed.Infrastructure.Providers.Ibkr;
 using DataFeed.Infrastructure.Providers.Iol;
@@ -335,6 +338,50 @@ public class BrokersTests
         Assert.Equal(1000m, spy.MarketValue); // sin costo ni ganancia: cantidad x precio
         Assert.Equal("USD", spy.Currency);
         Assert.Null(spy.Pnl);
+    }
+
+    private static async Task<IolPositionView> IolPosicionAsync(string symbol, string? type, decimal qty, decimal avg, decimal last, decimal pnl)
+    {
+        var (service, _, iol) = NewRig();
+        await service.SetIolCredentialsAsync(User, "usuarioiol1", Password, default);
+        iol.ArPositions = new IolPositions
+        {
+            Account = "AR", Currency = "ARS",
+            Positions = new List<IolPosition>
+            {
+                new()
+                {
+                    Instrument = new IolInstrument { Symbol = symbol, Type = type },
+                    Quantity = qty,
+                    CostBasis = new IolCostBasis { AverageEntryPrice = avg, TotalCost = qty * avg },
+                    MarketValue = new IolMarketValue { CurrentPrice = last },
+                    ProfitLoss = new IolProfitLoss { UnrealizedPl = pnl },
+                },
+            },
+        };
+        var p = await service.GetIolPortfolioAsync(User, default);
+        return p.Positions.Single(x => x.Symbol == symbol);
+    }
+
+    [Fact]
+    public async Task Portafolio_bono_cotizado_por_100_valua_cantidad_x_precio_sobre_100()
+    {
+        var v = await IolPosicionAsync("TZX27", "TITULOS PUBLICOS", 1348361m, 373.26890232m, 425.15m, 699544.4874890248m);
+        Assert.InRange(v.MarketValue!.Value, 5732556.79m - 0.01m, 5732556.79m + 0.01m);
+    }
+
+    [Fact]
+    public async Task Portafolio_accion_valua_cantidad_x_precio()
+    {
+        var v = await IolPosicionAsync("YPFD", "ACCIONES", 80m, 5475m, 5835m, 28800m);
+        Assert.Equal(466800m, v.MarketValue);
+    }
+
+    [Fact]
+    public async Task Portafolio_bono_sin_ganancia_usa_el_tipo_para_la_escala()
+    {
+        var v = await IolPosicionAsync("AL30", "TIT. PUBLICOS", 1000m, 50m, 60m, 0m);
+        Assert.Equal(600m, v.MarketValue);
     }
 
     [Fact]
@@ -846,5 +893,254 @@ public class BrokersTests
         Assert.Equal(forgetsAntes + 1, ibkr.Forgets);
         Assert.Null(store.Rows["ibkr"].SecretCipher);
         Assert.Equal("missing", (await service.ListAsync(User, default)).Single(b => b.Id == "ibkr").Status);
+    }
+
+    // ── cartera consolidada ───────────────────────────────────────────────────────────────────────────────────
+
+    private static DolarQuote Mep(decimal venta) => new("bolsa", "Bolsa", venta - 10m, venta, "2026-11-23T15:00:00.000Z", null);
+
+    private static (AccountBalancesResponse, AccountPositionsResponse) TastyData(string direction = "Long") => (
+        new AccountBalancesResponse { AccountNumber = "5WX1", CashBalance = 1000m, UpdatedAt = "2026-11-23T15:00:00.000+00:00" },
+        new AccountPositionsResponse
+        {
+            Positions = new List<AccountPositionDto>
+            {
+                new() { AccountNumber = "5WX1", Symbol = "SPY", InstrumentType = "Equity", Quantity = 10m, QuantityDirection = direction, ClosePrice = 500m, AverageOpenPrice = 450m, Multiplier = 1m },
+            },
+        });
+
+    private sealed class ConsolidatedRig
+    {
+        public FakeStore Store { get; } = new();
+        public FakeIol Iol { get; } = new();
+        public FakeIbkr Ibkr { get; } = new();
+        public BrokersService Service { get; }
+
+        public ConsolidatedRig(DolarQuote? mep, Func<(AccountBalancesResponse, AccountPositionsResponse)>? tasty)
+        {
+            Service = new BrokersService(Store, new FakeProtector(), Iol, Ibkr, null, NullLogger<BrokersService>.Instance,
+                tastytradePortfolio: tasty == null ? null : _ => Task.FromResult(tasty()),
+                mep: _ => Task.FromResult(mep));
+        }
+
+        public async Task ConnectAllAsync()
+        {
+            Store.TastytradeLinked = true;
+            await Service.SetIolCredentialsAsync(User, "usuarioiol1", Password, default);
+            await Service.SetIbkrCredentialsAsync(User, FlexToken, FlexQuery, default);
+        }
+    }
+
+    private static IolPositions IolPos(string symbol, string currency, decimal value) => new()
+    {
+        Currency = currency,
+        Positions = new List<IolPosition>
+        {
+            new() { Instrument = new IolInstrument { Symbol = symbol }, Quantity = 1m, MarketValue = new IolMarketValue { CurrentPrice = value }, CostBasis = new IolCostBasis { TotalCost = value }, ProfitLoss = new IolProfitLoss { UnrealizedPl = 0m } },
+        },
+    };
+
+    [Fact]
+    public async Task Consolidada_broker_excluido_no_se_pide_y_sale_excluded()
+    {
+        var rig = new ConsolidatedRig(null, () => TastyData());
+        await rig.ConnectAllAsync();
+        await rig.Service.SetIncludeAsync(User, "ibkr", false, default);
+        var antes = rig.Ibkr.Reports;
+
+        var r = await rig.Service.GetConsolidatedAsync(User, default);
+
+        Assert.Equal(antes, rig.Ibkr.Reports);
+        var slice = r.Brokers.Single(b => b.Id == "ibkr");
+        Assert.Equal("excluded", slice.Status);
+        Assert.Null(slice.TotalUsd);
+        Assert.DoesNotContain(r.Positions, p => p.Broker == "ibkr");
+    }
+
+    [Fact]
+    public async Task Consolidada_ibkr_caido_sale_error_y_los_otros_siguen_con_su_total()
+    {
+        var rig = new ConsolidatedRig(null, () => TastyData());
+        await rig.ConnectAllAsync();
+        rig.Ibkr.Fails = new UpstreamSourceException("IBKR", "Flex no responde.");
+        rig.Iol.Us = new IolBalances { Usd = new IolCurrencyBalance { Currency = "USD", Totals = new IolTerms { T0 = 300m } } };
+
+        var r = await rig.Service.GetConsolidatedAsync(User, default);
+
+        var ibkr = r.Brokers.Single(b => b.Id == "ibkr");
+        Assert.Equal("error", ibkr.Status);
+        Assert.Contains("Flex no responde", ibkr.Message);
+        var tasty = r.Brokers.Single(b => b.Id == "tastytrade");
+        Assert.Equal("ok", tasty.Status);
+        Assert.Equal(6000m, tasty.TotalUsd); // 10 x 500 + 1000 de saldo
+        Assert.Equal(300m, r.Brokers.Single(b => b.Id == "iol").TotalUsd);
+        Assert.Equal(6300m, r.TotalUsd);
+    }
+
+    [Fact]
+    public async Task Consolidada_ars_a_usd_con_mep_125000_pesos_son_100_dolares()
+    {
+        var rig = new ConsolidatedRig(Mep(1250m), null);
+        await rig.ConnectAllAsync();
+        rig.Ibkr.Fails = new UpstreamSourceException("IBKR", "x");
+        rig.Iol.Ar = new IolBalances { Ars = new IolCurrencyBalance { Currency = "ARS", Totals = new IolTerms { T0 = 125000m } } };
+
+        var r = await rig.Service.GetConsolidatedAsync(User, default);
+
+        var cash = Assert.Single(r.Cash);
+        Assert.Equal(125000m, cash.Amount);
+        Assert.Equal(100m, cash.AmountUsd);
+        Assert.Equal(100m, r.Brokers.Single(b => b.Id == "iol").TotalUsd);
+        Assert.Equal(1250m, r.Fx!.Rate);
+        Assert.Contains("Pesos a dólares con el MEP (venta) de DolarAPI.", r.Notes);
+        var tasty = r.Brokers.Single(b => b.Id == "tastytrade");
+        Assert.Equal("error", tasty.Status); // sin handler de cartera
+        Assert.Equal("No disponible en este servidor.", tasty.Message);
+    }
+
+    [Fact]
+    public async Task Consolidada_sin_mep_los_pesos_quedan_null_con_warning_y_note()
+    {
+        var rig = new ConsolidatedRig(null, null);
+        await rig.ConnectAllAsync();
+        rig.Ibkr.Fails = new UpstreamSourceException("IBKR", "x");
+        rig.Iol.Ar = new IolBalances
+        {
+            Ars = new IolCurrencyBalance { Currency = "ARS", Totals = new IolTerms { T0 = 125000m } },
+            Usd = new IolCurrencyBalance { Currency = "USD", Totals = new IolTerms { T0 = 50m } },
+        };
+
+        var r = await rig.Service.GetConsolidatedAsync(User, default);
+
+        Assert.Null(r.Fx);
+        Assert.Null(r.Cash.Single(c => c.Currency == "ARS").AmountUsd);
+        var iol = r.Brokers.Single(b => b.Id == "iol");
+        Assert.Equal("partial", iol.Status);
+        Assert.Single(iol.Warnings, "ARS sin convertir: no suma al total.");
+        Assert.Equal(50m, iol.TotalUsd);
+        Assert.Contains("Sin cotización MEP: los pesos no se pasan a dólares.", r.Notes);
+    }
+
+    private sealed class SelectiveIol : IIolClient
+    {
+        private readonly FakeIol _inner;
+        private readonly string _failCountry;
+        public SelectiveIol(FakeIol inner, string failCountry) { _inner = inner; _failCountry = failCountry; }
+        public Task LoginAsync(Guid userId, IolCredentials credentials, CancellationToken ct) => _inner.LoginAsync(userId, credentials, ct);
+        public Task<IolBalances> GetBalancesAsync(Guid userId, IolCredentials credentials, string country, CancellationToken ct) =>
+            country == _failCountry ? Task.FromException<IolBalances>(new UpstreamSourceException("IOL", "sin respuesta.")) : _inner.GetBalancesAsync(userId, credentials, country, ct);
+        public Task<IolPositions> GetPositionsAsync(Guid userId, IolCredentials credentials, string country, CancellationToken ct) =>
+            country == _failCountry ? Task.FromException<IolPositions>(new UpstreamSourceException("IOL", "sin respuesta.")) : _inner.GetPositionsAsync(userId, credentials, country, ct);
+        public void Forget(Guid userId) => _inner.Forget(userId);
+    }
+
+    [Fact]
+    public async Task Consolidada_iol_con_cuenta_us_caida_sigue_con_ar_y_avisa()
+    {
+        var store = new FakeStore();
+        var fake = new FakeIol
+        {
+            Ar = new IolBalances { Usd = new IolCurrencyBalance { Currency = "USD", Totals = new IolTerms { T0 = 70m } } },
+            ArPositions = IolPos("AL30", "ARS", 50000m),
+        };
+        var service = new BrokersService(store, new FakeProtector(), new SelectiveIol(fake, "US"), new FakeIbkr(), null, NullLogger<BrokersService>.Instance);
+        await service.SetIolCredentialsAsync(User, "usuarioiol1", Password, default);
+
+        var p = await service.GetIolPortfolioAsync(User, default);
+
+        Assert.Single(p.Warnings);
+        Assert.StartsWith("Cuenta US de IOL: ", p.Warnings[0]);
+        Assert.Contains(p.Balances, b => b.Account == "AR" && b.Total == 70m);
+        Assert.Equal("AR", p.Positions.Single().Account);
+
+        var slice = PortfolioConsolidator.FromIol(new BrokerView { Id = "iol", Name = "IOL" }, p, new FxView { Rate = 1000m });
+        Assert.Equal("partial", slice.Slice.Status);
+        Assert.Contains(p.Warnings[0], slice.Slice.Warnings);
+        Assert.Equal(120m, slice.Slice.TotalUsd); // 70 USD + 50.000 ARS / 1000
+    }
+
+    [Fact]
+    public async Task Consolidada_iol_con_las_dos_cuentas_caidas_relanza_la_primera_falla()
+    {
+        var (service, _, iol) = NewRig();
+        await service.SetIolCredentialsAsync(User, "usuarioiol1", Password, default);
+        iol.ReadFails = new UpstreamSourceException("IOL", "no se pudo conectar.");
+        var ex = await Assert.ThrowsAsync<UpstreamSourceException>(() => service.GetIolPortfolioAsync(User, default));
+        Assert.Contains("no se pudo conectar", ex.Message);
+    }
+
+    [Fact]
+    public void Consolidada_fx_rate_to_base_convierte_euros_y_sin_tasa_avisa_una_sola_vez()
+    {
+        var xml = """
+            <FlexQueryResponse><FlexStatements count="1">
+              <FlexStatement accountId="U1" toDate="20261120" whenGenerated="20261121;163045"><AccountInformation currency="USD" />
+                <OpenPositions>
+                  <OpenPosition currency="EUR" assetCategory="STK" symbol="SAP" position="10" positionValue="1000" fifoPnlUnrealized="100" fxRateToBase="1.1" />
+                  <OpenPosition currency="GBP" assetCategory="STK" symbol="BP" position="5" positionValue="500" />
+                  <OpenPosition currency="GBP" assetCategory="STK" symbol="SHEL" position="5" positionValue="700" />
+                </OpenPositions>
+              </FlexStatement>
+            </FlexStatements></FlexQueryResponse>
+            """;
+        var portfolio = IbkrPortfolioMapper.Map(Parse(xml));
+        Assert.Equal(1.1m, portfolio.Positions.Single(p => p.Symbol == "SAP").FxRateToBase);
+
+        var data = PortfolioConsolidator.FromIbkr(new BrokerView { Id = "ibkr", Name = "IBKR" }, portfolio, null);
+
+        var sap = data.Positions.Single(p => p.Symbol == "SAP");
+        Assert.Equal(1100m, sap.MarketValueUsd);
+        Assert.Equal(110m, sap.PnlUsd);
+        Assert.Null(data.Positions.Single(p => p.Symbol == "BP").MarketValueUsd);
+        Assert.Equal(1100m, data.Slice.TotalUsd);
+        Assert.Equal("partial", data.Slice.Status);
+        Assert.Single(data.Slice.Warnings, w => w == "GBP sin convertir: no suma al total.");
+        Assert.Contains("Dato del cierre del 2026-11-20.", data.Slice.Warnings);
+        Assert.True(data.Slice.IsClose);
+    }
+
+    [Fact]
+    public void Consolidada_tastytrade_corto_tiene_valor_y_pnl_con_signo()
+    {
+        var (balances, positions) = TastyData("Short");
+        var data = PortfolioConsolidator.FromTastytrade(new BrokerView { Id = "tastytrade", Name = "Tastytrade" }, balances, positions, null);
+
+        var p = Assert.Single(data.Positions);
+        Assert.Equal(-5000m, p.MarketValue);
+        Assert.Equal(-5000m, p.MarketValueUsd);
+        Assert.Equal(-500m, p.Pnl); // (500 - 450) x 10 x -1
+        Assert.Equal(450m, p.AverageCost);
+        Assert.Equal(-4000m, data.Slice.TotalUsd); // -5000 + 1000 de saldo
+        Assert.Equal(DateTimeKind.Utc, data.Slice.AsOf!.Value.Kind);
+    }
+
+    [Theory]
+    [InlineData(100, "MEP", 1250, 100)]
+    [InlineData(100, "ccl", 1250, 100)]
+    [InlineData(125000, "ARS", 1250, 100)]
+    [InlineData(10, "EUR", 0, 11)]
+    public void Consolidada_ToUsd_reglas(double amount, string currency, double mep, double expected)
+    {
+        var fx = mep > 0 ? new FxView { Rate = (decimal)mep } : null;
+        Assert.Equal((decimal)expected, PortfolioConsolidator.ToUsd((decimal)amount, currency, fx, currency == "EUR" ? 1.1m : null, "USD"));
+        Assert.Null(PortfolioConsolidator.ToUsd(10m, "EUR", fx, 1.1m, "EUR")); // base no USD
+        Assert.Null(PortfolioConsolidator.ToUsd(null, "USD", fx, null, "USD"));
+    }
+
+    [Fact]
+    public async Task Consolidada_no_conectados_salen_missing_y_credencial_rechazada_invalid()
+    {
+        var rig = new ConsolidatedRig(null, null);
+        var vacio = await rig.Service.GetConsolidatedAsync(User, default);
+        Assert.All(vacio.Brokers.Where(b => b.Id is "iol" or "ibkr" or "tastytrade"), b => Assert.Equal("missing", b.Status));
+        Assert.Contains("Conectalo en Configuración", vacio.Brokers.First(b => b.Id == "iol").Message);
+        Assert.Null(vacio.TotalUsd);
+
+        await rig.ConnectAllAsync();
+        rig.Ibkr.Fails = new IbkrCredentialInvalidException("El token venció.");
+        var r = await rig.Service.GetConsolidatedAsync(User, default);
+        var ibkr = r.Brokers.Single(b => b.Id == "ibkr");
+        Assert.Equal("invalid", ibkr.Status);
+        Assert.Contains("Revisá la credencial", ibkr.Message);
     }
 }

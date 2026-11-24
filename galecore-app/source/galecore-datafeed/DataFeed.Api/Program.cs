@@ -306,7 +306,22 @@ namespace DataFeed
                         await scope.ServiceProvider.GetRequiredService<IMediator>()
                             .Send(new DataFeed.Application.Data.Tastytrade.AccountBalances.AccountBalancesRequest(), ct);
                     },
-                    sp.GetRequiredService<ILogger<DataFeed.Application.App.Brokers.BrokersService>>());
+                    sp.GetRequiredService<ILogger<DataFeed.Application.App.Brokers.BrokersService>>(),
+                    tastytradePortfolio: async ct =>
+                    {
+                        using var scope = sp.CreateScope();
+                        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+                        var balances = await mediator.Send(new DataFeed.Application.Data.Tastytrade.AccountBalances.AccountBalancesRequest(), ct);
+                        var positions = await mediator.Send(new DataFeed.Application.Data.Tastytrade.AccountPositions.AccountPositionsRequest(), ct);
+                        return (balances, positions);
+                    },
+                    mep: async ct =>
+                    {
+                        using var scope = sp.CreateScope();
+                        var quotes = await scope.ServiceProvider.GetRequiredService<IMediator>()
+                            .Send(new DataFeed.Application.Data.Argentina.ArgentinaDolaresRequest(), ct);
+                        return quotes.Data.FirstOrDefault(q => q.Casa == "bolsa");
+                    });
             });
 
             // Agentes que corren solos (WS-0079): clave de agentes, reporte de corridas, token de disparo y ejecución sin PC.

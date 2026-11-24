@@ -4,6 +4,8 @@ namespace DataFeed.Application.App.Brokers
 {
     public sealed class IolPositionView
     {
+        /// <summary>País de la cuenta: AR | US.</summary>
+        public string Account { get; set; } = "";
         public string Symbol { get; set; } = "";
         public string? Description { get; set; }
         public string? Type { get; set; }
@@ -35,19 +37,21 @@ namespace DataFeed.Application.App.Brokers
         public string Source { get; set; } = "IOL";
         public List<IolPositionView> Positions { get; set; } = new();
         public List<IolBalanceView> Balances { get; set; } = new();
+        /// <summary>Avisos de la consulta, p. ej. una cuenta de IOL que no respondió y quedó afuera.</summary>
+        public List<string> Warnings { get; set; } = new();
     }
 
     /// <summary>Pasa lo que devuelve IOL a la forma de GaleCore. Pura, para probarla sin red.</summary>
     public static class IolPortfolioMapper
     {
-        public static IolPortfolioResponse Map(DateTime asOf, IolBalances ar, IolBalances us, IolPositions arPositions, IolPositions usPositions)
+        public static IolPortfolioResponse Map(DateTime asOf, IolBalances? ar, IolBalances? us, IolPositions? arPositions, IolPositions? usPositions)
         {
             var response = new IolPortfolioResponse { AsOf = asOf };
-            AddBalance(response, "AR", ar.Ars);
-            AddBalance(response, "AR", ar.Usd);
-            AddBalance(response, "US", us.Usd);
-            AddPositions(response, arPositions);
-            AddPositions(response, usPositions);
+            AddBalance(response, "AR", ar?.Ars);
+            AddBalance(response, "AR", ar?.Usd);
+            AddBalance(response, "US", us?.Usd);
+            AddPositions(response, "AR", arPositions);
+            AddPositions(response, "US", usPositions);
             return response;
         }
 
@@ -63,19 +67,19 @@ namespace DataFeed.Application.App.Brokers
             });
         }
 
-        private static void AddPositions(IolPortfolioResponse response, IolPositions data)
+        private static void AddPositions(IolPortfolioResponse response, string country, IolPositions? data)
         {
+            if (data == null) return;
             foreach (var p in data.Positions ?? new List<IolPosition>())
             {
                 var price = p.MarketValue?.CurrentPrice;
-                // La API no trae el valor total de la posición. Se toma el costo más la ganancia no realizada (cierra con la
-                // contabilidad del broker aunque el precio sea por cada 100 nominales, como los bonos); si falta alguno,
-                // cantidad por precio.
-                decimal? value = p.CostBasis?.TotalCost is { } cost && p.ProfitLoss?.UnrealizedPl is { } pl
-                    ? cost + pl
-                    : p.Quantity.HasValue && price.HasValue ? p.Quantity * price : null;
+                // La API no trae el valor total de la posición: cantidad por precio, dividido por 100 si el precio es por cada
+                // 100 nominales (bonos y letras). La escala se deduce de la ganancia no realizada (que viene bien escalada);
+                // si no alcanza, del tipo de instrumento. El costo total del broker no se usa: no viene escalado.
+                decimal? value = p.Quantity is { } qty && price is { } px ? qty * px / PriceScale(p, qty, px) : null;
                 response.Positions.Add(new IolPositionView
                 {
+                    Account = country,
                     Symbol = p.Instrument?.Symbol ?? "",
                     Description = p.Instrument?.Name,
                     Type = p.Instrument?.Type ?? p.Instrument?.AssetClass,
@@ -90,6 +94,20 @@ namespace DataFeed.Application.App.Brokers
                     PnlPct = p.ProfitLoss?.UnrealizedPlPercent,
                 });
             }
+        }
+
+        private static decimal PriceScale(IolPosition p, decimal qty, decimal price)
+        {
+            var avg = p.CostBasis?.AverageEntryPrice;
+            var pnl = p.ProfitLoss?.UnrealizedPl;
+            if (avg is { } a && pnl is { } l && l != 0)
+            {
+                var ratio = qty * (price - a) / l;
+                if (Math.Abs(ratio - 100m) <= 1m) return 100m;
+                if (Math.Abs(ratio - 1m) <= 0.01m) return 1m;
+            }
+            var type = p.Instrument?.Type?.ToUpperInvariant() ?? "";
+            return type.Contains("PUBLICO") || type.Contains("LETRA") || type.Contains("OBLIGACION") ? 100m : 1m;
         }
 
         /// <summary>ARS / USD tal cual vengan; «peso_Argentino» y «dolar_Estadounidense» (nombres largos) se normalizan.</summary>

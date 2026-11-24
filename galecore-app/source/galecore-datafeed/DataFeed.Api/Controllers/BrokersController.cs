@@ -168,6 +168,15 @@ namespace DataFeed.Controllers
             }
         }
 
+        // Nunca 502: cada broker informa su propio estado dentro de la respuesta.
+        [Tags("Data.Account")]
+        [HttpGet("/Data/Portfolio/Consolidated")]
+        public async Task<IActionResult> Consolidated(CancellationToken ct)
+        {
+            if (_currentUser.UserId is not { } userId) return Unauthorized();
+            return Ok(await _service.GetConsolidatedAsync(userId, ct));
+        }
+
         private ObjectResult Upstream(UpstreamSourceException ex) =>
             StatusCode(502, new ApiErrorResponse { Error = ex.Message, Code = UpstreamSourceException.Code });
 

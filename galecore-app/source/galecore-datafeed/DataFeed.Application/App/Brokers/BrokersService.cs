@@ -1,5 +1,9 @@
 using System.Text.Json;
 using DataFeed.Application.App.Connections;
+using DataFeed.Application.Data.Argentina;
+using DataFeed.Application.Data.Tastytrade.AccountBalances;
+using DataFeed.Application.Data.Tastytrade.AccountPositions;
+using DataFeed.Infrastructure.Providers;
 using DataFeed.Infrastructure.Providers.Ibkr;
 using DataFeed.Infrastructure.Providers.Iol;
 using DataFeed.Infrastructure.Providers.Tastytrade;
@@ -61,11 +65,19 @@ namespace DataFeed.Application.App.Brokers
         private readonly Func<CancellationToken, Task>? _tastytradeProbe;
         private readonly ILogger<BrokersService> _logger;
         private readonly Func<DateTime> _now;
+        private readonly Func<CancellationToken, Task<(AccountBalancesResponse Balances, AccountPositionsResponse Positions)>>? _tastytradePortfolio;
+        private readonly Func<CancellationToken, Task<DolarQuote?>>? _mep;
 
         /// <param name="tastytradeProbe">Lee los balances de Tastytrade del usuario actual (el mismo handler de Data/Tastytrade/Account/Balances).</param>
+        /// <param name="tastytradePortfolio">Balances y posiciones de Tastytrade del usuario actual (cartera consolidada).</param>
+        /// <param name="mep">Cotización MEP (casa «bolsa» de DolarAPI) para pasar pesos a dólares; null si no hay.</param>
         public BrokersService(IBrokerStore? store, ITokenProtector protector, IIolClient iol, IIbkrFlexClient ibkr,
-            Func<CancellationToken, Task>? tastytradeProbe, ILogger<BrokersService> logger, Func<DateTime>? now = null)
+            Func<CancellationToken, Task>? tastytradeProbe, ILogger<BrokersService> logger, Func<DateTime>? now = null,
+            Func<CancellationToken, Task<(AccountBalancesResponse Balances, AccountPositionsResponse Positions)>>? tastytradePortfolio = null,
+            Func<CancellationToken, Task<DolarQuote?>>? mep = null)
         {
+            _tastytradePortfolio = tastytradePortfolio;
+            _mep = mep;
             _store = store;
             _protector = protector;
             _iol = iol;
@@ -338,11 +350,30 @@ namespace DataFeed.Application.App.Brokers
         {
             var credentials = await LoadIolCredentialsAsync(userId, ct) ?? throw new BrokerAccountNotLinkedException();
             var asOf = _now();
-            var arBalances = await _iol.GetBalancesAsync(userId, credentials, "AR", ct);
-            var usBalances = await _iol.GetBalancesAsync(userId, credentials, "US", ct);
-            var arPositions = await _iol.GetPositionsAsync(userId, credentials, "AR", ct);
-            var usPositions = await _iol.GetPositionsAsync(userId, credentials, "US", ct);
-            return IolPortfolioMapper.Map(asOf, arBalances, usBalances, arPositions, usPositions);
+            // Cada cuenta por separado: si una cae se sigue con la otra y queda un aviso (si caen las dos, sale la primera falla).
+            var warnings = new List<string>();
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo? first = null;
+            async Task<(IolBalances, IolPositions)?> Account(string country)
+            {
+                try
+                {
+                    var balances = await _iol.GetBalancesAsync(userId, credentials, country, ct);
+                    var positions = await _iol.GetPositionsAsync(userId, credentials, country, ct);
+                    return (balances, positions);
+                }
+                catch (UpstreamSourceException ex)
+                {
+                    first ??= System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+                    warnings.Add($"Cuenta {country} de IOL: {ex.Message}");
+                    return null;
+                }
+            }
+            var ar = await Account("AR");
+            var us = await Account("US");
+            if (ar == null && us == null) first!.Throw();
+            var response = IolPortfolioMapper.Map(asOf, ar?.Item1, us?.Item1, ar?.Item2, us?.Item2);
+            response.Warnings.AddRange(warnings);
+            return response;
         }
 
         /// <summary>Null si no hay credencial guardada (o no se puede leer: se trata como no vinculada).</summary>
@@ -362,6 +393,91 @@ namespace DataFeed.Application.App.Brokers
             {
                 _logger.LogWarning("Brokers: no se pudo descifrar la credencial de IOL de {UserId}.", userId);
                 return null;
+            }
+        }
+
+        // ── cartera consolidada ───────────────────────────────────────────────────────────────────────────────
+
+        private sealed record Fetch(BrokerView Broker, string Status, string? Message, Func<FxView?, SliceData>? Convert);
+
+        private const string MissingMessage = "Conectalo en Configuración › Conexiones › Brokers.";
+        private const string InvalidMessage = "Revisá la credencial en Configuración › Conexiones › Brokers.";
+
+        /// <summary>
+        /// Cartera de todos los brokers conectados e incluidos, en dólares. Los brokers y el MEP se piden en paralelo y un
+        /// broker caído nunca tapa a los otros: sale con su estado y su motivo en <see cref="ConsolidatedPortfolioResponse.Brokers"/>.
+        /// </summary>
+        public async Task<ConsolidatedPortfolioResponse> GetConsolidatedAsync(Guid userId, CancellationToken ct)
+        {
+            var brokers = await ListAsync(userId, ct);
+            var mepTask = FetchMepAsync(ct);
+            var fetches = await Task.WhenAll(brokers.Select(b => FetchBrokerAsync(userId, b, ct)));
+            var fx = await mepTask;
+            var slices = fetches.Select(f => f.Convert != null
+                ? f.Convert(fx)
+                : PortfolioConsolidator.Empty(f.Broker, f.Status, f.Message));
+            return PortfolioConsolidator.Combine(_now(), fx, slices);
+        }
+
+        private async Task<FxView?> FetchMepAsync(CancellationToken ct)
+        {
+            if (_mep == null) return null;
+            try
+            {
+                var quote = await _mep(ct);
+                return quote?.Venta is > 0
+                    ? new FxView { Rate = quote.Venta.Value, AsOf = string.IsNullOrEmpty(quote.FechaActualizacion) ? null : quote.FechaActualizacion }
+                    : null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning("Brokers: no se pudo leer el MEP ({Type}).", ex.GetType().Name);
+                return null;
+            }
+        }
+
+        private async Task<Fetch> FetchBrokerAsync(Guid userId, BrokerView broker, CancellationToken ct)
+        {
+            if (!broker.Include) return new Fetch(broker, "excluded", null, null);
+            if (broker.Status != "connected")
+            {
+                return broker.Status switch
+                {
+                    "missing" => new Fetch(broker, "missing", MissingMessage, null),
+                    "invalid" => new Fetch(broker, "invalid", InvalidMessage, null),
+                    _ => new Fetch(broker, "soon", $"{broker.Name} todavía no se puede conectar.", null),
+                };
+            }
+
+            try
+            {
+                switch (broker.Id)
+                {
+                    case Tastytrade:
+                        if (_tastytradePortfolio == null) return new Fetch(broker, "error", "No disponible en este servidor.", null);
+                        var (balances, positions) = await _tastytradePortfolio(ct);
+                        return new Fetch(broker, "ok", null, fx => PortfolioConsolidator.FromTastytrade(broker, balances, positions, fx));
+                    case Iol:
+                        var iol = await GetIolPortfolioAsync(userId, ct);
+                        return new Fetch(broker, "ok", null, fx => PortfolioConsolidator.FromIol(broker, iol, fx));
+                    case Ibkr:
+                        var ibkr = await GetIbkrPortfolioAsync(userId, ct);
+                        return new Fetch(broker, "ok", null, fx => PortfolioConsolidator.FromIbkr(broker, ibkr, fx));
+                    default:
+                        return new Fetch(broker, "soon", $"{broker.Name} todavía no se puede conectar.", null);
+                }
+            }
+            catch (BrokerAccountNotLinkedException) { return new Fetch(broker, "missing", MissingMessage, null); }
+            catch (Exception ex) when (ex is IolCredentialInvalidException or IbkrCredentialInvalidException or BrokerCredentialInvalidException)
+            {
+                return new Fetch(broker, "invalid", InvalidMessage, null);
+            }
+            catch (UpstreamSourceException ex) { return new Fetch(broker, "error", ex.Message, null); }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                // Sólo el tipo: nunca el mensaje, que podría arrastrar datos de la credencial.
+                _logger.LogWarning("Brokers: {Id} no respondió en la cartera consolidada ({Type}).", broker.Id, ex.GetType().Name);
+                return new Fetch(broker, "error", "No respondió.", null);
             }
         }
 
