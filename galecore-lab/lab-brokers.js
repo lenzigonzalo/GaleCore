@@ -120,7 +120,7 @@ function probeClaude({ local, binary, env, spawnProcess = spawn, timeout = 60000
   return new Promise(done => {
     let buf = '', ok = false;
     const proc = spawnProcess(binary, ['-p', 'ok', '--output-format', 'stream-json', '--verbose', '--model', 'haiku',
-      '--setting-sources', 'project,local'], { cwd: local, env, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      '--setting-sources', 'user,project,local'], { cwd: local, env, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     const end = () => { clearTimeout(timer); try { proc.kill(); } catch { /* ya terminó */ } done(ok); };
     const timer = setTimeout(end, timeout);
     proc.on('error', end); proc.on('close', end);

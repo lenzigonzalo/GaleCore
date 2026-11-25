@@ -14,6 +14,10 @@ const SKIP_DIRS = new Set(['.git', '.scratch', 'node_modules', '__pycache__']);
 const SKIP_FILES = new Set([SYNC_FILE, SYNC_FILE + '.tmp', '.sync.lock']);
 const MAX_BYTES = 2 * 1024 * 1024, MAX_PATH = 400;
 const syncable = rel => rel.length <= MAX_PATH && !/[\u0000-\u001f\\:]/.test(rel);
+// El crudo sólo va a la consola y sin URLs con query, tokens ni rutas del usuario.
+const redactRaw = t => String(t).replace(/https?:\/\/[^\s"')]+/gi, u => u.split(/[?#]/)[0]).replace(/\b(sk|pk|rk)-[A-Za-z0-9_-]{8,}/g, '[token]')
+  .replace(/\bBearer\s+[A-Za-z0-9._~+\/=-]+/gi, 'Bearer [token]').replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[token]')
+  .replace(/[A-Za-z]:\\[^\s"']+|\/(?:home|Users|srv|root)\/[^\s"']+/g, '[ruta]');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 
 // La cache de sesión del CLI (galecore_space.session_file): %LOCALAPPDATA%/GaleCore/session.json.
@@ -103,10 +107,10 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
     if (/is unreadable|not overwritten/i.test(m)) return 'el registro de sincronización de esta copia está dañado';
     if (/has no sharedProjectId|is not shared|no \.sync\.json/i.test(m)) return 'esta copia perdió el vínculo con el proyecto compartido';
     if (/sincronizando|already syncing/i.test(m)) return 'ya se está sincronizando';
-    if (/^No se pudo aplicar/.test(m)) return m;
+    if (/^No se pudo aplicar [^\r\n]{1,200}; queda pendiente( para reintentar)?\.$/.test(m)) return m;   // sólo lo arma shared_projects.py con la ruta del archivo
     if (/no está disponible para este usuario/i.test(m)) return 'el proyecto no está disponible para este usuario y entorno';
     // El texto crudo (a menudo en inglés o técnico) no se muestra: sólo queda en la consola del Lab.
-    console.error('[lab] sync: error sin traducir: ' + m.slice(0, 300));
+    console.error('[lab] sync: error sin traducir: ' + redactRaw(m).slice(0, 300));
     return 'no se pudo sincronizar';
   }
   // Qué puede hacer el usuario con un error: quitar la copia sin acceso, compartir de nuevo acá, o reintentar.

@@ -626,11 +626,25 @@ test('BF-0022: engineFailure traduce el error del motor a castellano con qué ha
  assert.match(engineFailure('claude','MCP server mcp__claude_ai_Gmail__send_message needs authorization'),/^Gmail no está autorizado en tu cuenta de Claude/);
  assert.match(engineFailure('codex','connector unauthorized'),/^Un conector no está autorizado/);
  assert.equal(engineFailure('codex','Not logged in. Please run codex login'),'Tu sesión de Codex venció: reconectala en Configuración › Proveedores de IA.');
- assert.equal(engineFailure('claude','401 invalid token'),'Tu sesión de Claude venció: reconectala en Configuración › Proveedores de IA.');
+ assert.equal(engineFailure('claude','API Error: 401 invalid token'),'Tu sesión de Claude venció: reconectala en Configuración › Proveedores de IA.');
  assert.match(engineFailure('claude','You have hit your usage limit'),/límite de uso de Claude/);
- const largo=engineFailure('codex','INFO arrancó\nERROR '+'x'.repeat(400));
- assert.match(largo,/^El motor se cortó: x+….? Reintentá; si se repite, revisá Configuración › Conectores\.$|^El motor se cortó: .{1,161}\. Reintentá/);
- assert.match(engineFailure('codex','WARN algo\nERROR sandbox exploded'),/^El motor se cortó: sandbox exploded\. Reintentá/);
- assert.match(engineFailure('codex',''),/sin dar detalle/);
- assert.doesNotMatch(engineFailure('codex','algo'),/terminal/);
+ const generico='El motor se cortó por un error inesperado. Reintentá; si se repite, revisá Configuración › Conectores.';
+ const mudo=console.error;const logs=[];console.error=(...a)=>logs.push(a.join(' '));
+ try{
+  // nunca el texto crudo: ni URL con query, ni token, ni el JSON de un API Error
+  for(const crudo of ['ERROR sandbox exploded','x'.repeat(400),'fetch https://api.x.com/v1?key=SECRET123 failed','Authorization: Bearer abc.def.ghi-123 rejected','sk-proj-ABCDEFGHIJKLMNOP1234 invalid','API Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"},"request_id":"req_011"}']){
+   const out=engineFailure('codex',crudo);
+   assert.equal(out,generico,crudo.slice(0,30));
+  }
+  // números sueltos no son códigos HTTP
+  for(const n of ['panicked at src/lib.rs:401:13','line 429 of 500','pid 401 exited','error at 429']) assert.equal(engineFailure('claude',n),generico,n);
+  // con contexto sí
+  assert.match(engineFailure('claude','API Error: 429 rate limited'),/límite de uso/);
+  assert.match(engineFailure('codex','request failed with status 401'),/sesión de Codex venció/);
+  assert.match(engineFailure('codex','HTTP 403 from app connector gmail'),/no está autorizado/);
+  assert.match(engineFailure('codex',''),/error inesperado/);
+  // el log de consola va redactado
+  assert.ok(logs.some(l=>/\[token\]/.test(l)));
+  assert.ok(!logs.some(l=>/SECRET123|abc\.def|sk-proj/.test(l)));
+ }finally{console.error=mudo;}
 });

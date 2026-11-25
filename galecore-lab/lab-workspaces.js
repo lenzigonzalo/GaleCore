@@ -142,32 +142,35 @@ function stepDetail(tool,input){
 function pushStep(chat,step){const steps=chat.steps||(chat.steps=[]);const last=steps.at(-1);if(last&&last.label===step.label&&last.detail===step.detail)return;steps.push({...step,at:new Date().toISOString()});if(steps.length>14)steps.splice(0,steps.length-14);}
 function setActivity(chat,label,detail=''){chat.activity=label;if(!label||label==='Pensando'||(label==='Trabajando'&&!detail))return;pushStep(chat,{label,detail});}
 function setNote(chat,text){const t=String(text||'').replace(/\s+/g,' ').trim();if(!t)return;pushStep(chat,{label:t.length>160?t.slice(0,157)+'…':t,detail:'',kind:'note'});}
+function redact(raw){
+  return String(raw||'').replace(/\u001b\[[0-9;]*m/g,'').replace(/https?:\/\/[^\s"')]+/gi,u=>u.split(/[?#]/)[0])
+    .replace(/\b(sk|pk|rk)-[A-Za-z0-9_-]{8,}/g,'[token]').replace(/\bBearer\s+[A-Za-z0-9._~+\/=-]+/gi,'Bearer [token]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_.-]+/g,'[token]').replace(/\b[A-Za-z0-9_-]{32,}\b/g,'[token]')
+    .replace(/[A-Za-z]:\\[^\s"']+|\/(?:home|Users|srv|root)\/[^\s"']+/g,'[ruta]').trim();
+}
 // BF-0022: el motor salió con error. Traduce lo que dijo (stderr o evento de error del stream) a un mensaje en castellano con qué
-// hacer; nunca el texto crudo salvo la primera línea útil del resto. Pura y sin E/S.
+// hacer. Nunca muestra el texto del motor: lo que no reconoce sale genérico y el detalle (redactado) va sólo a la consola. Pura salvo ese log.
 const KNOWN_APPS=[[/interactive_brokers_ibkr|ibkr|interactive brokers/i,'IBKR'],[/iol_invertironline|invertironline|\bIoL\b/i,'IOL']];
 function connectorName(text){
   for(const [re,name] of KNOWN_APPS)if(re.test(text))return name;
   const m=/mcp__(?:claude_ai_)?([A-Za-z0-9]+(?:_[A-Za-z0-9]+)*?)__/.exec(text)||/\b(?:app|connector|conector|server)\s*[`'"“]([^`'"”]{2,40})[`'"”]/i.exec(text);
   return m?m[1].replace(/_/g,' ').trim():'';
 }
+const HTTP=code=>new RegExp('(?:HTTP|status|code|error)[\\s:=]{0,3}'+code+'\\b|\\b'+code+'\\s+(?:Too Many|Unauthorized|Forbidden)','i');
 function engineFailure(provider,raw){
   const name=provider==='codex'?'Codex':'Claude',account=provider==='codex'?'ChatGPT':'Claude';
   const text=String(raw||'').replace(/\u001b\[[0-9;]*m/g,'').trim();
-  if(/usage limit|hit your .*limit|limit reached|rate.?limit|quota|too many requests|\b429\b/i.test(text))return 'Llegaste al límite de uso de '+name+'. Probá más tarde'+(provider==='codex'?' o seguí con Claude.':' o seguí con Codex.');
-  const auth=/not (yet )?(authorized|connected|linked|accessible)|unauthori[sz]ed|needs?[ -]auth|authori[sz]ation (required|failed|needed)|requires? (auth|authori[sz]ation)|auth(entication)? (required|failed)|isAccessible|forbidden|\b40[13]\b/i;
+  if(/usage limit|hit your .*limit|limit reached|rate.?limit|quota|too many requests/i.test(text)||HTTP(429).test(text))return 'Llegaste al límite de uso de '+name+'. Probá más tarde'+(provider==='codex'?' o seguí con Claude.':' o seguí con Codex.');
+  const connectorAuth=/not (yet )?(authorized|connected|linked|accessible)|unauthori[sz]ed|needs?[ -]auth|authori[sz]ation (required|failed|needed)|requires? (auth|authori[sz]ation)|auth(entication)? (required|failed)|isAccessible|forbidden/i;
   const mentionsConnector=/\b(apps?|connectors?|conectores?|mcp)\b|mcp__|interactive_brokers|iol_invertironline/i;
-  if(auth.test(text)&&mentionsConnector.test(text)){
+  if((connectorAuth.test(text)||HTTP('40[13]').test(text))&&mentionsConnector.test(text)){
     const c=connectorName(text);
     return (c?c+' no está autorizado':'Un conector no está autorizado')+' en tu cuenta de '+account+': reconectalo en Configuración › Conectores o apagalo.';
   }
-  if(/not logged in|log ?in required|please (log ?in|sign ?in|run .*login)|sign in|login (expired|required)|session (expired|invalid)|token (expired|invalid|revoked)|refresh.?token|invalid (api key|credentials)|unauthori[sz]ed|authentication (failed|required)|\b401\b/i.test(text))
+  if(/not logged in|log ?in required|please (log ?in|sign ?in|run .*login)|login (expired|required)|session (expired|invalid)|token (expired|invalid|revoked)|refresh.?token|invalid (api key|credentials)|unauthori[sz]ed|authentication (failed|required)/i.test(text)||HTTP(401).test(text))
     return 'Tu sesión de '+name+' venció: reconectala en Configuración › Proveedores de IA.';
-  const lines=text.split(/\r?\n/).map(l=>l.replace(/^\s*\d{4}-\d\d-\d\dT[\d:.]+Z?\s+/,'').replace(/^\s*(WARN|INFO|DEBUG)\s+/,'').trim()).filter(l=>l&&!/^(at |\{?\s*$)/.test(l));
-  let line=lines.find(l=>l.startsWith('ERROR '))?.slice(6)||lines.find(l=>/error|fail|denied|refused|invalid|cannot|could not|unable/i.test(l))||lines[0]||'';
-  try{const j=JSON.parse(line);line=String(j.error?.message||j.message||j.error||line);}catch{ /* no era JSON */ }
-  line=line.replace(/\s+/g,' ').replace(/[.\s]+$/,'');
-  if(!line)return 'El motor se cortó sin dar detalle. Reintentá; si se repite, revisá Configuración › Conectores.';
-  return 'El motor se cortó: '+(line.length>160?line.slice(0,157)+'…':line)+'. Reintentá; si se repite, revisá Configuración › Conectores.';
+  if(text)console.error('[lab] error del motor sin traducir ('+provider+'): '+redact(text).slice(0,300));
+  return 'El motor se cortó por un error inesperado. Reintentá; si se repite, revisá Configuración › Conectores.';
 }
 function limitText(resetsAt){
   if(typeof resetsAt !== 'number') return 'Se terminó tu límite de uso de Claude. Probá más tarde o seguí con Codex.';
@@ -552,7 +555,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const box=mode==='auto'?[]:chat.nativeId?['-c','sandbox_mode='+JSON.stringify(mode)]:['--sandbox',mode];
       return {file,args:chat.nativeId?[...args,...box,'resume',chat.nativeId,'-']:[...args,...box,'-C',p.dir,'-']};
     }
-    // Claude: sin la configuración del usuario; los conectores de claude.ai se cargan y se niegan los apagados en Configuración (WS-0091); los permisos
+    // Claude: con la configuración propia del Lab (CLAUDE_CONFIG_DIR, fuente `user`: sin los plugins ni hooks de la PC); los conectores de claude.ai se cargan y se niegan los apagados en Configuración (WS-0091); los permisos
     // (web después de GaleCore, sin tocar el código) salen de knowledge/.claude/settings.json. Sonnet/medium por defecto
     // (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
     const broker=claudeConnectors(local);
@@ -566,7 +569,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // Los modos son los de PERMISSION_MODES: nunca bypassPermissions.
     const args=['-p',...modelFlags(chat),'--input-format','stream-json','--output-format','stream-json','--verbose','--append-system-prompt-file',file,
       '--permission-prompt-tool','stdio','--permission-mode',mode,
-      '--setting-sources','project,local','--settings',settingsFile];
+      '--setting-sources','user,project,local','--settings',settingsFile];
     return {file,args:chat.nativeId?[...args,'--resume',chat.nativeId]:args};
   }
   function send(chat, words, options={}){

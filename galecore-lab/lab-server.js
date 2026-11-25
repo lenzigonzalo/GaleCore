@@ -19,6 +19,11 @@ const PORT = Number(process.env.GALECORE_LAB_PORT || 8771);
 // Estado del Lab (sesiones, chats). El Lab de desarrollo (galecore_dev.py lab) usa otra carpeta para no mezclarse con el de producción.
 const LOCAL = process.env.GALECORE_LAB_LOCAL ? path.resolve(process.env.GALECORE_LAB_LOCAL) : path.join(__dirname, '.local');
 const STORE = path.join(LOCAL, 'lab-sessions.json');
+// BF-0022: Claude corre con la configuración PROPIA del Lab (CLAUDE_CONFIG_DIR), no con la personal de la PC. Los conectores de claude.ai
+// sólo cargan con la fuente de settings `user`, que así es esta carpeta (sin plugins ni hooks del usuario). No se copian credenciales.
+const CLAUDE_HOME = process.env.GALECORE_LAB_CLAUDE_CONFIG_DIR ? path.resolve(process.env.GALECORE_LAB_CLAUDE_CONFIG_DIR) : path.join(LOCAL, 'claude');
+fs.mkdirSync(CLAUDE_HOME, { recursive: true });
+process.env.CLAUDE_CONFIG_DIR = CLAUDE_HOME;   // lo heredan los turnos, la sonda, el login/estado (provider-auth) y claudeLastUsage
 const ORIGINS = new Set((process.env.GALECORE_LAB_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039,https://galecore.vercel.app').split(',').map(s => s.trim()).filter(Boolean));
 const TOKEN = crypto.randomBytes(32).toString('hex');
 const sessions = new Map();
@@ -111,7 +116,7 @@ const instructions = project => 'Proyecto: ' + project.id + '.';
 function environment() {
   const venvScripts = path.join(ROOT, '.venv', 'Scripts');
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor',
-    PYTHONPATH: path.join(ROOT, 'galecore-ai', 'src'), GALECORE_KNOWLEDGE_DIR: KB };
+    PYTHONPATH: path.join(ROOT, 'galecore-ai', 'src'), GALECORE_KNOWLEDGE_DIR: KB, CLAUDE_CONFIG_DIR: CLAUDE_HOME };
   if (fs.existsSync(venvScripts)) env.PATH = venvScripts + path.delimiter + (env.PATH || '');
   // BF-0021: el CLI sólo acepta localhost o GALECORE_ALLOWED_BASE_URL; el Lab declara el host que usa, sin depender de
   // que cada .env lo repita (BF-0018 movió la base al host público y el chat quedó bloqueado).
@@ -150,7 +155,7 @@ function newSession(body) {
     // WS-0028: mismo entorno que el chat (contexto de producto de knowledge/, sin desarrollo ni ~/.claude).
     args = ['--model', process.env.GALECORE_LAB_MODEL || 'sonnet', '--effort', process.env.GALECORE_LAB_EFFORT || 'medium',
       '--append-system-prompt', 'Proyecto: ' + project.id + '.', '--strict-mcp-config',
-      '--setting-sources', 'project,local', '--settings', path.join(KB, '.claude', 'settings.json')];
+      '--setting-sources', 'user,project,local', '--settings', path.join(KB, '.claude', 'settings.json')];
     if (previous || body.history) args.push('--resume', ...(previous?.nativeId ? [previous.nativeId] : []));
     else args.push('--session-id', s.nativeId);
   }

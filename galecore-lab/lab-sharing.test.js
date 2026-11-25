@@ -346,6 +346,8 @@ test('los errores del sync nunca salen crudos: se traducen, con la acción que c
     ['El proyecto está sincronizando; volvé a intentar.', /ya se está sincronizando/, 'retry'],
     ['No se pudo aplicar notas.md; queda pendiente para reintentar.', /^No se pudo aplicar notas\.md/, 'retry'],
     ['Traceback: KeyError xyz', /^no se pudo sincronizar$/, 'retry'],
+    ['No se pudo aplicar /home/x/secreto; token sk-abcdefgh12345 y más', /^no se pudo sincronizar$/, 'retry'],
+    ['HTTP 500 {"error":"boom"} https://api.x.com/y?key=SECRET', /^no se pudo sincronizar$/, 'retry'],
   ];
   const consola = console.error; console.error = () => {}; t.after(() => { console.error = consola; });
   for (const [raw, expected, action] of casos) {
@@ -353,7 +355,7 @@ test('los errores del sync nunca salen crudos: se traducen, con la acción que c
     await assert.rejects(route(service, 'POST', '/workspaces/' + p.id + '/sync'));
     const r = await row();
     assert.match(r.notice, expected, raw); assert.equal(r.action, action, raw);
-    assert.doesNotMatch(r.notice, /unreadable|sharedProjectId|Traceback|KeyError/);
+    assert.doesNotMatch(r.notice, /unreadable|sharedProjectId|Traceback|KeyError|SECRET|sk-abc/);
   }
 });
 
