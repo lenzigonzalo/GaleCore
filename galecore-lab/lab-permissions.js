@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Reglas de permisos de Claude Code (WS-0083, Configuración → Permisos). Las del producto viven en knowledge/.claude/settings.json
-// y son fijas; las del usuario se guardan en <local>/claude-permissions.json (por PC, no se versiona). `--setting-sources project,local`
+// y son fijas; las del usuario se guardan en <local>/claude-permissions.json (por PC, no se versiona). `--setting-sources user,project,local`
 // busca .claude/ en la carpeta del proyecto, no en knowledge/, así que el Lab arma por turno un único --settings con las dos.
 const LISTS = ['allow', 'ask', 'deny'];
 const RULE = /^[A-Za-z_][\w.-]*(\(.+\))?$/;   // Herramienta  o  Herramienta(patrón)

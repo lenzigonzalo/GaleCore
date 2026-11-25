@@ -192,3 +192,28 @@
 .conn-table .conn-edit { flex-wrap: nowrap; white-space: nowrap; }
 .perm-menu span { font-weight: 400; }
 .settings-agent-account.perm > p { font-size: 14px; margin: 0; color: var(--text-secondary); }
+/* Conectores como en claude.ai (BF-0022): fila con Configurar y Reconectar; detalle con permisos por herramienta. */
+.connector-table .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.conn-open { padding: 0; border: 0; background: none; color: var(--text-primary); font: inherit; font-weight: 500; cursor: pointer; text-align: left; }
+.conn-open:hover { text-decoration: underline; }
+.conn-actions { display: flex; gap: 8px; justify-content: flex-end; white-space: nowrap; }
+.conn-actions .btn, .conn-head .btn { padding: 3px 12px; font-size: 13px; text-decoration: none; }
+.conn-reconnect.is-urgent { border-color: var(--accent); color: var(--accent); }
+.conn-detail { gap: 14px; }
+.conn-back { align-self: flex-start; justify-self: start; text-align: left; width: fit-content; padding: 0; border: 0; background: none; color: var(--text-secondary); font-size: 14px; cursor: pointer; }
+.conn-back:hover { color: var(--text-primary); }
+.conn-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 16px; }
+.conn-head .conn-state { font-size: 14px; cursor: default; }
+.conn-head .pref-switch { margin-left: auto; }
+.conn-section { margin: 4px 0 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.conn-group { border: 1px solid var(--border-dark); border-radius: 10px; overflow: hidden; }
+.conn-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: var(--bg-tertiary); font-size: 14px; font-weight: 500; color: var(--text-primary); }
+.conn-group-head em { font-style: normal; color: var(--text-muted); font-weight: 400; }
+.conn-tools { list-style: none; margin: 0; padding: 0; }
+.conn-tools li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; border-top: 1px solid var(--border-dark); font-size: 14px; color: var(--text-primary); }
+.conn-select { appearance: none; -webkit-appearance: none; color-scheme: dark; flex-shrink: 0; min-width: 190px; padding: 6px 30px 6px 10px; border: 1px solid var(--border); border-radius: 8px; font: 13px var(--font-sans); color: var(--text-primary); cursor: pointer;
+  background: var(--bg-primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a9a9a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; }
+.conn-select:hover:not(:disabled) { border-color: var(--border-light); }
+.conn-select:disabled { opacity: .55; cursor: default; }
+.conn-select option { background: var(--bg-secondary); color: var(--text-primary); }
+@media (max-width: 700px) { .conn-select { min-width: 150px; } .conn-actions { flex-direction: column; } }

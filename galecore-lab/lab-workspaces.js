@@ -6,7 +6,7 @@ const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const { createSharing } = require('./lab-sharing');
-const { codexConnectors, claudeConnectors, recordClaudeInit, listConnectors, knownConnector, setConnector } = require('./lab-brokers');
+const { codexConnectors, claudeConnectors, recordClaudeInit, listConnectors, knownConnector, setConnector, setToolMode, allowAlways, describeMcp } = require('./lab-brokers');
 const { authStatus, createCodexLogin, createClaudeLogin } = require('./provider-auth');
 const { permissionRules, saveUserRules, mergedSettings } = require('./lab-permissions');
 
@@ -142,6 +142,36 @@ function stepDetail(tool,input){
 function pushStep(chat,step){const steps=chat.steps||(chat.steps=[]);const last=steps.at(-1);if(last&&last.label===step.label&&last.detail===step.detail)return;steps.push({...step,at:new Date().toISOString()});if(steps.length>14)steps.splice(0,steps.length-14);}
 function setActivity(chat,label,detail=''){chat.activity=label;if(!label||label==='Pensando'||(label==='Trabajando'&&!detail))return;pushStep(chat,{label,detail});}
 function setNote(chat,text){const t=String(text||'').replace(/\s+/g,' ').trim();if(!t)return;pushStep(chat,{label:t.length>160?t.slice(0,157)+'…':t,detail:'',kind:'note'});}
+function redact(raw){
+  return String(raw||'').replace(/\u001b\[[0-9;]*m/g,'').replace(/https?:\/\/[^\s"')]+/gi,u=>u.split(/[?#]/)[0])
+    .replace(/\b(sk|pk|rk)-[A-Za-z0-9_-]{8,}/g,'[token]').replace(/\bBearer\s+[A-Za-z0-9._~+\/=-]+/gi,'Bearer [token]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_.-]+/g,'[token]').replace(/\b[A-Za-z0-9_-]{32,}\b/g,'[token]')
+    .replace(/[A-Za-z]:\\[^\s"']+|\/(?:home|Users|srv|root)\/[^\s"']+/g,'[ruta]').trim();
+}
+// BF-0022: el motor salió con error. Traduce lo que dijo (stderr o evento de error del stream) a un mensaje en castellano con qué
+// hacer. Nunca muestra el texto del motor: lo que no reconoce sale genérico y el detalle (redactado) va sólo a la consola. Pura salvo ese log.
+const KNOWN_APPS=[[/interactive_brokers_ibkr|ibkr|interactive brokers/i,'IBKR'],[/iol_invertironline|invertironline|\bIoL\b/i,'IOL']];
+function connectorName(text){
+  for(const [re,name] of KNOWN_APPS)if(re.test(text))return name;
+  const m=/mcp__(?:claude_ai_)?([A-Za-z0-9]+(?:_[A-Za-z0-9]+)*?)__/.exec(text)||/\b(?:app|connector|conector|server)\s*[`'"“]([^`'"”]{2,40})[`'"”]/i.exec(text);
+  return m?m[1].replace(/_/g,' ').trim():'';
+}
+const HTTP=code=>new RegExp('(?:HTTP|status|code|error)[\\s:=]{0,3}'+code+'\\b|\\b'+code+'\\s+(?:Too Many|Unauthorized|Forbidden)','i');
+function engineFailure(provider,raw){
+  const name=provider==='codex'?'Codex':'Claude',account=provider==='codex'?'ChatGPT':'Claude';
+  const text=String(raw||'').replace(/\u001b\[[0-9;]*m/g,'').trim();
+  if(/usage limit|hit your .*limit|limit reached|rate.?limit|quota|too many requests/i.test(text)||HTTP(429).test(text))return 'Llegaste al límite de uso de '+name+'. Probá más tarde'+(provider==='codex'?' o seguí con Claude.':' o seguí con Codex.');
+  const connectorAuth=/not (yet )?(authorized|connected|linked|accessible)|unauthori[sz]ed|needs?[ -]auth|authori[sz]ation (required|failed|needed)|requires? (auth|authori[sz]ation)|auth(entication)? (required|failed)|isAccessible|forbidden/i;
+  const mentionsConnector=/\b(apps?|connectors?|conectores?|mcp)\b|mcp__|interactive_brokers|iol_invertironline/i;
+  if((connectorAuth.test(text)||HTTP('40[13]').test(text))&&mentionsConnector.test(text)){
+    const c=connectorName(text);
+    return (c?c+' no está autorizado':'Un conector no está autorizado')+' en tu cuenta de '+account+': reconectalo en Configuración › Conectores o apagalo.';
+  }
+  if(/not logged in|log ?in required|please (log ?in|sign ?in|run .*login)|login (expired|required)|session (expired|invalid)|token (expired|invalid|revoked)|refresh.?token|invalid (api key|credentials)|unauthori[sz]ed|authentication (failed|required)/i.test(text)||HTTP(401).test(text))
+    return 'Tu sesión de '+name+' venció: reconectala en Configuración › Proveedores de IA.';
+  if(text)console.error('[lab] error del motor sin traducir ('+provider+'): '+redact(text).slice(0,300));
+  return 'El motor se cortó por un error inesperado. Reintentá; si se repite, revisá Configuración › Conectores.';
+}
 function limitText(resetsAt){
   if(typeof resetsAt !== 'number') return 'Se terminó tu límite de uso de Claude. Probá más tarde o seguí con Codex.';
   const at = new Date(resetsAt * 1000), today = at.toDateString() === new Date().toDateString();
@@ -269,9 +299,12 @@ function consumeEvent(chat, event, provider) {
     if(event.type === 'item.started') { const input=event.item?.type === 'command_execution' ? {command:event.item.command} : event.item?.type === 'file_change' ? {file_path:(event.item.changes||[])[0]?.path} : null;
       setActivity(chat, input ? describeStep(input.command ? 'Bash' : 'Write', input) : 'Pensando', input ? stepDetail('Bash', input) : ''); }
     if(event.type === 'item.completed' && event.item?.type === 'reasoning') setNote(chat, event.item.text);
+    // BF-0022: una app de ChatGPT sin autorizar no corta el turno: la herramienta vuelve con connector_auth_failure. Se avisa cuál es.
+    const authFail=event.type === 'item.completed' && event.item?.type === 'mcp_tool_call' ? event.item.result?._meta?._codex_apps?.connector_auth_failure : null;
+    if(authFail?.is_auth_failure) chat.notice=(authFail.connector_name||'Un conector')+' no está autorizado en tu cuenta de ChatGPT: reconectalo en Configuración › Conectores o apagalo.';
     if(event.type === 'turn.completed' && event.usage) recordUsage(chat,{input:num(event.usage.input_tokens)||0,cached:num(event.usage.cached_input_tokens)||0,output:num(event.usage.output_tokens)||0});
     if(event.type === 'turn.completed')refreshCodexUsage(chat);
-    if(event.type === 'turn.failed' || event.type === 'error') chat.error = event.error?.message || event.message || 'El motor no pudo completar el pedido.';
+    if(event.type === 'turn.failed' || event.type === 'error') chat.error = engineFailure('codex', event.error?.message || event.message || '');
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
     if(event.type === 'system' && /^task_/.test(event.subtype||'')) consumeTask(chat,event);
@@ -292,7 +325,7 @@ function consumeEvent(chat, event, provider) {
     if(event.type === 'result') claudeUsage(chat,event);
     const limited = chat.limitResetsAt || (event.type === 'result' && event.is_error && /hit your .*limit|usage limit|rate.?limit/i.test(String(event.result || '')));
     if(event.type === 'result' && !event.is_error && event.result) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.result,at:new Date().toISOString()});
-    if(event.type === 'result' && event.is_error) chat.error = limited ? limitText(chat.limitResetsAt) : 'Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
+    if(event.type === 'result' && event.is_error) chat.error = limited ? limitText(chat.limitResetsAt) : engineFailure('claude', event.result || (event.errors||[]).join('\n'));
     // Con el Lab como host los permisos se preguntan en el chat; lo que el trader negó no es un error.
     const refused = (event.permission_denials || []).filter(d => !(chat.refused || []).includes(d.tool_use_id));
     // Owner 27/10: una regla del Lab (p. ej. no escribir en galecore-ai/) frena un paso aunque esté en Auto; si el turno
@@ -522,7 +555,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const box=mode==='auto'?[]:chat.nativeId?['-c','sandbox_mode='+JSON.stringify(mode)]:['--sandbox',mode];
       return {file,args:chat.nativeId?[...args,...box,'resume',chat.nativeId,'-']:[...args,...box,'-C',p.dir,'-']};
     }
-    // Claude: sin la configuración del usuario; los conectores de claude.ai se cargan y se niegan los apagados en Configuración (WS-0091); los permisos
+    // Claude: con la configuración propia del Lab (CLAUDE_CONFIG_DIR, fuente `user`: sin los plugins ni hooks de la PC); los conectores de claude.ai se cargan y se niegan los apagados en Configuración (WS-0091); los permisos
     // (web después de GaleCore, sin tocar el código) salen de knowledge/.claude/settings.json. Sonnet/medium por defecto
     // (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
     const broker=claudeConnectors(local);
@@ -536,7 +569,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // Los modos son los de PERMISSION_MODES: nunca bypassPermissions.
     const args=['-p',...modelFlags(chat),'--input-format','stream-json','--output-format','stream-json','--verbose','--append-system-prompt-file',file,
       '--permission-prompt-tool','stdio','--permission-mode',mode,
-      '--setting-sources','project,local','--settings',settingsFile];
+      '--setting-sources','user,project,local','--settings',settingsFile];
     return {file,args:chat.nativeId?[...args,'--resume',chat.nativeId]:args};
   }
   function send(chat, words, options={}){
@@ -569,7 +602,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     // BF-0020: el chat nunca espera ni se rechaza; su marca frena las tareas de fondo mientras corre y 5 min después.
     touchChatMark();job.mark=setInterval(touchChatMark,60*1000);job.mark.unref?.();
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);clearInterval(job.mark);touchChatMark();chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    function finish(code,stderr=''){if(done)return;done=true;jobs.delete(chat.id);clearInterval(job.mark);touchChatMark();chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error=engineFailure(chat.provider,stderr);try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor
@@ -584,11 +617,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const control=e=>{
         if(e.request?.subtype!=='can_use_tool'){job.write({type:'control_response',response:{subtype:'error',request_id:e.request_id,error:'El Lab no atiende '+e.request?.subtype}});return;}
         const r=e.request;job.asks.set(e.request_id,r);
-        chat.permission={id:e.request_id,tool:r.tool_name,label:describeStep(r.tool_name,r.input),detail:stepDetail(r.tool_name,r.input)||r.description||'',always:(r.permission_suggestions||[]).length>0};
+        const mcp=describeMcp(local,r.tool_name);
+        chat.permission={id:e.request_id,tool:r.tool_name,label:mcp?mcp.connector+' › '+mcp.label:describeStep(r.tool_name,r.input),detail:stepDetail(r.tool_name,r.input)||r.description||'',always:!!mcp||(r.permission_suggestions||[]).length>0,...(mcp?{connector:mcp.connector,toolLabel:mcp.label}:{})};
         chat.activity='Esperando tu permiso';saveChat(chat);
       };
       proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{const e=JSON.parse(line);if(claude&&e.type==='control_request'){control(e);continue;}if(claude&&e.type==='control_response')continue;if(claude&&e.type==='system'&&e.subtype==='init'){try{recordClaudeInit(local,e);}catch{ /* el catálogo se actualiza en el próximo turno */ }}consumeEvent(chat,e,chat.provider);if(claude&&e.type==='result')proc.stdin.end();saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
-      let stderrBuf='';proc.stderr.on('data',d=>{stderrBuf+=String(d);});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(stderrBuf.trim())console.error('[lab] stderr de '+chat.provider+':\n'+stderrBuf.slice(0,2000));if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});
+      let stderrBuf='';proc.stderr.on('data',d=>{stderrBuf+=String(d);});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(stderrBuf.trim())console.error('[lab] stderr de '+chat.provider+':\n'+stderrBuf.slice(0,2000));if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code,stderrBuf);});
       if(claude){job.write({type:'control_request',request_id:'init-'+chat.id,request:{subtype:'initialize'}});job.write({type:'user',message:{role:'user',content:options.prompt||words},parent_tool_use_id:null,session_id:''});}
       else proc.stdin.end((options.prompt||words)+'\n');
     }).catch(()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});
@@ -693,6 +727,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       if(!['claude','codex'].includes(b.engine)||typeof b.id!=='string'||typeof b.enabled!=='boolean')throw fail('Indicá el motor, el conector y si querés prenderlo o apagarlo.');
       if(!await knownConnector(connectorOpts(),b.engine,b.id))throw fail('Ese conector no está en la lista del motor.',404);
       setConnector(local,b.engine,b.id,b.enabled);json(res,200,{engine:b.engine,id:b.id,enabled:b.enabled});return true;
+    }
+    // BF-0022: permiso por herramienta (Siempre permitir / Pedir aprobación / Nunca), una o todo un grupo (read|write).
+    if(url.pathname==='/connectors/tools'&&req.method==='POST'){
+      const b=await readBody(req);
+      if(!['claude','codex'].includes(b.engine)||typeof b.id!=='string'||(typeof b.tool!=='string'&&typeof b.group!=='string'))throw fail('Indicá el motor, el conector, la herramienta o el grupo y el permiso.');
+      const changed=await setToolMode(connectorOpts(),b.engine,b.id,typeof b.tool==='string'?{tool:b.tool}:{group:b.group},b.value);
+      json(res,200,{engine:b.engine,id:b.id,value:b.value,tools:changed});return true;
     }
     // Reglas de permisos de Claude Code: las del producto (fijas) y las del usuario (lab-permissions.js).
     if(url.pathname==='/permissions/claude'&&req.method==='GET'){json(res,200,permissionRules(kb,local));return true;}
@@ -846,6 +887,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         const decision=['allow','always','deny'].includes(b.decision)?b.decision:'deny';j.asks.delete(b.id);
         const response=decision==='deny'?{behavior:'deny',message:'El trader no lo permitió. Seguí sin eso o proponé otra forma.'}:{behavior:'allow',updatedInput:r.input,...(decision==='always'&&r.permission_suggestions?.length?{updatedPermissions:r.permission_suggestions}:{})};
         if(decision==='deny')j.chat.refused=[...(j.chat.refused||[]),r.tool_use_id];
+        if(decision==='always'&&String(r.tool_name).startsWith('mcp__')){try{allowAlways(local,r.tool_name);}catch{ /* la regla del CLI igual rige en este turno */ }}
         j.write({type:'control_response',response:{subtype:'success',request_id:b.id,response}});
         j.chat.permission=null;j.chat.activity='Trabajando';saveChat(j.chat);json(res,200,{decision});return true;}
       // Cambiar el modo de permisos en medio de una respuesta (Claude): el motor sigue con el modo nuevo.
@@ -865,4 +907,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   return {route,listProjects,reserveShell,isBusy:()=>jobs.size>0||listProjects().some(p=>sharing.isRunning(p)),shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={permissionMode,mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};
+module.exports={engineFailure,permissionMode,mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};

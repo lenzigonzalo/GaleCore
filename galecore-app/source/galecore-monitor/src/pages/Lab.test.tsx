@@ -36,6 +36,16 @@ test('mientras responde muestra los pasos ya hechos y el actual (owner 18/10)',a
  expect(screen.queryByText('Trayendo la cadena de SPY')).not.toBeInTheDocument();
 });
 
+test('BF-0022: el pedido de una herramienta de conector muestra «Gmail › Send message» y ofrece Permitir una vez · Permitir siempre · Rechazar',async()=>{
+ sessionStorage.setItem('galecore:lab:chat','chat-1');
+ (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>{if(path==='/workspaces')return {projects,chats:[{id:'chat-1',project:'spy',provider:'claude',title:'Vieja',state:'running'}],providers:[{id:'claude',label:'Claude',installed:true}]};if(path.endsWith('/mapa'))return {mapa:null};if(path.endsWith('/permission'))return {decision:body.decision};return {id:'chat-1',project:'spy',provider:'claude',state:'running',activity:'Esperando tu permiso',permission:{id:'p1',tool:'mcp__claude_ai_Gmail__send_message',label:'Gmail › Send message',always:true,connector:'Gmail',toolLabel:'Send message'},messages:[{id:'m',role:'user',text:'mandá un mail'}]};});
+ render(<Lab onMonitor={()=>{}}/>);
+ const box=await screen.findByRole('alertdialog',{name:'Pedido de permiso'});
+ expect(box).toHaveTextContent('Gmail › Send message');
+ expect(screen.getAllByRole('button').map(b=>b.textContent).filter(t=>/Permitir|Rechazar/.test(t||''))).toEqual(['Permitir una vez','Permitir siempre','Rechazar']);
+ fireEvent.click(screen.getByRole('button',{name:'Permitir siempre'}));
+ await waitFor(()=>expect(labRequest).toHaveBeenCalledWith('/chats/chat-1/permission',{id:'p1',decision:'always'}));
+});
 test('nuevo proyecto pide sólo el nombre; la estrategia llega después, por intención (owner 19/10)',async()=>{
  const base=(labRequest as jest.Mock).getMockImplementation()!;
  (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>path==='/workspaces'&&body?{id:'idea_qqq',label:'Idea QQQ',relative:'workspaces/idea_qqq',strategies: []}:base(path,body));
