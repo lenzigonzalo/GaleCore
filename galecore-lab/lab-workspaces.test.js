@@ -1,4 +1,4 @@
-const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('fs');const path=require('path');const os=require('os');const {createWorkspaces,safeFile,consumeEvent,codexLimits}=require('./lab-workspaces');
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('fs');const path=require('path');const os=require('os');const {engineFailure,createWorkspaces,safeFile,consumeEvent,codexLimits}=require('./lab-workspaces');
 function setup(t){const base=fs.mkdtempSync(path.join(os.tmpdir(),'gc-lab-test-'));t.after(()=>{assert.ok(path.resolve(base).startsWith(path.resolve(os.tmpdir())+path.sep+'gc-lab-test-'));fs.rmSync(base,{recursive:true,force:true});});const kb=path.join(base,'knowledge'),local=path.join(base,'local');fs.mkdirSync(kb);fs.mkdirSync(local);const service=createWorkspaces({root:base,kb,local,binaries:{codex:null,claude:null},environment:()=>({}),instructions:()=>'',legacyProjects:()=>[],legacySessions:()=>[]});return{base,kb,local,service};}
 async function route(service,method,url,body){let answer;await service.route({method},{},new URL(url,'http://localhost'),(res,status,value)=>{answer={status,value};},async()=>body);return answer;}
 
@@ -537,7 +537,7 @@ test('conectores del chat (WS-0091): GaleCore fijo, lista por motor y interrupto
  recordClaudeInit(local,{mcp_servers:[{name:'claude.ai IoL',status:'connected'},{name:'claude.ai Gmail',status:'needs-auth'}],tools:['mcp__claude_ai_IoL__get_portfolio']});
  let r=await route(service,'GET','/connectors');
  assert.deepEqual(r.value.galecore,{enabled:true});
- assert.deepEqual(r.value.claude,[{id:'claude.ai IoL',name:'IoL',status:'connected',enabled:false},{id:'claude.ai Gmail',name:'Gmail',status:'needs-auth',enabled:false}]);
+ assert.deepEqual(r.value.claude.map(c=>[c.id,c.name,c.status,c.enabled]),[['claude.ai IoL','IoL','connected',false],['claude.ai Gmail','Gmail','needs-auth',false]]);
  assert.equal(r.value.codex.length,2);   // sin Codex instalado: IOL e IBKR
  r=await route(service,'POST','/connectors',{engine:'claude',id:'claude.ai IoL',enabled:true});assert.equal(r.value.enabled,true);
  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(local,'connectors.json'),'utf8')),{claude:{'claude.ai IoL':true}});
@@ -546,6 +546,13 @@ test('conectores del chat (WS-0091): GaleCore fijo, lista por motor y interrupto
  assert.ok(require('./lab-brokers').codexConnectors(local));   // lo que lee el turno de Codex
  for(const bad of [{engine:'claude',id:'claude.ai IoL',enabled:'true'},{engine:'otro',id:'x',enabled:true},{engine:'claude',enabled:true},{engine:'claude',id:'claude.ai IoL'}])await assert.rejects(route(service,'POST','/connectors',bad),/Indicá el motor/);
  await assert.rejects(route(service,'POST','/connectors',{engine:'claude',id:'claude.ai Inventado',enabled:true}),e=>e.status===404);
+ // BF-0022: permiso por herramienta
+ r=await route(service,'POST','/connectors/tools',{engine:'claude',id:'claude.ai IoL',tool:'get_portfolio',value:'ask'});assert.equal(r.value.value,'ask');
+ assert.equal(JSON.parse(fs.readFileSync(path.join(local,'connectors.json'),'utf8')).tools.claude['claude.ai IoL'].get_portfolio,'ask');
+ assert.equal((await route(service,'GET','/connectors')).value.claude[0].tools.find(x=>x.name==='get_portfolio').value,'ask');
+ await assert.rejects(route(service,'POST','/connectors/tools',{engine:'claude',id:'claude.ai IoL',tool:'validate_order',value:'allow'}),/siempre en Nunca/);
+ await assert.rejects(route(service,'POST','/connectors/tools',{engine:'claude',id:'claude.ai IoL',tool:'get_portfolio',value:'quizás'}),/Elegí/);
+ await assert.rejects(route(service,'POST','/connectors/tools',{engine:'claude',id:'claude.ai IoL'}),/Indicá/);
 });
 
 test('permisos de Claude Code (WS-0083): reglas del producto fijas, las del usuario se validan y llegan al --settings del turno',async t=>{
@@ -612,4 +619,32 @@ test('BF-0020: en el VPS el chat nunca se rechaza aunque una tarea ocupe el luga
  const past=(Date.now()-6*60000)/1000;fs.utimesSync(path.join(slots,marks[0]),past,past);
  const quiet=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],autoSync:true,curation:true,curationDelayMs:0,execute:(bin,args,o,cb)=>{calls.push(args.slice(-3).join(' '));cb(null,'{"status":"SERVED","runs":[]}');}});
  await route(quiet,'GET','/workspaces');assert.equal(calls.filter(c=>c==='task serve --on-use').length,1);     // 5 min sin chat: corre
+});
+
+test('BF-0022: engineFailure traduce el error del motor a castellano con qué hacer',()=>{
+ assert.match(engineFailure('codex','2026-11-25T10:00:00Z ERROR codex_apps: app interactive_brokers_ibkr is not authorized'),/^IBKR no está autorizado en tu cuenta de ChatGPT: reconectalo en Configuración › Conectores o apagalo\.$/);
+ assert.match(engineFailure('claude','MCP server mcp__claude_ai_Gmail__send_message needs authorization'),/^Gmail no está autorizado en tu cuenta de Claude/);
+ assert.match(engineFailure('codex','connector unauthorized'),/^Un conector no está autorizado/);
+ assert.equal(engineFailure('codex','Not logged in. Please run codex login'),'Tu sesión de Codex venció: reconectala en Configuración › Proveedores de IA.');
+ assert.equal(engineFailure('claude','API Error: 401 invalid token'),'Tu sesión de Claude venció: reconectala en Configuración › Proveedores de IA.');
+ assert.match(engineFailure('claude','You have hit your usage limit'),/límite de uso de Claude/);
+ const generico='El motor se cortó por un error inesperado. Reintentá; si se repite, revisá Configuración › Conectores.';
+ const mudo=console.error;const logs=[];console.error=(...a)=>logs.push(a.join(' '));
+ try{
+  // nunca el texto crudo: ni URL con query, ni token, ni el JSON de un API Error
+  for(const crudo of ['ERROR sandbox exploded','x'.repeat(400),'fetch https://api.x.com/v1?key=SECRET123 failed','Authorization: Bearer abc.def.ghi-123 rejected','sk-proj-ABCDEFGHIJKLMNOP1234 invalid','API Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"},"request_id":"req_011"}']){
+   const out=engineFailure('codex',crudo);
+   assert.equal(out,generico,crudo.slice(0,30));
+  }
+  // números sueltos no son códigos HTTP
+  for(const n of ['panicked at src/lib.rs:401:13','line 429 of 500','pid 401 exited','error at 429']) assert.equal(engineFailure('claude',n),generico,n);
+  // con contexto sí
+  assert.match(engineFailure('claude','API Error: 429 rate limited'),/límite de uso/);
+  assert.match(engineFailure('codex','request failed with status 401'),/sesión de Codex venció/);
+  assert.match(engineFailure('codex','HTTP 403 from app connector gmail'),/no está autorizado/);
+  assert.match(engineFailure('codex',''),/error inesperado/);
+  // el log de consola va redactado
+  assert.ok(logs.some(l=>/\[token\]/.test(l)));
+  assert.ok(!logs.some(l=>/SECRET123|abc\.def|sk-proj/.test(l)));
+ }finally{console.error=mudo;}
 });
