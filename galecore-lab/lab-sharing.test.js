@@ -334,6 +334,29 @@ test('estado por proyecto: conflicto, error con su acción (sin acceso, otro ent
   assert.equal((await row()).action, 'reshare');
 });
 
+test('los errores del sync nunca salen crudos: se traducen, con la acción que corresponde', async t => {
+  let answer;
+  const { kb, service } = world(t, { answers: { 'project sync': () => answer } });
+  const p = await create(service, 'Idea'); share(kb, p.id); synced(kb, p.id);
+  const row = async () => (await route(service, 'GET', '/workspaces')).value.projects.find(x => x.id === p.id);
+  const casos = [
+    ['idea/.sync.json is unreadable; not overwritten', /registro de sincronización.*dañado/, 'reshare'],
+    ['idea/.sync.json has no sharedProjectId', /perdió el vínculo/, 'reshare'],
+    ['idea is not shared (no .sync.json)', /perdió el vínculo/, 'reshare'],
+    ['El proyecto está sincronizando; volvé a intentar.', /ya se está sincronizando/, 'retry'],
+    ['No se pudo aplicar notas.md; queda pendiente para reintentar.', /^No se pudo aplicar notas\.md/, 'retry'],
+    ['Traceback: KeyError xyz', /^no se pudo sincronizar$/, 'retry'],
+  ];
+  const consola = console.error; console.error = () => {}; t.after(() => { console.error = consola; });
+  for (const [raw, expected, action] of casos) {
+    answer = { error: raw };
+    await assert.rejects(route(service, 'POST', '/workspaces/' + p.id + '/sync'));
+    const r = await row();
+    assert.match(r.notice, expected, raw); assert.equal(r.action, action, raw);
+    assert.doesNotMatch(r.notice, /unreadable|sharedProjectId|Traceback|KeyError/);
+  }
+});
+
 test('/workspaces/sync devuelve los errores por proyecto con un motivo legible', async t => {
   const { kb, service } = world(t, { answers: {
     'project shared': { projects: [{ id: 'p1', local: 'idea', subscribed: true }] },

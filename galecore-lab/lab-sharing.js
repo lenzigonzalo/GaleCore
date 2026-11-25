@@ -93,16 +93,24 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   // El último error de sync de un proyecto, en el mismo aviso de una línea que usa la UI para los conflictos.
   function reason(message) {
     const m = String(message || '');
+    if (!m) return 'GaleCore no respondió';
     if (/no credentials/i.test(m)) return 'faltan las credenciales de GaleCore';
     if (/did not answer|timed out|ENOTFOUND|ECONN/i.test(m)) return 'sin conexión con GaleCore';
     if (/HTTP 429/.test(m)) return 'GaleCore pidió esperar unos minutos';
     if (/HTTP 401|HTTP 403/.test(m)) return 'GaleCore no aceptó la sesión';
     if (/ya no ten[ée]s acceso/i.test(m)) return 'ya no tenés acceso: el dueño dejó de compartirlo o lo borró';
     if (/Confirm[áa]|otro usuario o entorno|otro entorno/i.test(m)) return 'esta copia se compartió desde otro usuario o entorno';
-    return m || 'GaleCore no respondió';
+    if (/is unreadable|not overwritten/i.test(m)) return 'el registro de sincronización de esta copia está dañado';
+    if (/has no sharedProjectId|is not shared|no \.sync\.json/i.test(m)) return 'esta copia perdió el vínculo con el proyecto compartido';
+    if (/sincronizando|already syncing/i.test(m)) return 'ya se está sincronizando';
+    if (/^No se pudo aplicar/.test(m)) return m;
+    if (/no está disponible para este usuario/i.test(m)) return 'el proyecto no está disponible para este usuario y entorno';
+    // El texto crudo (a menudo en inglés o técnico) no se muestra: sólo queda en la consola del Lab.
+    console.error('[lab] sync: error sin traducir: ' + m.slice(0, 300));
+    return 'no se pudo sincronizar';
   }
   // Qué puede hacer el usuario con un error: quitar la copia sin acceso, compartir de nuevo acá, o reintentar.
-  const actionFor = text => /ya no tenés acceso/.test(text) ? 'remove' : /otro usuario o entorno/.test(text) ? 'reshare' : 'retry';
+  const actionFor = text => /ya no tenés acceso/.test(text) ? 'remove' : /otro usuario o entorno|dañado|perdió el vínculo/.test(text) ? 'reshare' : 'retry';
 
   // Estado de un proyecto agregado: ok · syncing · conflict · error (+ action). `info` viene del `.sync.json` (lista) o de
   // la fila del catálogo: { following, lastError, removed, needsConfirmation }.
