@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -302,7 +303,13 @@ function claudeConnectors(local) {
 // Codex: la config `apps=` del turno con lo prendido. IOL e IBKR, con su lista cerrada (menos lo que el trader apagó); otra app
 // prendida, sólo con las herramientas en Siempre permitir (destructive_enabled si alguna escribe). Sin catálogo de la app, sin
 // herramientas destructivas. `exec` no puede pedir aprobación (probado: «requires approval, but approval policy is never»).
-function codexConnectors(local) {
+// Servidores MCP ibkr/iol propios de la config de Codex de esta PC: se apagan en el turno sólo si existen. Un
+// `-c mcp_servers.ibkr.enabled=false` sin el servidor definido crea uno a medias y Codex no arranca («invalid transport»).
+function localCodexMcp(codexHome) {
+  let text = ''; try { text = fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8'); } catch { /* sin config: nada que apagar */ }
+  return ['ibkr', 'iol'].filter(n => new RegExp(String.raw`^\s*\[mcp_servers\.${n}[\].]`, 'm').test(text));
+}
+function codexConnectors(local, codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex')) {
   const cfg = readJson(local, 'connectors.json', {});
   const ids = [...new Set([...BROKERS.map(b => b.id), ...Object.keys(cfg.codex || {})])].filter(id => isOn(local, 'codex', id, cfg));
   if (!ids.length) return null;
@@ -317,7 +324,7 @@ function codexConnectors(local) {
   }).join(', ') + ' }';
   const labels = BROKERS.filter(b => ids.includes(b.id)).map(b => b.prefix === 'iol_invertironline' ? 'IOL' : 'IBKR').sort();
   return {
-    args: ['--enable', 'apps', '-c', 'apps=' + apps, '-c', 'mcp_servers.ibkr.enabled=false', '-c', 'mcp_servers.iol.enabled=false'],
+    args: ['--enable', 'apps', '-c', 'apps=' + apps, ...localCodexMcp(codexHome).flatMap(n => ['-c', 'mcp_servers.' + n + '.enabled=false'])],
     instructions: labels.length ? brokerInstructions(labels, ' de ChatGPT') : '',
   };
 }

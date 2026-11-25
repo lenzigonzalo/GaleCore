@@ -24,7 +24,8 @@ test('Codex: sin nada prendido no hay apps; broker-queries.json es el valor por 
   const local = tmp(t);
   assert.equal(codexConnectors(local), null);
   fs.writeFileSync(path.join(local, 'broker-queries.json'), '{"enabled":true}');
-  const { args, instructions } = codexConnectors(local);
+  const codexHome = tmp(t);   // sin config.toml: no hay servidores ibkr/iol locales que apagar
+  const { args, instructions } = codexConnectors(local, codexHome);
   const policy = args.find(s => s.startsWith('apps='));
   assert.match(policy, /_default = \{ enabled = false \}/);
   assert.equal((policy.match(/default_tools_enabled = false/g) || []).length, 2);
@@ -32,7 +33,10 @@ test('Codex: sin nada prendido no hay apps; broker-queries.json es el valor por 
   assert.ok(allowed.includes('interactive_brokers_ibkr.get_account_orders') && allowed.includes('iol_invertironline.get_access_mode'));
   assert.ok(!allowed.some(s => /\.(create_|delete_|edit_|update_|set_|accept_|validate_|place_|cancel_|subscribe_|redeem_|provide_)/.test(s)));
   assert.ok(!allowed.some(s => /get_combo_identifier|get_ddjj|get_caucion_guarantee_assets/.test(s)));
-  assert.ok(args.includes('mcp_servers.ibkr.enabled=false') && args.includes('mcp_servers.iol.enabled=false'));
+  assert.ok(!args.some(a => a.startsWith('mcp_servers.')));   // VPS: un -c sin el servidor definido rompe Codex («invalid transport»)
+  fs.writeFileSync(path.join(codexHome, 'config.toml'), ['[mcp_servers.ibkr]', 'command = "x"', '', '[mcp_servers.iol.env]', 'A = "1"'].join('\n'));
+  const withLocal = codexConnectors(local, codexHome).args;
+  assert.ok(withLocal.includes('mcp_servers.ibkr.enabled=false') && withLocal.includes('mcp_servers.iol.enabled=false'));
   assert.match(instructions, /debe devolver read_only/);
   setConnector(local, 'codex', 'asdk_app_6a207f00eed0819181227b2ea257ff0b', false);   // IOL apagado a mano
   setConnector(local, 'codex', 'connector_gmail', true);                              // otra app prendida: sin lista de herramientas
