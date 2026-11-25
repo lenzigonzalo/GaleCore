@@ -43,7 +43,7 @@ test('Codex: sin nada prendido no hay apps; broker-queries.json es el valor por 
 });
 
 test('Claude sin catálogo todavía: se niegan todos los conectores de claude.ai', t => {
-  assert.deepEqual(claudeConnectors(tmp(t)), { allow: [], deny: ['mcp__claude_ai_*'], instructions: '' });
+  assert.deepEqual(claudeConnectors(tmp(t)), { allow: [], deny: ['mcp__claude_ai_*', 'mcp__plugin_*'], instructions: '' });
 });
 
 test('un connectors.json ilegible frena el turno', t => {
@@ -62,7 +62,7 @@ test('Claude: el prefijo sale de los nombres reales de tools y todo conector sin
   const { allow, deny, instructions } = claudeConnectors(local);
   assert.deepEqual(allow, []);
   assert.equal(instructions, '');
-  assert.deepEqual(deny.sort(), ['mcp__claude_ai_Gmail', 'mcp__claude_ai_Interactive_Brokers_IBKR', 'mcp__claude_ai_IoL', 'mcp__claude_ai_LSEG']);
+  assert.deepEqual(deny.sort(), ['mcp__claude_ai_Gmail', 'mcp__claude_ai_Interactive_Brokers_IBKR', 'mcp__claude_ai_IoL', 'mcp__claude_ai_LSEG', 'mcp__plugin_*']);
 });
 
 test('Claude: IOL prendido permite sólo consultas y niega validaciones y lo que no está en la lista cerrada; el resto sigue negado', t => {
@@ -234,4 +234,14 @@ test('un init sin herramientas (conectores todavía pending) muestra el estado d
   recordClaudeInit(local, { mcp_servers: [{ name: 'claude.ai Gmail', status: 'pending' }], tools: ['Bash'] });
   const gmail = JSON.parse(fs.readFileSync(path.join(local, 'connectors-seen.json'), 'utf8')).claude.servers.find(s => s.name === 'claude.ai Gmail');
   assert.deepEqual([gmail.status, gmail.tools], ['pending', ['send_message']]);
+});
+
+test('Claude: los MCP de plugins de la cuenta no se listan como conectores y se niegan en el turno', async t => {
+  const local = tmp(t);
+  recordClaudeInit(local, { mcp_servers: [...init.mcp_servers, { name: 'plugin:finance:gmail', status: 'failed' }],
+    tools: [...init.tools, 'mcp__plugin_finance_gmail__send'] });
+  assert.ok(claudeConnectors(local).deny.includes('mcp__plugin_*'));
+  const { claude } = await listConnectors({ local });
+  assert.ok(!claude.some(c => /^plugin:/.test(c.id)));
+  assert.ok(claude.some(c => c.id === 'claude.ai Gmail'));
 });

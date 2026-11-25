@@ -207,7 +207,8 @@ async function codexCatalog({ codexBinary, local, ...opts }) {
 async function listConnectors(opts) {
   const cfg = readJson(opts.local, 'connectors.json', {});
   const [servers, apps] = await Promise.all([claudeCatalog(opts), codexCatalog(opts)]);
-  const claude = servers.map(s => ({ id: s.name, name: s.name.replace(/^claude\.ai /, ''), status: s.status, enabled: isOn(opts.local, 'claude', s.name, cfg),
+  // Los MCP de plugins de la cuenta (plugin:…) no son conectores de claude.ai: no se listan y en el turno se niegan.
+  const claude = servers.filter(s => !isPlugin(s.name)).map(s => ({ id: s.name, name: s.name.replace(/^claude\.ai /, ''), status: s.status, enabled: isOn(opts.local, 'claude', s.name, cfg),
     tools: withModes(cfg, 'claude', s.name, claudeToolList(s)) }));
   const codex = apps.filter(a => a.accessible || BROKERS.some(b => b.id === a.id) || a.id in (cfg.codex || {}))
     .map(a => ({ id: a.id, name: a.name, status: a.accessible ? 'connected' : 'needs-auth', enabled: isOn(opts.local, 'codex', a.id, cfg),
@@ -279,12 +280,14 @@ function brokerInstructions(labels, suffix) {
 // Claude: reglas del turno según lo prendido. Apagado o sin entrada = se niega el servidor entero. Prendido, cada herramienta
 // según su permiso: allow = regla de permitir, deny = regla de negar, ask = sin regla (el CLI pide y el Lab lo muestra en el chat).
 // En IOL e IBKR sólo la lista cerrada de consultas se puede permitir; todo lo demás que el servidor exponga se niega.
+const isPlugin = name => /^plugin:/.test(name);
 function claudeConnectors(local) {
   const cfg = readJson(local, 'connectors.json', {});
   const allow = [], deny = [], labels = [], seen = claudeSeen(local);
   // Sin catálogo todavía (primer turno, nadie abrió Configuración): se niegan todos los conectores de claude.ai; el init de este turno arma el catálogo.
   if (!seen) deny.push('mcp__claude_ai_*');
-  for (const s of seen?.servers || []) {
+  deny.push('mcp__plugin_*');
+  for (const s of (seen?.servers || []).filter(x => !isPlugin(x.name))) {
     if (!isOn(local, 'claude', s.name, cfg)) { deny.push(s.prefix); continue; }
     for (const t of claudeToolList(s)) {
       const mode = toolMode(cfg, 'claude', s.name, t);
