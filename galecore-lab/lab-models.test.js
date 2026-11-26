@@ -71,7 +71,7 @@ test('chat selection persists, reaches the spawned process, and cannot be change
   await route(service,'POST','/chats/'+created.value.id+'/messages',{text:'fixture',model:'haiku'});
   assert.equal(captured[captured.indexOf('--model')+1],'opus');
   assert.equal(captured[captured.indexOf('--effort')+1],'high');
-  assert.ok(captured.includes('--strict-mcp-config'));
+  assert.ok(!captured.includes('--strict-mcp-config'));   // WS-0091/BF-0022: los conectores de claude.ai tienen que llegar al turno
   child.emit('close',0);
   const loaded=await route(service,'GET','/chats/'+created.value.id);
   assert.equal(loaded.value.model,'opus');
